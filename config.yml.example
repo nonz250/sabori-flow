@@ -1,0 +1,22 @@
+# 対象リポジトリ
+repositories:
+  - owner: nonz250
+    repo: example-app
+    labels:
+      plan:
+        trigger: claude/plan
+        in_progress: "claude/plan:in-progress"
+        done: "claude/plan:done"
+        failed: "claude/plan:failed"
+      impl:
+        trigger: claude/impl
+        in_progress: "claude/impl:in-progress"
+        done: "claude/impl:done"
+        failed: "claude/impl:failed"
+    priority_labels:
+      - priority:high
+      - priority:low
+
+# 実行設定
+execution:
+  max_parallel: 1
