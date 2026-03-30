@@ -105,17 +105,20 @@ def _parse_issues(
         priority = _determine_priority(labels, repo_config.priority_labels)
         body = item.get("body")
 
-        issues.append(
-            Issue(
-                number=item["number"],
-                title=item["title"],
-                body=body if body is not None else None,
-                labels=labels,
-                url=item["url"],
-                phase=phase,
-                priority=priority,
+        try:
+            issues.append(
+                Issue(
+                    number=item["number"],
+                    title=item["title"],
+                    body=body,
+                    labels=labels,
+                    url=item["url"],
+                    phase=phase,
+                    priority=priority,
+                )
             )
-        )
+        except KeyError as e:
+            raise IssueParseError(f"Missing required field in issue data: {e}") from e
 
     return issues
 

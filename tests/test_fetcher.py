@@ -185,6 +185,54 @@ class TestParseIssues:
         issues = _parse_issues("[]", Phase.PLAN, repo_config)
         assert issues == []
 
+    def test_missing_number_raises_issue_parse_error(
+        self, repo_config: RepositoryConfig
+    ) -> None:
+        raw_json = _make_gh_json(
+            [
+                {
+                    "title": "No number",
+                    "body": "body",
+                    "labels": [],
+                    "url": "https://github.com/nonz250/example-app/issues/1",
+                },
+            ]
+        )
+        with pytest.raises(IssueParseError, match="Missing required field"):
+            _parse_issues(raw_json, Phase.PLAN, repo_config)
+
+    def test_missing_title_raises_issue_parse_error(
+        self, repo_config: RepositoryConfig
+    ) -> None:
+        raw_json = _make_gh_json(
+            [
+                {
+                    "number": 1,
+                    "body": "body",
+                    "labels": [],
+                    "url": "https://github.com/nonz250/example-app/issues/1",
+                },
+            ]
+        )
+        with pytest.raises(IssueParseError, match="Missing required field"):
+            _parse_issues(raw_json, Phase.PLAN, repo_config)
+
+    def test_missing_url_raises_issue_parse_error(
+        self, repo_config: RepositoryConfig
+    ) -> None:
+        raw_json = _make_gh_json(
+            [
+                {
+                    "number": 1,
+                    "title": "No url",
+                    "body": "body",
+                    "labels": [],
+                },
+            ]
+        )
+        with pytest.raises(IssueParseError, match="Missing required field"):
+            _parse_issues(raw_json, Phase.PLAN, repo_config)
+
 
 class TestSortByPriority:
     """_sort_by_priority のテスト"""
