@@ -1,10 +1,21 @@
 # claude-issue-worker
 
-Claude Code を使って GitHub Issue を自動的に検出し、定期的に対象 Issue を解決するワーカースクリプト。
+Claude Code Desktop scheduled tasks を使って GitHub Issue を自動的に検出し、定期的に対象 Issue を解決する仕組み。
 
 ## 概要
 
-このリポジトリは、GitHub リポジトリに登録された Issue を定期的にポーリングし、Claude Code を活用して自動的に解決（コード修正・Draft PR 作成）する仕組みを提供します。
+Claude Code デスクトップアプリの定期実行機能により、GitHub リポジトリの Issue をポーリングし、Claude Code が自律的に解決（コード修正・Draft PR 作成）します。
+
+スクリプトは不要です。Claude Code が `CLAUDE.md` の指示と `config.yml` の設定に基づいて `gh` コマンドで直接操作します。
+
+### リポジトリ構成
+
+```
+claude-issue-worker/
+├── CLAUDE.md        # Claude Code への処理指示（ロジック本体）
+├── config.yml       # 対象リポジトリ・ラベル・実行設定
+└── README.md        # ドキュメント
+```
 
 ### 主な機能
 
@@ -18,20 +29,23 @@ Claude Code を使って GitHub Issue を自動的に検出し、定期的に対
 
 ### 実行基盤
 
-Claude Code デスクトップアプリの [Desktop scheduled tasks](https://docs.anthropic.com/en/docs/claude-code) を利用して 1 時間ごとにローカルマシン上で定期実行します。
+Claude Code デスクトップアプリの Desktop scheduled tasks を利用して 1 時間ごとにローカルマシン上で定期実行します。
 
 ### 処理フロー
 
 ```
-[Desktop scheduled tasks] ─(1時間ごと)─> [ワーカースクリプト]
+[Desktop scheduled tasks] ─(1時間ごと)─> [Claude Code]
                                            │
-                                           ├─ 1. 設定ファイル（YAML）から対象リポジトリ一覧を取得
-                                           ├─ 2. 各リポジトリの `claude-auto` ラベル付き Issue を取得
-                                           ├─ 3. 優先度ラベルでソート
-                                           ├─ 4. ラベルを `claude-in-progress` に遷移
-                                           ├─ 5. Claude Code で Issue を解決
-                                           ├─ 6a. 成功 → Draft PR 作成 + `claude-done` ラベル
-                                           └─ 6b. 失敗 → Issue にコメント + `claude-failed` ラベル
+                                           ├─ CLAUDE.md を読み込み
+                                           ├─ config.yml から対象リポジトリ一覧を取得
+                                           │
+                                           ├─ 各リポジトリに対して:
+                                           │   ├─ gh issue list で claude-auto ラベル付き Issue を取得
+                                           │   ├─ 優先度ラベルでソート
+                                           │   ├─ ラベルを claude-in-progress に遷移
+                                           │   ├─ 対象リポジトリをクローンし Issue を解決
+                                           │   ├─ 成功 → Draft PR 作成 + claude-done ラベル
+                                           │   └─ 失敗 → Issue にコメント + claude-failed ラベル
 ```
 
 ### ラベル遷移
@@ -76,7 +90,6 @@ execution:
 - [Claude Code デスクトップアプリ](https://docs.anthropic.com/en/docs/claude-code) がインストール済みであること
 - Claude Code Max プランのサブスクリプション
 - GitHub CLI (`gh`) がインストール・認証済みであること
-- Python 3.x
 - 対象リポジトリへの書き込み権限があること
 
 ## セットアップ
@@ -84,6 +97,7 @@ execution:
 ```bash
 git clone git@github.com:nonz250/claude-issue-worker.git
 cd claude-issue-worker
+cp config.yml.example config.yml  # 設定ファイルを作成し、対象リポジトリを記載
 ```
 
 ### Desktop scheduled tasks の設定
@@ -91,8 +105,13 @@ cd claude-issue-worker
 1. Claude Code デスクトップアプリを起動
 2. Code タブ → Schedule ページを開く
 3. 「New local task」を作成
-4. プロンプト・頻度（Hourly）・権限を設定
-5. 作業ディレクトリとしてこのリポジトリのパスを指定
+4. 作業ディレクトリとしてこのリポジトリのパスを指定
+5. 頻度を Hourly に設定
+6. プロンプトに以下を入力:
+
+```
+config.yml を読み、CLAUDE.md の指示に従って GitHub Issue を処理してください。
+```
 
 ## ライセンス
 
