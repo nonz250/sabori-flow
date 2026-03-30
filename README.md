@@ -1,20 +1,27 @@
 # claude-issue-worker
 
-Claude Code Desktop scheduled tasks を使って GitHub Issue を自動的に検出し、定期的に対象 Issue を解決する仕組み。
+Python スクリプトと Claude Code CLI を使って GitHub Issue を自動的に検出し、定期的に対象 Issue を解決する仕組み。
 
 ## 概要
 
-Claude Code デスクトップアプリの定期実行機能により、GitHub リポジトリの Issue をポーリングし、Claude Code が自律的に解決（方針策定・コード修正・Draft PR 作成）します。
-
-スクリプトは不要です。Claude Code が `CLAUDE.md` の指示と `config.yml` の設定に基づいて `gh` コマンドで直接操作します。
+ローカルマシンのスケジューラ（launchd / cron）で Python スクリプトを定期実行し、GitHub Issue のポーリング・ラベル管理を行います。Issue の実際の解決には Claude Code CLI を非対話モードで呼び出します。
 
 ### リポジトリ構成
 
 ```
 claude-issue-worker/
-├── CLAUDE.md        # Claude Code への処理指示（ロジック本体）
-├── config.yml       # 対象リポジトリ・ラベル・実行設定
-└── README.md        # ドキュメント
+├── CLAUDE.md              # 開発時の Claude Code への指示
+├── README.md              # ドキュメント
+├── config.yml             # 対象リポジトリ・ラベル・実行設定
+├── src/
+│   ├── main.py            # エントリポイント
+│   ├── config.py          # config.yml の読み込み
+│   ├── fetcher.py         # Issue 取得・フィルタリング・ソート
+│   ├── labeler.py         # ラベル遷移管理
+│   ├── planner.py         # plan フェーズ（Claude Code CLI で方針策定）
+│   └── implementer.py     # impl フェーズ（Claude Code CLI で実装）
+└── launchd/
+    └── com.nonz250.claude-issue-worker.plist  # macOS launchd 定義
 ```
 
 ### 主な機能
@@ -30,32 +37,40 @@ claude-issue-worker/
 
 ### 実行基盤
 
-Claude Code デスクトップアプリの Desktop scheduled tasks を利用して 1 時間ごとにローカルマシン上で定期実行します。
+macOS の launchd（または cron）で Python スクリプトを 1 時間ごとに定期実行します。
 
 ### 処理フロー
 
 ```
-[Desktop scheduled tasks] ─(1時間ごと)─> [Claude Code]
-                                           │
-                                           ├─ CLAUDE.md を読み込み
-                                           ├─ config.yml から対象リポジトリ一覧を取得
-                                           │
-                                           ├─ 【plan フェーズ】
-                                           │   ├─ claude/plan ラベル付き Issue を取得
-                                           │   ├─ 優先度ラベルでソート
-                                           │   ├─ ラベルを claude/plan:in-progress に遷移
-                                           │   ├─ Issue を調査し方針を策定
-                                           │   ├─ 成功 → 方針を Issue コメント + claude/plan:done
-                                           │   └─ 失敗 → 理由を Issue コメント + claude/plan:failed
-                                           │
-                                           ├─ 【impl フェーズ】
-                                           │   ├─ claude/impl ラベル付き Issue を取得
-                                           │   ├─ 優先度ラベルでソート
-                                           │   ├─ ラベルを claude/impl:in-progress に遷移
-                                           │   ├─ 対象リポジトリをクローンし Issue を解決
-                                           │   ├─ 成功 → Draft PR 作成 + claude/impl:done
-                                           │   └─ 失敗 → 理由を Issue コメント + claude/impl:failed
+[launchd/cron] ─(1時間ごと)─> [Python: main.py]
+                                  │
+                                  ├─ config.yml から対象リポジトリ一覧を取得
+                                  ├─ gh コマンドで Issue を取得・ラベル遷移
+                                  │
+                                  ├─ 【plan フェーズ】
+                                  │   ├─ claude/plan ラベル付き Issue を取得
+                                  │   ├─ 優先度ラベルでソート
+                                  │   ├─ ラベルを claude/plan:in-progress に遷移
+                                  │   ├─ Claude Code CLI で方針策定
+                                  │   ├─ 成功 → 方針を Issue コメント + claude/plan:done
+                                  │   └─ 失敗 → 理由を Issue コメント + claude/plan:failed
+                                  │
+                                  ├─ 【impl フェーズ】
+                                  │   ├─ claude/impl ラベル付き Issue を取得
+                                  │   ├─ 優先度ラベルでソート
+                                  │   ├─ ラベルを claude/impl:in-progress に遷移
+                                  │   ├─ Claude Code CLI で実装
+                                  │   ├─ 成功 → Draft PR 作成 + claude/impl:done
+                                  │   └─ 失敗 → 理由を Issue コメント + claude/impl:failed
 ```
+
+### 責務分担
+
+| レイヤー | 担当 |
+|----------|------|
+| スケジューリング | launchd / cron |
+| Issue 取得・ラベル管理・ログ | Python スクリプト（`gh` コマンド経由） |
+| Issue の解決（方針策定・実装） | Claude Code CLI（`claude -p "プロンプト"` で非対話実行） |
 
 ### ラベル遷移
 
@@ -124,9 +139,10 @@ execution:
 
 ## 前提条件
 
-- [Claude Code デスクトップアプリ](https://docs.anthropic.com/en/docs/claude-code) がインストール済みであること
+- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) がインストール済みであること
 - Claude Code Max プランのサブスクリプション
 - GitHub CLI (`gh`) がインストール・認証済みであること
+- Python 3.x
 - 対象リポジトリへの書き込み権限があること
 
 ## セットアップ
@@ -137,17 +153,17 @@ cd claude-issue-worker
 cp config.yml.example config.yml  # 設定ファイルを作成し、対象リポジトリを記載
 ```
 
-### Desktop scheduled tasks の設定
+### launchd の設定（macOS）
 
-1. Claude Code デスクトップアプリを起動
-2. Code タブ → Schedule ページを開く
-3. 「New local task」を作成
-4. 作業ディレクトリとしてこのリポジトリのパスを指定
-5. 頻度を Hourly に設定
-6. プロンプトに以下を入力:
-
+```bash
+cp launchd/com.nonz250.claude-issue-worker.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.nonz250.claude-issue-worker.plist
 ```
-config.yml を読み、CLAUDE.md の指示に従って GitHub Issue を処理してください。
+
+### 手動実行
+
+```bash
+python src/main.py
 ```
 
 ## ライセンス
