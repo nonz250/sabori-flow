@@ -161,6 +161,80 @@ class TestLoadConfigRepositoriesValidation:
             load_config(config_file)
 
 
+class TestLoadConfigPriorityLabelsValidation:
+    """priority_labels 要素のバリデーションテスト"""
+
+    def test_non_string_element_rejected(self, tmp_path: Path) -> None:
+        yaml_content = """\
+repositories:
+  - owner: my-org
+    repo: my-repo
+    labels:
+      plan:
+        trigger: "plan"
+        in_progress: "plan:in-progress"
+        done: "plan:done"
+        failed: "plan:failed"
+      impl:
+        trigger: "impl"
+        in_progress: "impl:in-progress"
+        done: "impl:done"
+        failed: "impl:failed"
+    priority_labels:
+      - 123
+"""
+        config_file = _write_yaml(tmp_path, yaml_content)
+        with pytest.raises(ConfigValidationError, match="priority_labels\\[0\\]: must be a string"):
+            load_config(config_file)
+
+    def test_invalid_characters_rejected(self, tmp_path: Path) -> None:
+        yaml_content = """\
+repositories:
+  - owner: my-org
+    repo: my-repo
+    labels:
+      plan:
+        trigger: "plan"
+        in_progress: "plan:in-progress"
+        done: "plan:done"
+        failed: "plan:failed"
+      impl:
+        trigger: "impl"
+        in_progress: "impl:in-progress"
+        done: "impl:done"
+        failed: "impl:failed"
+    priority_labels:
+      - "priority<script>"
+"""
+        config_file = _write_yaml(tmp_path, yaml_content)
+        with pytest.raises(ConfigValidationError, match="priority_labels\\[0\\]: invalid characters"):
+            load_config(config_file)
+
+    def test_second_element_invalid(self, tmp_path: Path) -> None:
+        yaml_content = """\
+repositories:
+  - owner: my-org
+    repo: my-repo
+    labels:
+      plan:
+        trigger: "plan"
+        in_progress: "plan:in-progress"
+        done: "plan:done"
+        failed: "plan:failed"
+      impl:
+        trigger: "impl"
+        in_progress: "impl:in-progress"
+        done: "impl:done"
+        failed: "impl:failed"
+    priority_labels:
+      - "priority:high"
+      - true
+"""
+        config_file = _write_yaml(tmp_path, yaml_content)
+        with pytest.raises(ConfigValidationError, match="priority_labels\\[1\\]: must be a string"):
+            load_config(config_file)
+
+
 class TestLoadConfigLabelsValidation:
     """labels セクションのバリデーションテスト"""
 

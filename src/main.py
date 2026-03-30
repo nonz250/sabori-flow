@@ -15,11 +15,13 @@ logger = logging.getLogger(__name__)
 
 def _setup_logging() -> None:
     """ロギングを初期化する。"""
+    root_logger = logging.getLogger()
+    if root_logger.handlers:
+        return
     handler = logging.StreamHandler(sys.stderr)
     handler.setFormatter(
         logging.Formatter("[%(asctime)s] %(levelname)s - %(message)s")
     )
-    root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
     root_logger.addHandler(handler)
 

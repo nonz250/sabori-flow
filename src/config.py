@@ -110,6 +110,17 @@ def _parse_repositories(raw: list) -> list[RepositoryConfig]:
         if not isinstance(priority_raw, list):
             raise ConfigValidationError(f"{prefix}.priority_labels: must be a list")
 
+        for j, item in enumerate(priority_raw):
+            if not isinstance(item, str):
+                raise ConfigValidationError(
+                    f"{prefix}.priority_labels[{j}]: must be a string"
+                )
+            if not _LABEL_PATTERN.match(item):
+                raise ConfigValidationError(
+                    f"{prefix}.priority_labels[{j}]: invalid characters in '{item}' "
+                    f"(must match {_LABEL_PATTERN.pattern})"
+                )
+
         configs.append(
             RepositoryConfig(
                 owner=owner,
