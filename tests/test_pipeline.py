@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -19,6 +20,14 @@ from models import (
 )
 from pipeline import _handle_failure, process_issue
 from prompt import PromptTemplateError
+
+
+def _fake_worktree_context(local_path, issue_number):
+    """テスト用の worktree_context フェイク。実際の git 操作を行わない。"""
+    @contextmanager
+    def _ctx():
+        yield f"/tmp/worktrees/issue-{issue_number}"
+    return _ctx()
 
 
 # ---------------------------------------------------------------------------
@@ -50,6 +59,7 @@ def _make_repo_config(
     return RepositoryConfig(
         owner=owner,
         repo=repo,
+        local_path="/tmp/testowner/testrepo",
         labels=LABELS_CONFIG,
         priority_labels=["priority:high", "priority:low"],
     )
@@ -96,6 +106,7 @@ def _make_failure_result(
 class TestProcessIssueSuccess:
     """process_issue の正常系テスト"""
 
+    @patch("pipeline.worktree_context", side_effect=_fake_worktree_context)
     @patch("pipeline.post_success_comment")
     @patch("pipeline.post_failure_comment")
     @patch("pipeline.transition_to_done")
@@ -112,6 +123,7 @@ class TestProcessIssueSuccess:
         mock_done: MagicMock,
         mock_fail_comment: MagicMock,
         mock_success_comment: MagicMock,
+        mock_worktree: MagicMock,
     ) -> None:
         """全ステップ成功時に True が返り、done 遷移と成功コメントが呼ばれる"""
         # Arrange
@@ -129,7 +141,7 @@ class TestProcessIssueSuccess:
             "testowner/testrepo", 42, PLAN_LABELS
         )
         mock_build.assert_called_once_with(issue, repo_config)
-        mock_run.assert_called_once_with("generated prompt")
+        mock_run.assert_called_once_with("generated prompt", cwd="/tmp/worktrees/issue-42")
         mock_done.assert_called_once_with(
             "testowner/testrepo", 42, PLAN_LABELS
         )
@@ -139,6 +151,7 @@ class TestProcessIssueSuccess:
         mock_failed.assert_not_called()
         mock_fail_comment.assert_not_called()
 
+    @patch("pipeline.worktree_context", side_effect=_fake_worktree_context)
     @patch("pipeline.post_success_comment")
     @patch("pipeline.post_failure_comment")
     @patch("pipeline.transition_to_done")
@@ -155,6 +168,7 @@ class TestProcessIssueSuccess:
         mock_done: MagicMock,
         mock_fail_comment: MagicMock,
         mock_success_comment: MagicMock,
+        mock_worktree: MagicMock,
     ) -> None:
         """plan フェーズで正しい PhaseLabels が使われる"""
         # Arrange
@@ -174,6 +188,7 @@ class TestProcessIssueSuccess:
             "testowner/testrepo", 42, PLAN_LABELS
         )
 
+    @patch("pipeline.worktree_context", side_effect=_fake_worktree_context)
     @patch("pipeline.post_success_comment")
     @patch("pipeline.post_failure_comment")
     @patch("pipeline.transition_to_done")
@@ -190,6 +205,7 @@ class TestProcessIssueSuccess:
         mock_done: MagicMock,
         mock_fail_comment: MagicMock,
         mock_success_comment: MagicMock,
+        mock_worktree: MagicMock,
     ) -> None:
         """impl フェーズで正しい PhaseLabels が使われる"""
         # Arrange
@@ -218,6 +234,7 @@ class TestProcessIssueSuccess:
 class TestLevel1Error:
     """trigger -> in-progress のラベル遷移失敗テスト"""
 
+    @patch("pipeline.worktree_context", side_effect=_fake_worktree_context)
     @patch("pipeline.post_success_comment")
     @patch("pipeline.post_failure_comment")
     @patch("pipeline.transition_to_done")
@@ -234,6 +251,7 @@ class TestLevel1Error:
         mock_done: MagicMock,
         mock_fail_comment: MagicMock,
         mock_success_comment: MagicMock,
+        mock_worktree: MagicMock,
     ) -> None:
         """transition_to_in_progress が LabelError を送出すると False が返り、
         後続の関数は呼ばれない"""
@@ -263,6 +281,7 @@ class TestLevel1Error:
 class TestLevel2Error:
     """プロンプト生成・Claude CLI 実行失敗のテスト"""
 
+    @patch("pipeline.worktree_context", side_effect=_fake_worktree_context)
     @patch("pipeline.post_success_comment")
     @patch("pipeline.post_failure_comment")
     @patch("pipeline.transition_to_done")
@@ -279,6 +298,7 @@ class TestLevel2Error:
         mock_done: MagicMock,
         mock_fail_comment: MagicMock,
         mock_success_comment: MagicMock,
+        mock_worktree: MagicMock,
     ) -> None:
         """build_prompt が PromptTemplateError を送出すると
         _handle_failure が呼ばれ False が返る"""
@@ -302,6 +322,7 @@ class TestLevel2Error:
             "testowner/testrepo", 42, "プロンプトの生成に失敗しました"
         )
 
+    @patch("pipeline.worktree_context", side_effect=_fake_worktree_context)
     @patch("pipeline.post_success_comment")
     @patch("pipeline.post_failure_comment")
     @patch("pipeline.transition_to_done")
@@ -318,6 +339,7 @@ class TestLevel2Error:
         mock_done: MagicMock,
         mock_fail_comment: MagicMock,
         mock_success_comment: MagicMock,
+        mock_worktree: MagicMock,
     ) -> None:
         """run_claude が ExecutorError を送出すると
         _handle_failure が呼ばれ False が返る"""
@@ -341,6 +363,7 @@ class TestLevel2Error:
             "testowner/testrepo", 42, "Claude Code CLI の実行に失敗しました"
         )
 
+    @patch("pipeline.worktree_context", side_effect=_fake_worktree_context)
     @patch("pipeline.post_success_comment")
     @patch("pipeline.post_failure_comment")
     @patch("pipeline.transition_to_done")
@@ -357,6 +380,7 @@ class TestLevel2Error:
         mock_done: MagicMock,
         mock_fail_comment: MagicMock,
         mock_success_comment: MagicMock,
+        mock_worktree: MagicMock,
     ) -> None:
         """run_claude が success=False の結果を返すと
         _handle_failure が呼ばれ False が返る"""
@@ -380,6 +404,7 @@ class TestLevel2Error:
             "testowner/testrepo", 42, "Claude Code CLI がエラーを返しました"
         )
 
+    @patch("pipeline.worktree_context", side_effect=_fake_worktree_context)
     @patch("pipeline.post_success_comment")
     @patch("pipeline.post_failure_comment")
     @patch("pipeline.transition_to_done")
@@ -396,6 +421,7 @@ class TestLevel2Error:
         mock_done: MagicMock,
         mock_fail_comment: MagicMock,
         mock_success_comment: MagicMock,
+        mock_worktree: MagicMock,
     ) -> None:
         """run_claude が success=False かつ stderr が空の場合、
         stdout がエラーメッセージとして使われる"""
@@ -414,6 +440,7 @@ class TestLevel2Error:
             "testowner/testrepo", 42, "Claude Code CLI がエラーを返しました"
         )
 
+    @patch("pipeline.worktree_context", side_effect=_fake_worktree_context)
     @patch("pipeline.post_success_comment")
     @patch("pipeline.post_failure_comment")
     @patch("pipeline.transition_to_done")
@@ -430,6 +457,7 @@ class TestLevel2Error:
         mock_done: MagicMock,
         mock_fail_comment: MagicMock,
         mock_success_comment: MagicMock,
+        mock_worktree: MagicMock,
     ) -> None:
         """run_claude が success=False かつ stderr/stdout ともに空の場合、
         デフォルトのエラーメッセージが使われる"""
@@ -459,6 +487,7 @@ class TestLevel2Error:
 class TestLevel3ErrorOnSuccess:
     """成功後の後処理失敗テスト（done 遷移 / 成功コメント投稿）"""
 
+    @patch("pipeline.worktree_context", side_effect=_fake_worktree_context)
     @patch("pipeline.post_success_comment")
     @patch("pipeline.post_failure_comment")
     @patch("pipeline.transition_to_done")
@@ -475,6 +504,7 @@ class TestLevel3ErrorOnSuccess:
         mock_done: MagicMock,
         mock_fail_comment: MagicMock,
         mock_success_comment: MagicMock,
+        mock_worktree: MagicMock,
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         """成功後に transition_to_done が LabelError を送出しても
@@ -495,6 +525,7 @@ class TestLevel3ErrorOnSuccess:
         assert "done ラベル遷移に失敗しました" in caplog.text
         mock_success_comment.assert_called_once()
 
+    @patch("pipeline.worktree_context", side_effect=_fake_worktree_context)
     @patch("pipeline.post_success_comment")
     @patch("pipeline.post_failure_comment")
     @patch("pipeline.transition_to_done")
@@ -511,6 +542,7 @@ class TestLevel3ErrorOnSuccess:
         mock_done: MagicMock,
         mock_fail_comment: MagicMock,
         mock_success_comment: MagicMock,
+        mock_worktree: MagicMock,
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         """成功後に post_success_comment が CommentError を送出しても
@@ -535,6 +567,7 @@ class TestLevel3ErrorOnSuccess:
 class TestLevel3ErrorOnFailure:
     """失敗後の後処理失敗テスト（failed 遷移 / 失敗コメント投稿）"""
 
+    @patch("pipeline.worktree_context", side_effect=_fake_worktree_context)
     @patch("pipeline.post_success_comment")
     @patch("pipeline.post_failure_comment")
     @patch("pipeline.transition_to_done")
@@ -551,6 +584,7 @@ class TestLevel3ErrorOnFailure:
         mock_done: MagicMock,
         mock_fail_comment: MagicMock,
         mock_success_comment: MagicMock,
+        mock_worktree: MagicMock,
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         """失敗後に transition_to_failed が LabelError を送出しても
@@ -571,6 +605,7 @@ class TestLevel3ErrorOnFailure:
         assert "failed ラベル遷移に失敗しました" in caplog.text
         mock_fail_comment.assert_called_once()
 
+    @patch("pipeline.worktree_context", side_effect=_fake_worktree_context)
     @patch("pipeline.post_success_comment")
     @patch("pipeline.post_failure_comment")
     @patch("pipeline.transition_to_done")
@@ -587,6 +622,7 @@ class TestLevel3ErrorOnFailure:
         mock_done: MagicMock,
         mock_fail_comment: MagicMock,
         mock_success_comment: MagicMock,
+        mock_worktree: MagicMock,
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         """失敗後に post_failure_comment が CommentError を送出しても

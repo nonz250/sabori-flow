@@ -56,6 +56,7 @@ class RepositoryConfig:
 
     owner: str
     repo: str
+    local_path: str
     labels: LabelsConfig
     priority_labels: list[str]
 

@@ -7,6 +7,7 @@ from executor import ExecutorError, run_claude
 from label import LabelError, transition_to_done, transition_to_failed, transition_to_in_progress
 from models import Issue, Phase, PhaseLabels, RepositoryConfig
 from prompt import PromptTemplateError, build_prompt
+from worktree import WorktreeError, worktree_context
 
 logger = logging.getLogger(__name__)
 
@@ -62,77 +63,92 @@ def process_issue(issue: Issue, repo_config: RepositoryConfig) -> bool:
         )
         return False
 
-    # 3. プロンプト生成（レベル 2）
+    # 3. worktree 作成 → Claude 実行 → worktree 削除
     try:
-        prompt = build_prompt(issue, repo_config)
-    except PromptTemplateError as e:
+        with worktree_context(repo_config.local_path, issue.number) as worktree_path:
+            # 3-1. プロンプト生成（レベル 2）
+            try:
+                prompt = build_prompt(issue, repo_config)
+            except PromptTemplateError as e:
+                logger.error(
+                    "Issue #%d: プロンプト生成に失敗しました [repo=%s]: %s",
+                    issue.number,
+                    repo_full_name,
+                    e,
+                )
+                _handle_failure(
+                    repo_full_name, issue.number, phase_labels,
+                    "プロンプトの生成に失敗しました",
+                )
+                return False
+
+            # 3-2. Claude CLI 実行（レベル 2）
+            try:
+                result = run_claude(prompt, cwd=worktree_path)
+            except ExecutorError as e:
+                logger.error(
+                    "Issue #%d: Claude CLI の実行に失敗しました [repo=%s]: %s",
+                    issue.number,
+                    repo_full_name,
+                    e,
+                )
+                _handle_failure(
+                    repo_full_name, issue.number, phase_labels,
+                    "Claude Code CLI の実行に失敗しました",
+                )
+                return False
+
+            if not result.success:
+                logger.error(
+                    "Issue #%d: Claude CLI が失敗ステータスを返しました [repo=%s]",
+                    issue.number,
+                    repo_full_name,
+                )
+                _handle_failure(
+                    repo_full_name, issue.number, phase_labels,
+                    "Claude Code CLI がエラーを返しました",
+                )
+                return False
+
+            # 5-A. 成功: done 遷移 + 成功コメント（レベル 3）
+            try:
+                transition_to_done(repo_full_name, issue.number, phase_labels)
+            except LabelError as e:
+                logger.warning(
+                    "Issue #%d: done ラベル遷移に失敗しました [repo=%s]: %s",
+                    issue.number,
+                    repo_full_name,
+                    e,
+                )
+
+            try:
+                post_success_comment(repo_full_name, issue.number, result.stdout)
+            except CommentError as e:
+                logger.warning(
+                    "Issue #%d: 成功コメントの投稿に失敗しました [repo=%s]: %s",
+                    issue.number,
+                    repo_full_name,
+                    e,
+                )
+
+            logger.info(
+                "Issue #%d の処理が正常に完了しました [repo=%s]",
+                issue.number,
+                repo_full_name,
+            )
+            return True
+    except WorktreeError as e:
         logger.error(
-            "Issue #%d: プロンプト生成に失敗しました [repo=%s]: %s",
+            "Issue #%d: worktree の作成に失敗しました [repo=%s]: %s",
             issue.number,
             repo_full_name,
             e,
         )
         _handle_failure(
             repo_full_name, issue.number, phase_labels,
-            "プロンプトの生成に失敗しました",
+            "作業ディレクトリの作成に失敗しました",
         )
         return False
-
-    # 4. Claude CLI 実行（レベル 2）
-    try:
-        result = run_claude(prompt)
-    except ExecutorError as e:
-        logger.error(
-            "Issue #%d: Claude CLI の実行に失敗しました [repo=%s]: %s",
-            issue.number,
-            repo_full_name,
-            e,
-        )
-        _handle_failure(
-            repo_full_name, issue.number, phase_labels,
-            "Claude Code CLI の実行に失敗しました",
-        )
-        return False
-
-    if not result.success:
-        logger.error(
-            "Issue #%d: Claude CLI が失敗ステータスを返しました [repo=%s]",
-            issue.number,
-            repo_full_name,
-        )
-        _handle_failure(
-            repo_full_name, issue.number, phase_labels,
-            "Claude Code CLI がエラーを返しました",
-        )
-        return False
-
-    # 5-A. 成功: done 遷移 + 成功コメント（レベル 3）
-    try:
-        transition_to_done(repo_full_name, issue.number, phase_labels)
-    except LabelError as e:
-        logger.warning(
-            "Issue #%d: done ラベル遷移に失敗しました [repo=%s]: %s",
-            issue.number,
-            repo_full_name,
-            e,
-        )
-
-    try:
-        post_success_comment(repo_full_name, issue.number, result.stdout)
-    except CommentError as e:
-        logger.warning(
-            "Issue #%d: 成功コメントの投稿に失敗しました [repo=%s]: %s",
-            issue.number,
-            repo_full_name,
-            e,
-        )
-
-    logger.info(
-        "Issue #%d の処理が正常に完了しました [repo=%s]",
-        issue.number,
-        repo_full_name,
-    )
-    return True
 
 
 def _handle_failure(

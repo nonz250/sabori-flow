@@ -55,18 +55,20 @@ class TestRunClaudeStdin:
     def test_prompt_is_passed_via_stdin(self, mock_run) -> None:
         """プロンプト文字列が input 引数で subprocess.run に渡される"""
         mock_run.return_value = subprocess.CompletedProcess(
-            args=["claude", "-p"], returncode=0, stdout="", stderr=""
+            args=["claude", "-p", "--dangerously-skip-permissions"],
+            returncode=0, stdout="", stderr=""
         )
 
         run_claude("Fix the bug in module Y")
 
         mock_run.assert_called_once_with(
-            ["claude", "-p"],
+            ["claude", "-p", "--dangerously-skip-permissions"],
             input="Fix the bug in module Y",
             shell=False,
             capture_output=True,
             text=True,
             timeout=DEFAULT_TIMEOUT_SECONDS,
+            cwd=None,
         )
 
 
@@ -135,7 +137,8 @@ class TestRunClaudeDefaultTimeout:
     def test_default_timeout_is_passed_to_subprocess(self, mock_run) -> None:
         """タイムアウト未指定時にデフォルト値が subprocess.run に渡される"""
         mock_run.return_value = subprocess.CompletedProcess(
-            args=["claude", "-p"], returncode=0, stdout="", stderr=""
+            args=["claude", "-p", "--dangerously-skip-permissions"],
+            returncode=0, stdout="", stderr=""
         )
 
         run_claude("prompt text")
@@ -151,7 +154,8 @@ class TestRunClaudeCustomTimeout:
     def test_custom_timeout_is_passed_to_subprocess(self, mock_run) -> None:
         """指定したタイムアウト値が subprocess.run に渡される"""
         mock_run.return_value = subprocess.CompletedProcess(
-            args=["claude", "-p"], returncode=0, stdout="", stderr=""
+            args=["claude", "-p", "--dangerously-skip-permissions"],
+            returncode=0, stdout="", stderr=""
         )
 
         run_claude("prompt text", timeout=600)
