@@ -12,6 +12,9 @@ class GitHubCLIError(Exception):
     pass
 
 
+_GH_TIMEOUT_SECONDS: int = 120
+
+
 class IssueParseError(Exception):
     """Issue の JSON パースエラー"""
 
@@ -70,7 +73,15 @@ def _run_gh_command(args: list[str]) -> str:
     Raises:
         GitHubCLIError: コマンドの終了コードが 0 でない場合
     """
-    result = subprocess.run(args, shell=False, capture_output=True, text=True)
+    try:
+        result = subprocess.run(
+            args, shell=False, capture_output=True, text=True,
+            timeout=_GH_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as e:
+        raise GitHubCLIError(
+            f"gh command timed out after {_GH_TIMEOUT_SECONDS} seconds"
+        ) from e
 
     if result.returncode != 0:
         raise GitHubCLIError(result.stderr)

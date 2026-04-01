@@ -7,6 +7,7 @@ from pathlib import Path
 from config import ConfigValidationError, load_config
 from fetcher import GitHubCLIError, IssueParseError, fetch_issues
 from models import Phase, RepositoryConfig
+from pipeline import process_issue
 
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.yml"
 
@@ -26,15 +27,15 @@ def _setup_logging() -> None:
     root_logger.addHandler(handler)
 
 
-def _fetch_and_log(repo_config: RepositoryConfig, phase: Phase) -> bool:
-    """指定リポジトリ・フェーズの Issue を取得してログ出力する。
+def _process_phase(repo_config: RepositoryConfig, phase: Phase) -> bool:
+    """指定リポジトリ・フェーズの Issue を取得し、パイプラインを実行する。
 
     Args:
         repo_config: リポジトリ設定
         phase: 処理フェーズ
 
     Returns:
-        取得に成功した場合 True、失敗した場合 False
+        1 件以上の Issue を正常に処理できた場合 True
     """
     phase_name = phase.value
     full_name = repo_config.full_name
@@ -59,15 +60,21 @@ def _fetch_and_log(repo_config: RepositoryConfig, phase: Phase) -> bool:
         len(issues),
     )
 
+    if not issues:
+        return True  # 0件は成功扱い
+
+    any_success = False
     for issue in issues:
         logger.info(
-            "  #%d [%s] %s",
+            "  #%d [%s] %s の処理を開始",
             issue.number,
             issue.priority.name,
             issue.title,
         )
+        if process_issue(issue, repo_config):
+            any_success = True
 
-    return True
+    return any_success
 
 
 def main() -> int:
@@ -96,7 +103,7 @@ def main() -> int:
 
     for repo_config in app_config.repositories:
         for phase in (Phase.PLAN, Phase.IMPL):
-            if _fetch_and_log(repo_config, phase):
+            if _process_phase(repo_config, phase):
                 any_success = True
 
     if not any_success:
