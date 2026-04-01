@@ -6,14 +6,19 @@ PROJECT_ROOT   := $(shell pwd)
 PYTHON_PATH    := $(PROJECT_ROOT)/.venv/bin/python
 CURRENT_PATH   := $(shell echo $$PATH)
 
-.PHONY: setup install uninstall
+.PHONY: check-config setup install uninstall
 
 setup:
 	python3 -m venv .venv
 	.venv/bin/pip install -r requirements.txt
 	@echo "Setup complete. Run 'make install' to register with launchd."
 
-install: setup $(PLIST_FILE)
+check-config:
+	@test -f config.yml || (echo "Error: config.yml が見つかりません。" && \
+		echo "  cp config.yml.example config.yml" && \
+		echo "  で作成し、リポジトリ情報を編集してください。" && exit 1)
+
+install: check-config setup $(PLIST_FILE)
 	mkdir -p $(HOME)/Library/LaunchAgents
 	cp $(PLIST_FILE) $(PLIST_DEST)
 	launchctl load $(PLIST_DEST)
