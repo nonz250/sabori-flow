@@ -16,6 +16,7 @@ DEFAULT_TIMEOUT_SECONDS: int = 1800
 
 def run_claude(
     prompt: str,
+    cwd: str | None = None,
     timeout: int = DEFAULT_TIMEOUT_SECONDS,
 ) -> ExecutorResult:
     """Claude Code CLI を実行し、結果を返す。
@@ -24,6 +25,7 @@ def run_claude(
 
     Args:
         prompt: Claude Code CLI に渡すプロンプト文字列
+        cwd: 作業ディレクトリ（指定時はそのディレクトリで実行）
         timeout: タイムアウト秒数
 
     Returns:
@@ -34,12 +36,13 @@ def run_claude(
     """
     try:
         result = subprocess.run(
-            ["claude", "-p"],
+            ["claude", "-p", "--dangerously-skip-permissions"],
             input=prompt,
             shell=False,
             capture_output=True,
             text=True,
             timeout=timeout,
+            cwd=cwd,
         )
     except subprocess.TimeoutExpired as e:
         raise ExecutorError(
