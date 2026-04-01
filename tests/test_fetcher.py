@@ -29,6 +29,7 @@ def repo_config() -> RepositoryConfig:
     return RepositoryConfig(
         owner="nonz250",
         repo="example-app",
+        local_path="/tmp/nonz250/example-app",
         labels=LabelsConfig(
             plan=PhaseLabels(
                 trigger="claude/plan",
@@ -64,7 +65,8 @@ class TestRunGhCommand:
 
         assert result == '{"result": "ok"}'
         mock_run.assert_called_once_with(
-            ["gh", "issue", "list"], shell=False, capture_output=True, text=True
+            ["gh", "issue", "list"], shell=False, capture_output=True, text=True,
+            timeout=120,
         )
 
     @patch("fetcher.subprocess.run")
