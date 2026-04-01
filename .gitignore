@@ -3,4 +3,7 @@ config.yml
 __pycache__/
 .env
 *.log
+logs/
 .venv/
+launchd/*.plist
+.claude-worker-worktrees/
