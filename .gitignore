@@ -1,0 +1,9 @@
+config.yml
+*.pyc
+__pycache__/
+.env
+*.log
+logs/
+.venv/
+launchd/*.plist
+.claude-worker-worktrees/
