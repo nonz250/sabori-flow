@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import logging
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
 from config import ConfigValidationError, load_config
 from fetcher import GitHubCLIError, IssueParseError, fetch_issues
 from models import Phase, RepositoryConfig
+from pipeline import process_issue
 
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.yml"
+_LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
 
 logger = logging.getLogger(__name__)
 
@@ -18,23 +22,39 @@ def _setup_logging() -> None:
     root_logger = logging.getLogger()
     if root_logger.handlers:
         return
-    handler = logging.StreamHandler(sys.stderr)
-    handler.setFormatter(
-        logging.Formatter("[%(asctime)s] %(levelname)s - %(message)s")
-    )
     root_logger.setLevel(logging.INFO)
-    root_logger.addHandler(handler)
+
+    formatter = logging.Formatter("[%(asctime)s] %(levelname)s - %(message)s")
+
+    # stderr ハンドラ（既存）
+    stderr_handler = logging.StreamHandler(sys.stderr)
+    stderr_handler.setFormatter(formatter)
+    root_logger.addHandler(stderr_handler)
+
+    # ファイルハンドラ（追加）
+    _LOG_DIR.mkdir(exist_ok=True)
+    log_file = _LOG_DIR / "worker.log"
+    file_handler = TimedRotatingFileHandler(
+        filename=str(log_file),
+        when="midnight",
+        interval=1,
+        backupCount=7,
+        encoding="utf-8",
+    )
+    file_handler.suffix = "%Y-%m-%d"
+    file_handler.setFormatter(formatter)
+    root_logger.addHandler(file_handler)
 
 
-def _fetch_and_log(repo_config: RepositoryConfig, phase: Phase) -> bool:
-    """指定リポジトリ・フェーズの Issue を取得してログ出力する。
+def _process_phase(repo_config: RepositoryConfig, phase: Phase) -> bool:
+    """指定リポジトリ・フェーズの Issue を取得し、パイプラインを実行する。
 
     Args:
         repo_config: リポジトリ設定
         phase: 処理フェーズ
 
     Returns:
-        取得に成功した場合 True、失敗した場合 False
+        1 件以上の Issue を正常に処理できた場合 True
     """
     phase_name = phase.value
     full_name = repo_config.full_name
@@ -59,15 +79,37 @@ def _fetch_and_log(repo_config: RepositoryConfig, phase: Phase) -> bool:
         len(issues),
     )
 
+    if not issues:
+        return True  # 0件は成功扱い
+
+    any_success = False
     for issue in issues:
         logger.info(
-            "  #%d [%s] %s",
+            "  #%d [%s] %s の処理を開始",
             issue.number,
             issue.priority.name,
             issue.title,
         )
+        if process_issue(issue, repo_config):
+            any_success = True
 
-    return True
+    return any_success
+
+
+def _process_repository(repo_config: RepositoryConfig) -> bool:
+    """1 リポジトリの全フェーズを処理する。
+
+    Args:
+        repo_config: リポジトリ設定
+
+    Returns:
+        1 件以上の Issue を正常に処理できた場合 True
+    """
+    any_success = False
+    for phase in (Phase.PLAN, Phase.IMPL):
+        if _process_phase(repo_config, phase):
+            any_success = True
+    return any_success
 
 
 def main() -> int:
@@ -93,11 +135,24 @@ def main() -> int:
     )
 
     any_success = False
+    max_workers = app_config.execution.max_parallel
 
-    for repo_config in app_config.repositories:
-        for phase in (Phase.PLAN, Phase.IMPL):
-            if _fetch_and_log(repo_config, phase):
-                any_success = True
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = {
+            pool.submit(_process_repository, repo_config): repo_config
+            for repo_config in app_config.repositories
+        }
+        for future in as_completed(futures):
+            repo_config = futures[future]
+            try:
+                if future.result():
+                    any_success = True
+            except Exception as e:
+                logger.error(
+                    "[%s] 予期しないエラー: %s",
+                    repo_config.full_name,
+                    e,
+                )
 
     if not any_success:
         return 1
