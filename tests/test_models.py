@@ -5,6 +5,7 @@ import pytest
 from models import (
     AppConfig,
     ExecutionConfig,
+    ExecutorResult,
     Issue,
     LabelsConfig,
     Phase,
@@ -157,6 +158,37 @@ class TestExecutionConfig:
         config = ExecutionConfig(max_parallel=4)
         with pytest.raises(FrozenInstanceError):
             config.max_parallel = 8  # type: ignore[misc]
+
+
+class TestExecutorResult:
+    """ExecutorResult dataclass のテスト"""
+
+    @pytest.fixture()
+    def executor_result(self) -> ExecutorResult:
+        return ExecutorResult(
+            success=True,
+            stdout="Claude output",
+            stderr="",
+        )
+
+    def test_fields_are_preserved(self, executor_result: ExecutorResult) -> None:
+        assert executor_result.success is True
+        assert executor_result.stdout == "Claude output"
+        assert executor_result.stderr == ""
+
+    def test_frozen(self, executor_result: ExecutorResult) -> None:
+        with pytest.raises(FrozenInstanceError):
+            executor_result.success = False  # type: ignore[misc]
+
+    def test_failure_fields_are_preserved(self) -> None:
+        result = ExecutorResult(
+            success=False,
+            stdout="",
+            stderr="Error: something went wrong",
+        )
+        assert result.success is False
+        assert result.stdout == ""
+        assert result.stderr == "Error: something went wrong"
 
 
 class TestAppConfig:
