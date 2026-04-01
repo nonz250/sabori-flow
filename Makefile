@@ -6,9 +6,14 @@ PROJECT_ROOT   := $(shell pwd)
 PYTHON_PATH    := $(PROJECT_ROOT)/.venv/bin/python
 CURRENT_PATH   := $(shell echo $$PATH)
 
-.PHONY: install uninstall
+.PHONY: setup install uninstall
 
-install: $(PLIST_FILE)
+setup:
+	python3 -m venv .venv
+	.venv/bin/pip install -r requirements.txt
+	@echo "Setup complete. Run 'make install' to register with launchd."
+
+install: setup $(PLIST_FILE)
 	mkdir -p $(HOME)/Library/LaunchAgents
 	cp $(PLIST_FILE) $(PLIST_DEST)
 	launchctl load $(PLIST_DEST)
