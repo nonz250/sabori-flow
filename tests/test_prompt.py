@@ -54,6 +54,7 @@ def _make_repo_config(
     return RepositoryConfig(
         owner=owner,
         repo=repo,
+        local_path="/tmp/testowner/testrepo",
         labels=_make_labels_config(),
         priority_labels=["priority:high", "priority:low"],
     )

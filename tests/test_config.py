@@ -17,6 +17,7 @@ VALID_YAML = """\
 repositories:
   - owner: my-org
     repo: my-repo
+    local_path: /tmp/my-org/my-repo
     labels:
       plan:
         trigger: "plan"
@@ -39,6 +40,7 @@ VALID_YAML_NO_EXECUTION = """\
 repositories:
   - owner: my-org
     repo: my-repo
+    local_path: /tmp/my-org/my-repo
     labels:
       plan:
         trigger: "plan"
@@ -58,6 +60,7 @@ VALID_YAML_EMPTY_PRIORITY = """\
 repositories:
   - owner: my-org
     repo: my-repo
+    local_path: /tmp/my-org/my-repo
     labels:
       plan:
         trigger: "plan"
@@ -169,6 +172,7 @@ class TestLoadConfigPriorityLabelsValidation:
 repositories:
   - owner: my-org
     repo: my-repo
+    local_path: /tmp/my-org/my-repo
     labels:
       plan:
         trigger: "plan"
@@ -192,6 +196,7 @@ repositories:
 repositories:
   - owner: my-org
     repo: my-repo
+    local_path: /tmp/my-org/my-repo
     labels:
       plan:
         trigger: "plan"
@@ -215,6 +220,7 @@ repositories:
 repositories:
   - owner: my-org
     repo: my-repo
+    local_path: /tmp/my-org/my-repo
     labels:
       plan:
         trigger: "plan"
@@ -243,6 +249,7 @@ class TestLoadConfigLabelsValidation:
 repositories:
   - owner: my-org
     repo: my-repo
+    local_path: /tmp/my-org/my-repo
     labels:
       impl:
         trigger: "impl"
@@ -260,6 +267,7 @@ repositories:
 repositories:
   - owner: my-org
     repo: my-repo
+    local_path: /tmp/my-org/my-repo
     labels:
       plan:
         in_progress: "plan:in-progress"

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 
@@ -88,6 +89,17 @@ def _parse_repositories(raw: list) -> list[RepositoryConfig]:
         owner = _validate_owner_repo(entry, "owner", prefix)
         repo = _validate_owner_repo(entry, "repo", prefix)
 
+        # local_path バリデーション
+        if "local_path" not in entry:
+            raise ConfigValidationError(f"{prefix}: 'local_path' is required")
+
+        local_path = entry["local_path"]
+        if not isinstance(local_path, str) or local_path == "":
+            raise ConfigValidationError(f"{prefix}.local_path: must be a non-empty string")
+
+        if not os.path.isabs(local_path):
+            raise ConfigValidationError(f"{prefix}.local_path: must be an absolute path, got '{local_path}'")
+
         if "labels" not in entry:
             raise ConfigValidationError(f"{prefix}: 'labels' is required")
 
@@ -125,6 +137,7 @@ def _parse_repositories(raw: list) -> list[RepositoryConfig]:
             RepositoryConfig(
                 owner=owner,
                 repo=repo,
+                local_path=local_path,
                 labels=LabelsConfig(plan=plan, impl=impl),
                 priority_labels=priority_raw,
             )
