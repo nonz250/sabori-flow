@@ -2,6 +2,7 @@
 repositories:
   - owner: nonz250
     repo: example-app
+    local_path: /Users/you/projects/example-app
     labels:
       plan:
         trigger: claude/plan
