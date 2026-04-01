@@ -77,3 +77,12 @@ class AppConfig:
 
     repositories: list[RepositoryConfig]
     execution: ExecutionConfig
+
+
+@dataclass(frozen=True)
+class ExecutorResult:
+    """Claude Code CLI の実行結果"""
+
+    success: bool
+    stdout: str
+    stderr: str
