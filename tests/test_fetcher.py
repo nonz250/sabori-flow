@@ -29,6 +29,7 @@ def repo_config() -> RepositoryConfig:
     return RepositoryConfig(
         owner="nonz250",
         repo="example-app",
+        local_path="/tmp/nonz250/example-app",
         labels=LabelsConfig(
             plan=PhaseLabels(
                 trigger="claude/plan",

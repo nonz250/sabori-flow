@@ -7,7 +7,7 @@ import pytest
 
 from config import ConfigValidationError
 from fetcher import GitHubCLIError, IssueParseError
-from main import _process_phase, main
+from main import _process_phase, _process_repository, main
 from models import (
     AppConfig,
     ExecutionConfig,
@@ -25,6 +25,7 @@ def _make_repo_config(owner: str = "my-org", repo: str = "my-repo") -> Repositor
     return RepositoryConfig(
         owner=owner,
         repo=repo,
+        local_path=f"/tmp/{owner}/{repo}",
         labels=LabelsConfig(
             plan=PhaseLabels(
                 trigger="claude/plan",
@@ -431,3 +432,201 @@ class TestProcessPhase:
         # Assert
         assert result is True
         assert mock_process_issue.call_count == 2
+
+
+class TestProcessRepository:
+    """_process_repository の単体テスト"""
+
+    @patch("main._process_phase")
+    def test_both_phases_called(
+        self,
+        mock_process_phase: MagicMock,
+    ) -> None:
+        """plan と impl の両フェーズが呼ばれる"""
+        # Arrange
+        repo_config = _make_repo_config()
+        mock_process_phase.return_value = True
+
+        # Act
+        _process_repository(repo_config)
+
+        # Assert
+        assert mock_process_phase.call_count == 2
+        mock_process_phase.assert_any_call(repo_config, Phase.PLAN)
+        mock_process_phase.assert_any_call(repo_config, Phase.IMPL)
+
+    @patch("main._process_phase")
+    def test_plan_succeeds_impl_fails_returns_true(
+        self,
+        mock_process_phase: MagicMock,
+    ) -> None:
+        """plan が成功し impl が失敗しても True が返る"""
+        # Arrange
+        repo_config = _make_repo_config()
+        mock_process_phase.side_effect = [True, False]
+
+        # Act
+        result = _process_repository(repo_config)
+
+        # Assert
+        assert result is True
+
+    @patch("main._process_phase")
+    def test_plan_fails_impl_succeeds_returns_true(
+        self,
+        mock_process_phase: MagicMock,
+    ) -> None:
+        """plan が失敗し impl が成功しても True が返る"""
+        # Arrange
+        repo_config = _make_repo_config()
+        mock_process_phase.side_effect = [False, True]
+
+        # Act
+        result = _process_repository(repo_config)
+
+        # Assert
+        assert result is True
+
+    @patch("main._process_phase")
+    def test_both_phases_succeed_returns_true(
+        self,
+        mock_process_phase: MagicMock,
+    ) -> None:
+        """両フェーズが成功すると True が返る"""
+        # Arrange
+        repo_config = _make_repo_config()
+        mock_process_phase.return_value = True
+
+        # Act
+        result = _process_repository(repo_config)
+
+        # Assert
+        assert result is True
+
+    @patch("main._process_phase")
+    def test_both_phases_fail_returns_false(
+        self,
+        mock_process_phase: MagicMock,
+    ) -> None:
+        """両フェーズが失敗すると False が返る"""
+        # Arrange
+        repo_config = _make_repo_config()
+        mock_process_phase.return_value = False
+
+        # Act
+        result = _process_repository(repo_config)
+
+        # Assert
+        assert result is False
+
+
+class TestMainThreadPoolExecutor:
+    """main() の ThreadPoolExecutor 関連テスト"""
+
+    @patch("main._process_repository")
+    @patch("main.ThreadPoolExecutor")
+    @patch("main.load_config")
+    def test_max_parallel_passed_to_thread_pool(
+        self,
+        mock_load_config: MagicMock,
+        mock_executor_cls: MagicMock,
+        mock_process_repo: MagicMock,
+    ) -> None:
+        """max_parallel の値が ThreadPoolExecutor に渡される"""
+        # Arrange
+        max_parallel = 4
+        mock_load_config.return_value = AppConfig(
+            repositories=[_make_repo_config()],
+            execution=ExecutionConfig(max_parallel=max_parallel),
+        )
+        mock_pool = MagicMock()
+        mock_executor_cls.return_value.__enter__ = MagicMock(return_value=mock_pool)
+        mock_executor_cls.return_value.__exit__ = MagicMock(return_value=False)
+        mock_pool.submit.return_value = MagicMock()
+        # as_completed が空を返す（submit 結果を直接検証するため）
+        mock_pool.submit.return_value.result.return_value = True
+
+        # Act
+        with patch("main.as_completed", return_value=[mock_pool.submit.return_value]):
+            main()
+
+        # Assert
+        mock_executor_cls.assert_called_once_with(max_workers=max_parallel)
+
+    @patch("main._process_repository")
+    @patch("main.ThreadPoolExecutor")
+    @patch("main.load_config")
+    def test_multiple_repos_submitted_to_pool(
+        self,
+        mock_load_config: MagicMock,
+        mock_executor_cls: MagicMock,
+        mock_process_repo: MagicMock,
+    ) -> None:
+        """複数リポジトリが ThreadPoolExecutor に submit される"""
+        # Arrange
+        repo1 = _make_repo_config(owner="org1", repo="repo1")
+        repo2 = _make_repo_config(owner="org2", repo="repo2")
+        repo3 = _make_repo_config(owner="org3", repo="repo3")
+        mock_load_config.return_value = AppConfig(
+            repositories=[repo1, repo2, repo3],
+            execution=ExecutionConfig(max_parallel=3),
+        )
+        mock_pool = MagicMock()
+        mock_executor_cls.return_value.__enter__ = MagicMock(return_value=mock_pool)
+        mock_executor_cls.return_value.__exit__ = MagicMock(return_value=False)
+
+        future1 = MagicMock()
+        future2 = MagicMock()
+        future3 = MagicMock()
+        future1.result.return_value = True
+        future2.result.return_value = True
+        future3.result.return_value = True
+        mock_pool.submit.side_effect = [future1, future2, future3]
+
+        # Act
+        with patch("main.as_completed", return_value=[future1, future2, future3]):
+            main()
+
+        # Assert: submit が 3 回呼ばれる
+        assert mock_pool.submit.call_count == 3
+        mock_pool.submit.assert_any_call(mock_process_repo, repo1)
+        mock_pool.submit.assert_any_call(mock_process_repo, repo2)
+        mock_pool.submit.assert_any_call(mock_process_repo, repo3)
+
+    @patch("main._process_repository")
+    @patch("main.ThreadPoolExecutor")
+    @patch("main.load_config")
+    def test_future_exception_logs_error_and_continues(
+        self,
+        mock_load_config: MagicMock,
+        mock_executor_cls: MagicMock,
+        mock_process_repo: MagicMock,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """future.result() が例外を送出するとログ出力され、処理は継続する"""
+        # Arrange
+        repo1 = _make_repo_config(owner="org1", repo="repo1")
+        repo2 = _make_repo_config(owner="org2", repo="repo2")
+        mock_load_config.return_value = AppConfig(
+            repositories=[repo1, repo2],
+            execution=ExecutionConfig(max_parallel=2),
+        )
+        mock_pool = MagicMock()
+        mock_executor_cls.return_value.__enter__ = MagicMock(return_value=mock_pool)
+        mock_executor_cls.return_value.__exit__ = MagicMock(return_value=False)
+
+        future_error = MagicMock()
+        future_success = MagicMock()
+        future_error.result.side_effect = RuntimeError("unexpected crash")
+        future_success.result.return_value = True
+        mock_pool.submit.side_effect = [future_error, future_success]
+
+        # as_completed の戻り値で futures -> repo_config マッピングを再現するため
+        # main() 内の futures dict のキーと一致させる
+        with patch("main.as_completed", return_value=[future_error, future_success]):
+            with caplog.at_level(logging.ERROR):
+                result = main()
+
+        # Assert: エラーがログ出力され、成功した方があるので 0 が返る
+        assert result == 0
+        assert "予期しないエラー" in caplog.text

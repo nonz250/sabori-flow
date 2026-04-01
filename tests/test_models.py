@@ -139,6 +139,7 @@ class TestRepositoryConfig:
         return RepositoryConfig(
             owner="my-org",
             repo="my-repo",
+            local_path="/tmp/my-org/my-repo",
             labels=LabelsConfig(plan=plan, impl=impl),
             priority_labels=["priority:high", "priority:low"],
         )
