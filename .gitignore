@@ -8,3 +8,4 @@ launchd/*.plist
 .sabori-flow-worktrees/
 node_modules/
 dist/
+coverage/
