@@ -1,0 +1,473 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { homedir } from "node:os";
+
+vi.mock("node:fs");
+
+import { readFileSync } from "node:fs";
+import {
+  loadConfig,
+  ConfigValidationError,
+} from "../../src/worker/config.js";
+
+const mockedReadFileSync = vi.mocked(readFileSync);
+
+// ---------- Helper ----------
+
+function mockYaml(content: string): void {
+  mockedReadFileSync.mockReturnValue(content);
+}
+
+function mockFileNotFound(): void {
+  const error = new Error("ENOENT: no such file or directory") as NodeJS.ErrnoException;
+  error.code = "ENOENT";
+  mockedReadFileSync.mockImplementation(() => {
+    throw error;
+  });
+}
+
+// ---------- Fixtures ----------
+
+const VALID_YAML = `\
+repositories:
+  - owner: my-org
+    repo: my-repo
+    local_path: /tmp/my-org/my-repo
+    labels:
+      plan:
+        trigger: "plan"
+        in_progress: "plan:in-progress"
+        done: "plan:done"
+        failed: "plan:failed"
+      impl:
+        trigger: "impl"
+        in_progress: "impl:in-progress"
+        done: "impl:done"
+        failed: "impl:failed"
+    priority_labels:
+      - "priority:high"
+      - "priority:low"
+execution:
+  max_parallel: 4
+`;
+
+const VALID_YAML_NO_EXECUTION = `\
+repositories:
+  - owner: my-org
+    repo: my-repo
+    local_path: /tmp/my-org/my-repo
+    labels:
+      plan:
+        trigger: "plan"
+        in_progress: "plan:in-progress"
+        done: "plan:done"
+        failed: "plan:failed"
+      impl:
+        trigger: "impl"
+        in_progress: "impl:in-progress"
+        done: "impl:done"
+        failed: "impl:failed"
+    priority_labels:
+      - "priority:high"
+`;
+
+const VALID_YAML_EMPTY_PRIORITY = `\
+repositories:
+  - owner: my-org
+    repo: my-repo
+    local_path: /tmp/my-org/my-repo
+    labels:
+      plan:
+        trigger: "plan"
+        in_progress: "plan:in-progress"
+        done: "plan:done"
+        failed: "plan:failed"
+      impl:
+        trigger: "impl"
+        in_progress: "impl:in-progress"
+        done: "impl:done"
+        failed: "impl:failed"
+    priority_labels: []
+`;
+
+// ---------- Tests ----------
+
+beforeEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe("loadConfig - normal", () => {
+  it("complete config", () => {
+    mockYaml(VALID_YAML);
+    const result = loadConfig("/path/to/config.yml");
+
+    expect(result.repositories).toHaveLength(1);
+
+    const repo = result.repositories[0];
+    expect(repo.owner).toBe("my-org");
+    expect(repo.repo).toBe("my-repo");
+    expect(repo.localPath).toBe("/tmp/my-org/my-repo");
+    expect(repo.labels.plan.trigger).toBe("plan");
+    expect(repo.labels.plan.inProgress).toBe("plan:in-progress");
+    expect(repo.labels.plan.done).toBe("plan:done");
+    expect(repo.labels.plan.failed).toBe("plan:failed");
+    expect(repo.labels.impl.trigger).toBe("impl");
+    expect(repo.labels.impl.inProgress).toBe("impl:in-progress");
+    expect(repo.labels.impl.done).toBe("impl:done");
+    expect(repo.labels.impl.failed).toBe("impl:failed");
+    expect(repo.priorityLabels).toEqual(["priority:high", "priority:low"]);
+    expect(result.execution.maxParallel).toBe(4);
+  });
+
+  it("execution default (max_parallel=1 when execution is omitted)", () => {
+    mockYaml(VALID_YAML_NO_EXECUTION);
+    const result = loadConfig("/path/to/config.yml");
+
+    expect(result.execution.maxParallel).toBe(1);
+  });
+
+  it("empty priority_labels", () => {
+    mockYaml(VALID_YAML_EMPTY_PRIORITY);
+    const result = loadConfig("/path/to/config.yml");
+
+    expect(result.repositories[0].priorityLabels).toEqual([]);
+  });
+});
+
+describe("loadConfig - file errors", () => {
+  it("file not found throws Error", () => {
+    mockFileNotFound();
+
+    expect(() => loadConfig("/path/to/nonexistent.yml")).toThrow(
+      "Config file not found",
+    );
+  });
+
+  it("invalid YAML throws ConfigValidationError", () => {
+    mockYaml(":\n  :\n  - [invalid yaml\n");
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+  });
+});
+
+describe("loadConfig - repositories validation", () => {
+  it("missing repositories key", () => {
+    mockYaml("execution:\n  max_parallel: 1\n");
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+  });
+
+  it("repositories is not a list", () => {
+    mockYaml("repositories: not_a_list\n");
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+  });
+
+  it("repositories is an empty list", () => {
+    mockYaml("repositories: []\n");
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+  });
+
+  it("owner is empty string", () => {
+    const yaml = VALID_YAML.replace("owner: my-org", 'owner: ""');
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+  });
+
+  it("owner has invalid characters", () => {
+    const yaml = VALID_YAML.replace("owner: my-org", 'owner: "owner;rm"');
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+  });
+
+  it("repo has invalid characters", () => {
+    const yaml = VALID_YAML.replace("repo: my-repo", 'repo: "repo;rm"');
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+  });
+});
+
+describe("loadConfig - priority_labels validation", () => {
+  it("non-string element is rejected", () => {
+    const yaml = `\
+repositories:
+  - owner: my-org
+    repo: my-repo
+    local_path: /tmp/my-org/my-repo
+    labels:
+      plan:
+        trigger: "plan"
+        in_progress: "plan:in-progress"
+        done: "plan:done"
+        failed: "plan:failed"
+      impl:
+        trigger: "impl"
+        in_progress: "impl:in-progress"
+        done: "impl:done"
+        failed: "impl:failed"
+    priority_labels:
+      - 123
+`;
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /priority_labels\[0\]: must be a string/,
+    );
+  });
+
+  it("invalid characters are rejected", () => {
+    const yaml = `\
+repositories:
+  - owner: my-org
+    repo: my-repo
+    local_path: /tmp/my-org/my-repo
+    labels:
+      plan:
+        trigger: "plan"
+        in_progress: "plan:in-progress"
+        done: "plan:done"
+        failed: "plan:failed"
+      impl:
+        trigger: "impl"
+        in_progress: "impl:in-progress"
+        done: "impl:done"
+        failed: "impl:failed"
+    priority_labels:
+      - "priority<script>"
+`;
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /priority_labels\[0\]: invalid characters/,
+    );
+  });
+
+  it("second element invalid", () => {
+    const yaml = `\
+repositories:
+  - owner: my-org
+    repo: my-repo
+    local_path: /tmp/my-org/my-repo
+    labels:
+      plan:
+        trigger: "plan"
+        in_progress: "plan:in-progress"
+        done: "plan:done"
+        failed: "plan:failed"
+      impl:
+        trigger: "impl"
+        in_progress: "impl:in-progress"
+        done: "impl:done"
+        failed: "impl:failed"
+    priority_labels:
+      - "priority:high"
+      - true
+`;
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /priority_labels\[1\]: must be a string/,
+    );
+  });
+});
+
+describe("loadConfig - labels validation", () => {
+  it("missing plan key", () => {
+    const yaml = `\
+repositories:
+  - owner: my-org
+    repo: my-repo
+    local_path: /tmp/my-org/my-repo
+    labels:
+      impl:
+        trigger: "impl"
+        in_progress: "impl:in-progress"
+        done: "impl:done"
+        failed: "impl:failed"
+    priority_labels: []
+`;
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+  });
+
+  it("missing trigger key", () => {
+    const yaml = `\
+repositories:
+  - owner: my-org
+    repo: my-repo
+    local_path: /tmp/my-org/my-repo
+    labels:
+      plan:
+        in_progress: "plan:in-progress"
+        done: "plan:done"
+        failed: "plan:failed"
+      impl:
+        trigger: "impl"
+        in_progress: "impl:in-progress"
+        done: "impl:done"
+        failed: "impl:failed"
+    priority_labels: []
+`;
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+  });
+
+  it("invalid label characters", () => {
+    const yaml = VALID_YAML.replace(
+      'trigger: "plan"',
+      'trigger: "plan<script>"',
+    );
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+  });
+});
+
+describe("loadConfig - execution validation", () => {
+  it("max_parallel zero", () => {
+    const yaml = VALID_YAML.replace("max_parallel: 4", "max_parallel: 0");
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+  });
+
+  it("max_parallel negative", () => {
+    const yaml = VALID_YAML.replace("max_parallel: 4", "max_parallel: -1");
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+  });
+
+  it("max_parallel string", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      'max_parallel: "four"',
+    );
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+  });
+});
+
+describe("loadConfig - local_path validation", () => {
+  it("local_path is empty string", () => {
+    const yaml = VALID_YAML.replace(
+      "local_path: /tmp/my-org/my-repo",
+      'local_path: ""',
+    );
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /local_path: must be a non-empty string/,
+    );
+  });
+
+  it("local_path is a relative path", () => {
+    const yaml = VALID_YAML.replace(
+      "local_path: /tmp/my-org/my-repo",
+      "local_path: relative/path",
+    );
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /local_path: must be an absolute path/,
+    );
+  });
+});
+
+describe("loadConfig - log_dir validation", () => {
+  it("log_dir is empty string", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      'max_parallel: 4\n  log_dir: ""',
+    );
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /log_dir: must be a non-empty string/,
+    );
+  });
+
+  it("log_dir is a relative path", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  log_dir: relative/logs",
+    );
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /log_dir: must be an absolute path/,
+    );
+  });
+});
+
+describe("loadConfig - tilde expansion", () => {
+  it("local_path with tilde is expanded", () => {
+    const yaml = VALID_YAML.replace(
+      "local_path: /tmp/my-org/my-repo",
+      "local_path: ~/projects/my-repo",
+    );
+    mockYaml(yaml);
+
+    const result = loadConfig("/path/to/config.yml");
+    const expected = `${homedir()}/projects/my-repo`;
+
+    expect(result.repositories[0].localPath).toBe(expected);
+  });
+
+  it("log_dir with tilde is expanded", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  log_dir: ~/logs",
+    );
+    mockYaml(yaml);
+
+    const result = loadConfig("/path/to/config.yml");
+    const expected = `${homedir()}/logs`;
+
+    expect(result.execution.logDir).toBe(expected);
+  });
+});
