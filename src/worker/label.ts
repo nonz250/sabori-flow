@@ -4,6 +4,9 @@ import {
   ProcessTimeoutError,
   ProcessExecutionError,
 } from "./process.js";
+import { createLogger } from "./logger.js";
+
+const logger = createLogger("label");
 
 const GH_TIMEOUT_MS = 120_000;
 
@@ -95,6 +98,36 @@ async function runGhEdit(
     );
 
     if (!result.success) {
+      if (isLabelNotFoundError(result.stderr, transition.addLabel)) {
+        logger.info(
+          "Label '%s' not found in %s — attempting to create",
+          transition.addLabel,
+          repoFullName,
+        );
+        await ensureLabel(repoFullName, transition.addLabel);
+
+        const retryResult = await runCommand(
+          "gh",
+          [
+            "issue",
+            "edit",
+            "--repo",
+            repoFullName,
+            String(issueNumber),
+            "--add-label",
+            transition.addLabel,
+            "--remove-label",
+            transition.removeLabel,
+          ],
+          { timeoutMs: GH_TIMEOUT_MS },
+        );
+
+        if (!retryResult.success) {
+          throw new LabelError(retryResult.stderr);
+        }
+        return;
+      }
+
       throw new LabelError(result.stderr);
     }
   } catch (error: unknown) {
@@ -111,4 +144,63 @@ async function runGhEdit(
     }
     throw error;
   }
+}
+
+/**
+ * stderr が「ラベルが存在しない」エラーかどうかを判定する。
+ *
+ * gh CLI v2.x 時点のエラーメッセージに基づく判定。
+ * gh のバージョンアップでメッセージが変わった場合、リトライが発動しなくなるが、
+ * 既存の LabelError フォールバックにより安全に劣化する。
+ */
+function isLabelNotFoundError(stderr: string, labelName: string): boolean {
+  const lower = stderr.toLowerCase();
+  return (
+    lower.includes("label") &&
+    lower.includes("not found") &&
+    lower.includes(labelName.toLowerCase())
+  );
+}
+
+/**
+ * stderr が「ラベルが既に存在する」エラーかどうかを判定する。
+ */
+function isLabelAlreadyExistsError(stderr: string): boolean {
+  return stderr.toLowerCase().includes("already exists");
+}
+
+/**
+ * ラベルが存在しない場合に作成する。既に存在する場合は何もしない。
+ *
+ * @throws {LabelError} ラベルの作成に失敗した場合
+ */
+async function ensureLabel(
+  repoFullName: string,
+  labelName: string,
+): Promise<void> {
+  const result = await runCommand(
+    "gh",
+    ["label", "create", labelName, "--repo", repoFullName],
+    { timeoutMs: GH_TIMEOUT_MS },
+  );
+
+  if (!result.success) {
+    if (isLabelAlreadyExistsError(result.stderr)) {
+      logger.info(
+        "Label '%s' already exists in %s — proceeding",
+        labelName,
+        repoFullName,
+      );
+      return;
+    }
+    throw new LabelError(
+      `Failed to create label '${labelName}': ${result.stderr}`,
+    );
+  }
+
+  logger.info(
+    "Label '%s' created in %s",
+    labelName,
+    repoFullName,
+  );
 }
