@@ -16,7 +16,7 @@ export const PIP_PATH = path.join(VENV_DIR, "bin", "pip");
 export const REQUIREMENTS_PATH = path.join(PROJECT_ROOT, "requirements.txt");
 export const LOGS_DIR = path.join(PROJECT_ROOT, "logs");
 
-export const PLIST_LABEL = "com.github.nonz250.claude-issue-worker";
+export const PLIST_LABEL = "com.github.nonz250.sabori-flow";
 export const PLIST_TEMPLATE_PATH = path.join(
   PROJECT_ROOT,
   "launchd",
