@@ -52,7 +52,7 @@ def _make_app_config(
         repo_configs = [_make_repo_config()]
     return AppConfig(
         repositories=repo_configs,
-        execution=ExecutionConfig(max_parallel=1),
+        execution=ExecutionConfig(max_parallel=1, log_dir="/tmp/test-logs"),
     )
 
 
@@ -537,7 +537,7 @@ class TestMainThreadPoolExecutor:
         max_parallel = 4
         mock_load_config.return_value = AppConfig(
             repositories=[_make_repo_config()],
-            execution=ExecutionConfig(max_parallel=max_parallel),
+            execution=ExecutionConfig(max_parallel=max_parallel, log_dir="/tmp/test-logs"),
         )
         mock_pool = MagicMock()
         mock_executor_cls.return_value.__enter__ = MagicMock(return_value=mock_pool)
@@ -569,7 +569,7 @@ class TestMainThreadPoolExecutor:
         repo3 = _make_repo_config(owner="org3", repo="repo3")
         mock_load_config.return_value = AppConfig(
             repositories=[repo1, repo2, repo3],
-            execution=ExecutionConfig(max_parallel=3),
+            execution=ExecutionConfig(max_parallel=3, log_dir="/tmp/test-logs"),
         )
         mock_pool = MagicMock()
         mock_executor_cls.return_value.__enter__ = MagicMock(return_value=mock_pool)
@@ -609,7 +609,7 @@ class TestMainThreadPoolExecutor:
         repo2 = _make_repo_config(owner="org2", repo="repo2")
         mock_load_config.return_value = AppConfig(
             repositories=[repo1, repo2],
-            execution=ExecutionConfig(max_parallel=2),
+            execution=ExecutionConfig(max_parallel=2, log_dir="/tmp/test-logs"),
         )
         mock_pool = MagicMock()
         mock_executor_cls.return_value.__enter__ = MagicMock(return_value=mock_pool)
