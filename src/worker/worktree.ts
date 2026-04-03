@@ -12,7 +12,7 @@ export class WorktreeError extends Error {
 }
 
 const GIT_TIMEOUT_MS = 120_000;
-const WORKTREES_DIR_NAME = ".claude-worker-worktrees";
+const WORKTREES_DIR_NAME = ".sabori-flow-worktrees";
 
 const logger = createLogger("worktree");
 
@@ -46,7 +46,7 @@ export async function withWorktree<T>(
   timestampFn: () => string = defaultTimestampFn,
 ): Promise<T> {
   const ts = timestampFn();
-  const branchName = `claude-worker/${issueNumber}-${ts}`;
+  const branchName = `sabori-flow/${issueNumber}-${ts}`;
   const worktreesDir = join(dirname(localPath), WORKTREES_DIR_NAME);
   const worktreePath = join(worktreesDir, `issue-${issueNumber}-${ts}`);
 

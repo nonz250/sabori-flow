@@ -41,7 +41,7 @@ describe("repoFullName", () => {
   it("'owner/repo' 形式のフルネームを返す", () => {
     const config: RepositoryConfig = {
       owner: "nonz250",
-      repo: "claude-issue-worker",
+      repo: "sabori-flow",
       localPath: "/path/to/repo",
       labels: {
         plan: {
@@ -60,7 +60,7 @@ describe("repoFullName", () => {
       priorityLabels: ["priority/high"],
     };
 
-    expect(repoFullName(config)).toBe("nonz250/claude-issue-worker");
+    expect(repoFullName(config)).toBe("nonz250/sabori-flow");
   });
 });
 

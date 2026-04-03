@@ -30,7 +30,7 @@ export async function installCommand(): Promise<void> {
   if (!fs.existsSync(CONFIG_PATH)) {
     console.error("Error: config.yml が見つかりません。");
     console.error(
-      "先に `npx claude-issue-worker init` を実行してください。",
+      "先に `npx sabori-flow init` を実行してください。",
     );
     process.exit(1);
   }
