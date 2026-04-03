@@ -1,5 +1,7 @@
 config.yml
 .env
+.claude/settings.local.json
+.claude/CLAUDE.md
 *.log
 logs/
 launchd/*.plist
