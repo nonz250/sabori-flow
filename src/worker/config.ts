@@ -1,6 +1,5 @@
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
-import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import YAML from "yaml";
 
@@ -11,6 +10,7 @@ import type {
   LabelsConfig,
   PhaseLabels,
 } from "./models.js";
+import { expandTilde } from "../utils/paths.js";
 
 // ---------- Custom error ----------
 
@@ -35,18 +35,6 @@ const DEFAULT_LOG_DIR = resolve(
   "..",
   "logs",
 );
-
-// ---------- Tilde expansion ----------
-
-function expandTilde(filePath: string): string {
-  if (filePath === "~") {
-    return homedir();
-  }
-  if (filePath.startsWith("~/")) {
-    return resolve(homedir(), filePath.slice(2));
-  }
-  return filePath;
-}
 
 // ---------- Public API ----------
 

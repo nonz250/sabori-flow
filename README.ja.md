@@ -33,18 +33,28 @@ npm install
 npm run build
 
 # 2. 対話的に config.yml を作成
-node dist/index.js init
+npx sabori-flow init
 
 # 3. launchd に登録して定期実行を開始
-node dist/index.js install
+npx sabori-flow install
 ```
 
 `install` コマンドはビルド、plist 生成、launchd への登録をまとめて行います。
 
+### リポジトリの追加
+
+既存の `config.yml` に新しいリポジトリを追加するには:
+
+```bash
+npx sabori-flow add
+```
+
+owner、repo、ローカルパスを対話的に入力し、`config.yml` にエントリを追加します。同じ owner/repo が既に存在する場合は上書き確認が表示されます。
+
 ### アンインストール
 
 ```bash
-node dist/index.js uninstall
+npx sabori-flow uninstall
 ```
 
 launchd からの登録解除と関連ファイルの削除が行われます。
@@ -119,7 +129,7 @@ logs/launchd_stderr.log      # launchd 経由の標準エラー出力
 
 ## 設定
 
-`config.yml.example` を参考に `config.yml` を作成するか、`node dist/index.js init` で対話的に生成できます。
+`config.yml.example` を参考に `config.yml` を作成するか、`npx sabori-flow init` で対話的に生成できます。
 
 ```yaml
 repositories:
