@@ -35,7 +35,9 @@ src/
   index.ts          # CLI エントリポイント
   worker.ts         # ワーカーエントリポイント
   commands/          # CLI コマンド
-    init.ts, install.ts, uninstall.ts
+    init.ts, install.ts, uninstall.ts, add.ts
+    helpers/
+      repository-prompt.ts  # 対話入力の共通ロジック（init/add で共有）
   worker/            # ワーカー本体
     main.ts          # メインロジック、並列実行制御
     config.ts        # config.yml 読み込み・バリデーション
@@ -50,7 +52,8 @@ src/
     logger.ts        # 軽量ロガー
     process.ts       # child_process ラッパー
   utils/             # 共有ユーティリティ
-    paths.ts, plist.ts, shell.ts, config-defaults.ts
+    paths.ts         # パス定義 + expandTilde（チルダ展開）
+    plist.ts, shell.ts, config-defaults.ts
 ```
 
 ### 処理フロー
