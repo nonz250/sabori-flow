@@ -185,3 +185,220 @@ describe("transitionToFailed", () => {
     ).rejects.toThrow("network error");
   });
 });
+
+describe("ラベル自動作成", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("addLabel が存在しない場合、label create → issue edit 再試行が行われる", async () => {
+    // Arrange
+    mockedRunCommand.mockResolvedValueOnce({
+      success: false,
+      stdout: "",
+      stderr: "label 'claude/plan:in-progress' not found",
+    });
+    mockedRunCommand.mockResolvedValueOnce({
+      success: true,
+      stdout: "",
+      stderr: "",
+    });
+    mockedRunCommand.mockResolvedValueOnce({
+      success: true,
+      stdout: "",
+      stderr: "",
+    });
+
+    // Act
+    await transitionToInProgress("nonz250/example-app", 42, phaseLabels);
+
+    // Assert
+    expect(mockedRunCommand).toHaveBeenCalledTimes(3);
+    expect(mockedRunCommand).toHaveBeenNthCalledWith(
+      2,
+      "gh",
+      [
+        "label",
+        "create",
+        "claude/plan:in-progress",
+        "--repo",
+        "nonz250/example-app",
+      ],
+      { timeoutMs: 120_000 },
+    );
+    expect(mockedRunCommand).toHaveBeenNthCalledWith(
+      3,
+      "gh",
+      [
+        "issue",
+        "edit",
+        "--repo",
+        "nonz250/example-app",
+        "42",
+        "--add-label",
+        "claude/plan:in-progress",
+        "--remove-label",
+        "claude/plan",
+      ],
+      { timeoutMs: 120_000 },
+    );
+  });
+
+  it("label create が already exists を返した場合も成功する", async () => {
+    // Arrange
+    mockedRunCommand.mockResolvedValueOnce({
+      success: false,
+      stdout: "",
+      stderr: "label 'claude/plan:in-progress' not found",
+    });
+    mockedRunCommand.mockResolvedValueOnce({
+      success: false,
+      stdout: "",
+      stderr: "label already exists",
+    });
+    mockedRunCommand.mockResolvedValueOnce({
+      success: true,
+      stdout: "",
+      stderr: "",
+    });
+
+    // Act & Assert
+    await expect(
+      transitionToInProgress("nonz250/example-app", 42, phaseLabels),
+    ).resolves.toBeUndefined();
+  });
+
+  it("label create が別のエラーを返した場合は LabelError が throw される", async () => {
+    // Arrange
+    mockedRunCommand.mockResolvedValueOnce({
+      success: false,
+      stdout: "",
+      stderr: "label 'claude/plan:in-progress' not found",
+    });
+    mockedRunCommand.mockResolvedValueOnce({
+      success: false,
+      stdout: "",
+      stderr: "HTTP 403: permission denied",
+    });
+
+    // Act & Assert
+    await expect(
+      transitionToInProgress("nonz250/example-app", 42, phaseLabels),
+    ).rejects.toThrow(LabelError);
+    expect(mockedRunCommand).toHaveBeenCalledTimes(2);
+  });
+
+  it("再試行の issue edit が失敗した場合は LabelError が throw される", async () => {
+    // Arrange
+    mockedRunCommand.mockResolvedValueOnce({
+      success: false,
+      stdout: "",
+      stderr: "label 'claude/plan:in-progress' not found",
+    });
+    mockedRunCommand.mockResolvedValueOnce({
+      success: true,
+      stdout: "",
+      stderr: "",
+    });
+    mockedRunCommand.mockResolvedValueOnce({
+      success: false,
+      stdout: "",
+      stderr: "network error",
+    });
+
+    // Act & Assert
+    await expect(
+      transitionToInProgress("nonz250/example-app", 42, phaseLabels),
+    ).rejects.toThrow(LabelError);
+  });
+
+  it("label create 中に ProcessTimeoutError が発生した場合は LabelError が throw される", async () => {
+    // Arrange
+    mockedRunCommand.mockResolvedValueOnce({
+      success: false,
+      stdout: "",
+      stderr: "label 'claude/plan:in-progress' not found",
+    });
+    mockedRunCommand.mockRejectedValueOnce(new ProcessTimeoutError(120_000));
+
+    // Act & Assert
+    await expect(
+      transitionToInProgress("nonz250/example-app", 42, phaseLabels),
+    ).rejects.toThrow(LabelError);
+  });
+
+  it("ラベル未存在でない通常のエラーではリトライしない", async () => {
+    // Arrange
+    mockedRunCommand.mockResolvedValueOnce({
+      success: false,
+      stdout: "",
+      stderr: "permission denied",
+    });
+
+    // Act & Assert
+    await expect(
+      transitionToInProgress("nonz250/example-app", 42, phaseLabels),
+    ).rejects.toThrow(LabelError);
+    expect(mockedRunCommand).toHaveBeenCalledTimes(1);
+  });
+
+  it("label create 中に ProcessTimeoutError が発生した場合のエラーメッセージが正しい", async () => {
+    // Arrange
+    mockedRunCommand.mockResolvedValueOnce({
+      success: false,
+      stdout: "",
+      stderr: "label 'claude/plan:in-progress' not found",
+    });
+    mockedRunCommand.mockRejectedValueOnce(new ProcessTimeoutError(120_000));
+
+    // Act & Assert
+    await expect(
+      transitionToInProgress("nonz250/example-app", 42, phaseLabels),
+    ).rejects.toThrow("gh issue edit timed out after 120 seconds");
+  });
+
+  it("label create 中に ProcessExecutionError が発生した場合は LabelError が throw される", async () => {
+    // Arrange
+    mockedRunCommand.mockResolvedValueOnce({
+      success: false,
+      stdout: "",
+      stderr: "label 'claude/plan:in-progress' not found",
+    });
+    mockedRunCommand.mockRejectedValueOnce(
+      new ProcessExecutionError("spawn gh ENOENT"),
+    );
+
+    // Act & Assert
+    const promise = transitionToInProgress(
+      "nonz250/example-app",
+      42,
+      phaseLabels,
+    );
+    await expect(promise).rejects.toThrow(LabelError);
+    await expect(promise).rejects.toThrow("spawn gh ENOENT");
+  });
+
+  it("label create が already exists を返した後の再試行が失敗した場合は LabelError が throw される", async () => {
+    // Arrange
+    mockedRunCommand.mockResolvedValueOnce({
+      success: false,
+      stdout: "",
+      stderr: "label 'claude/plan:in-progress' not found",
+    });
+    mockedRunCommand.mockResolvedValueOnce({
+      success: false,
+      stdout: "",
+      stderr: "label already exists",
+    });
+    mockedRunCommand.mockResolvedValueOnce({
+      success: false,
+      stdout: "",
+      stderr: "unexpected error",
+    });
+
+    // Act & Assert
+    await expect(
+      transitionToInProgress("nonz250/example-app", 42, phaseLabels),
+    ).rejects.toThrow(LabelError);
+  });
+});
