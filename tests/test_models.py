@@ -156,7 +156,7 @@ class TestExecutionConfig:
     """ExecutionConfig dataclass のテスト"""
 
     def test_frozen(self) -> None:
-        config = ExecutionConfig(max_parallel=4)
+        config = ExecutionConfig(max_parallel=4, log_dir="/tmp/test-logs")
         with pytest.raises(FrozenInstanceError):
             config.max_parallel = 8  # type: ignore[misc]
 
@@ -198,7 +198,7 @@ class TestAppConfig:
     def test_frozen(self) -> None:
         config = AppConfig(
             repositories=[],
-            execution=ExecutionConfig(max_parallel=2),
+            execution=ExecutionConfig(max_parallel=2, log_dir="/tmp/test-logs"),
         )
         with pytest.raises(FrozenInstanceError):
             config.repositories = []  # type: ignore[misc]

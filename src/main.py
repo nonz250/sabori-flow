@@ -12,28 +12,35 @@ from models import Phase, RepositoryConfig
 from pipeline import process_issue
 
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.yml"
-_LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
+_LOG_FORMAT = "[%(asctime)s] %(levelname)s - %(message)s"
 
 logger = logging.getLogger(__name__)
 
 
 def _setup_logging() -> None:
-    """ロギングを初期化する。"""
+    """stderr ハンドラのみでロギングを初期化する。
+
+    ファイルハンドラは config 読み込み後に _add_file_handler で追加する。
+    """
     root_logger = logging.getLogger()
     if root_logger.handlers:
         return
     root_logger.setLevel(logging.INFO)
 
-    formatter = logging.Formatter("[%(asctime)s] %(levelname)s - %(message)s")
-
-    # stderr ハンドラ（既存）
     stderr_handler = logging.StreamHandler(sys.stderr)
-    stderr_handler.setFormatter(formatter)
+    stderr_handler.setFormatter(logging.Formatter(_LOG_FORMAT))
     root_logger.addHandler(stderr_handler)
 
-    # ファイルハンドラ（追加）
-    _LOG_DIR.mkdir(exist_ok=True)
-    log_file = _LOG_DIR / "worker.log"
+
+def _add_file_handler(log_dir: str) -> None:
+    """ファイルハンドラをロガーに追加する。
+
+    Args:
+        log_dir: ログ出力先ディレクトリの絶対パス
+    """
+    log_path = Path(log_dir)
+    log_path.mkdir(parents=True, exist_ok=True)
+    log_file = log_path / "worker.log"
     file_handler = TimedRotatingFileHandler(
         filename=str(log_file),
         when="midnight",
@@ -42,8 +49,8 @@ def _setup_logging() -> None:
         encoding="utf-8",
     )
     file_handler.suffix = "%Y-%m-%d"
-    file_handler.setFormatter(formatter)
-    root_logger.addHandler(file_handler)
+    file_handler.setFormatter(logging.Formatter(_LOG_FORMAT))
+    logging.getLogger().addHandler(file_handler)
 
 
 def _process_phase(repo_config: RepositoryConfig, phase: Phase) -> bool:
@@ -128,6 +135,8 @@ def main() -> int:
     except ConfigValidationError as e:
         logger.error("設定ファイルのバリデーションエラー: %s", e)
         return 1
+
+    _add_file_handler(app_config.execution.log_dir)
 
     logger.info(
         "config.yml を読み込みました (リポジトリ数: %d)",

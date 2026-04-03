@@ -35,5 +35,6 @@ $(PLIST_FILE): $(PLIST_TEMPLATE)
 	sed -e 's|__PYTHON_PATH__|$(PYTHON_PATH)|g' \
 	    -e 's|__PROJECT_ROOT__|$(PROJECT_ROOT)|g' \
 	    -e 's|__PATH__|$(CURRENT_PATH)|g' \
+	    -e 's|__LOG_DIR__|$(PROJECT_ROOT)/logs|g' \
 	    $(PLIST_TEMPLATE) > $(PLIST_FILE)
 	@echo "Generated: $(PLIST_FILE)"
