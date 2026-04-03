@@ -97,7 +97,7 @@ describe("withWorktree", () => {
       expect(yieldedPath).toContain(expectedSuffix);
 
       const expectedPath =
-        `/path/to/.claude-worker-worktrees/issue-${issueNumber}-${FIXED_TIMESTAMP}`;
+        `/path/to/.sabori-flow-worktrees/issue-${issueNumber}-${FIXED_TIMESTAMP}`;
       expect(yieldedPath).toBe(expectedPath);
     });
 
@@ -113,7 +113,7 @@ describe("withWorktree", () => {
 
       const addCall = mockedRunCommandSync.mock.calls[0];
       const args = addCall[1] as string[];
-      const expectedBranch = `claude-worker/42-${FIXED_TIMESTAMP}`;
+      const expectedBranch = `sabori-flow/42-${FIXED_TIMESTAMP}`;
       expect(args).toContain(expectedBranch);
     });
 
@@ -128,7 +128,7 @@ describe("withWorktree", () => {
       );
 
       expect(mockedMkdirSync).toHaveBeenCalledWith(
-        "/path/to/.claude-worker-worktrees",
+        "/path/to/.sabori-flow-worktrees",
         { recursive: true },
       );
     });
