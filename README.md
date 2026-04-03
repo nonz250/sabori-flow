@@ -1,4 +1,4 @@
-# claude-issue-worker
+# sabori-flow
 
 GitHub Issue に特定のラベルを付けるだけで、Claude Code CLI が自動的に方針策定・実装を行うワーカー。
 macOS の launchd で 1 時間ごとに定期実行される。
@@ -39,11 +39,11 @@ launchd からの登録解除と関連ファイルの削除が行われる。
 ### 登録状況の確認
 
 ```bash
-launchctl list | grep claude-issue-worker
+launchctl list | grep sabori-flow
 ```
 
 ```
--	0	com.github.nonz250.claude-issue-worker
+-	0	com.github.nonz250.sabori-flow
 ```
 
 左から PID（未実行なら `-`）、最後の終了コード、ラベル名。
@@ -51,7 +51,7 @@ launchctl list | grep claude-issue-worker
 ### スケジュールを待たず即時実行
 
 ```bash
-launchctl start com.github.nonz250.claude-issue-worker
+launchctl start com.github.nonz250.sabori-flow
 ```
 
 ### ログの確認

@@ -7,8 +7,8 @@ import { uninstallCommand } from "./commands/uninstall";
 const program = new Command();
 
 program
-  .name("claude-issue-worker")
-  .description("CLI for claude-issue-worker setup and management")
+  .name("sabori-flow")
+  .description("CLI for sabori-flow setup and management")
   .version("0.1.0");
 
 program

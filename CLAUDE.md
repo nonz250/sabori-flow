@@ -7,7 +7,7 @@ Python スクリプトと Claude Code CLI を使って GitHub Issue を自動的
 
 ## リポジトリ情報
 
-- リポジトリ: `nonz250/claude-issue-worker`
+- リポジトリ: `nonz250/sabori-flow`
 - メインブランチ: `main`
 
 ## 技術スタック

@@ -102,7 +102,7 @@ class TestWorktreeContextNormal:
         expected_suffix = f"issue-{issue_number}-{_FIXED_TIMESTAMP}"
         assert yielded_path.endswith(expected_suffix)
         expected_path = (
-            "/path/to/.claude-worker-worktrees/"
+            "/path/to/.sabori-flow-worktrees/"
             f"issue-{issue_number}-{_FIXED_TIMESTAMP}"
         )
         assert yielded_path == expected_path
@@ -125,7 +125,7 @@ class TestWorktreeContextNormal:
         # Assert
         add_call = mock_run.call_args_list[0]
         add_args = add_call.args[0] if add_call.args else add_call.kwargs["args"]
-        expected_branch = f"claude-worker/42-{_FIXED_TIMESTAMP}"
+        expected_branch = f"sabori-flow/42-{_FIXED_TIMESTAMP}"
         assert expected_branch in add_args
 
 
