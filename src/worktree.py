@@ -15,7 +15,7 @@ class WorktreeError(Exception):
 
 
 _GIT_TIMEOUT_SECONDS: int = 120
-_WORKTREES_DIR_NAME: str = ".claude-worker-worktrees"
+_WORKTREES_DIR_NAME: str = ".sabori-flow-worktrees"
 
 
 @contextmanager
@@ -41,7 +41,7 @@ def worktree_context(
         timestamp_fn = lambda: time.strftime("%Y%m%d%H%M%S")
 
     ts = timestamp_fn()
-    branch_name = f"claude-worker/{issue_number}-{ts}"
+    branch_name = f"sabori-flow/{issue_number}-{ts}"
     worktrees_dir = Path(local_path).parent / _WORKTREES_DIR_NAME
     worktree_path = worktrees_dir / f"issue-{issue_number}-{ts}"
 
