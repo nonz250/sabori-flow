@@ -34,6 +34,34 @@ npx ts-node cli/src/index.ts uninstall
 
 launchd からの登録解除と関連ファイルの削除が行われる。
 
+## 運用
+
+### 登録状況の確認
+
+```bash
+launchctl list | grep claude-issue-worker
+```
+
+```
+-	0	com.github.nonz250.claude-issue-worker
+```
+
+左から PID（未実行なら `-`）、最後の終了コード、ラベル名。
+
+### スケジュールを待たず即時実行
+
+```bash
+launchctl start com.github.nonz250.claude-issue-worker
+```
+
+### ログの確認
+
+```
+logs/worker.log              # ワーカーのログ（日次ローテーション、7日保持）
+logs/launchd_stdout.log      # launchd 経由の標準出力
+logs/launchd_stderr.log      # launchd 経由の標準エラー出力
+```
+
 ## 使い方
 
 Issue にラベルを付けるだけ。ワーカーが 1 時間ごとに自動検出して処理する。
