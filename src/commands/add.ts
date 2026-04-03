@@ -73,7 +73,12 @@ export async function addCommand(): Promise<void> {
   });
 
   // 7. 書き戻し
-  writeFileSync(CONFIG_PATH, YAML.stringify(configObj), "utf-8");
+  try {
+    writeFileSync(CONFIG_PATH, YAML.stringify(configObj), "utf-8");
+  } catch {
+    console.error("Error: config.yml の書き込みに失敗しました。");
+    return;
+  }
 
   // 8. 成功メッセージ
   console.log(`\n${repoInput.owner}/${repoInput.repo} を追加しました。`);
