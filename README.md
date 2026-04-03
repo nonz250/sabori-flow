@@ -70,15 +70,15 @@ flowchart TD
 
 ### Label Transitions
 
-```
-You add the label          Worker transitions automatically
------------------     ------------------------------------------
+```mermaid
+flowchart LR
+    A["claude/plan"] --> B["claude/plan:in-progress"]
+    B --> C["claude/plan:done"]
+    B --> D["claude/plan:failed"]
 
-claude/plan  -->  claude/plan:in-progress  --+--> claude/plan:done
-                                             +--> claude/plan:failed
-
-claude/impl  -->  claude/impl:in-progress  --+--> claude/impl:done
-                                             +--> claude/impl:failed
+    E["claude/impl"] --> F["claude/impl:in-progress"]
+    F --> G["claude/impl:done"]
+    F --> H["claude/impl:failed"]
 ```
 
 ### Handling Failures
