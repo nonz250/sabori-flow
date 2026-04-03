@@ -36,30 +36,79 @@ launchd からの登録解除と関連ファイルの削除が行われる。
 
 ## 使い方
 
-1. `config.yml` に対象リポジトリを登録する
-2. 対象リポジトリの Issue に以下のラベルを付ける
-   - `claude/plan` -- 方針策定を依頼
-   - `claude/impl` -- 実装を依頼（事前に plan が完了していることを推奨）
-3. ワーカーが次回実行時に Issue を検出し、Claude Code CLI で処理する
-
-## ラベル遷移
-
-各フェーズでラベルが自動的に遷移する。
-
-**plan フェーズ:**
+Issue にラベルを付けるだけ。ワーカーが 1 時間ごとに自動検出して処理する。
 
 ```
-claude/plan -> claude/plan:in-progress -> claude/plan:done / claude/plan:failed
+あなたがやること                       ワーカーが自動でやること
+-----------------------------------------------------------------------
+
+  Issue にラベルを付ける               1時間ごとに Issue をチェック
+
+  +-----------------+                  +---------------------+
+  | Issue #42       |                  | claude/plan ラベル   |
+  | Labels:         |   ---------->    | が付いた Issue を発見 |
+  |  claude/plan    |                  +----------+----------+
+  +-----------------+                             |
+                                                  v
+                                       +---------------------+
+                                       | Plan フェーズ        |
+                                       |                     |
+                                       | label: -> in-progress
+                                       | worktree 作成       |
+                                       | claude -p で方針策定 |
+                                       | label: -> done       |
+                                       | 結果を Issue にコメント
+                                       | worktree 削除       |
+                                       +----------+----------+
+                                                  |
+                                                  v
+  +-----------------+                  +---------------------+
+  | コメントを確認   |<--------------  | Issue に方針コメント |
+  | 方針に問題なければ|                  | が投稿される        |
+  | impl ラベルを付与 |                  +---------------------+
+  +--------+--------+
+           |
+           |  claude/impl ラベルを追加
+           v
+  +-----------------+                  +---------------------+
+  | Issue #42       |                  | Impl フェーズ        |
+  | Labels:         |   ---------->    |                     |
+  |  claude/impl    |                  | label: -> in-progress
+  +-----------------+                  | worktree 作成       |
+                                       | claude -p で実装     |
+                                       | PR 作成 (close #42)  |
+                                       | label: -> done       |
+                                       | 結果を Issue にコメント
+                                       | worktree 削除       |
+                                       +----------+----------+
+                                                  |
+                                                  v
+  +-----------------+                  +---------------------+
+  | PR をレビュー    |<--------------  | PR が作成される      |
+  | マージ           |                  | close #42 付き      |
+  +-----------------+                  +---------------------+
 ```
 
-**impl フェーズ:**
+### ラベル遷移
 
 ```
-claude/impl -> claude/impl:in-progress -> claude/impl:done / claude/impl:failed
+  あなたが付ける          ワーカーが自動遷移
+  --------------     ------------------------------------------
+
+  claude/plan  -->  claude/plan:in-progress  --+--> claude/plan:done
+                                               +--> claude/plan:failed
+
+  claude/impl  -->  claude/impl:in-progress  --+--> claude/impl:done
+                                               +--> claude/impl:failed
 ```
 
-処理の成否に応じて `done` または `failed` ラベルが付与される。
-失敗時はログを確認し、Issue を修正して再度トリガーラベルを付けることで再実行できる。
+### 失敗した場合
+
+`failed` ラベルが付き、Issue に失敗コメントが投稿される。
+
+1. `logs/worker.log` で詳細を確認
+2. Issue の内容を修正
+3. `failed` ラベルを外して、再度 `claude/plan` または `claude/impl` を付ける
 
 ## config.yml
 
