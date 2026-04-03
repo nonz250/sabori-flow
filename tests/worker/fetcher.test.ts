@@ -10,6 +10,7 @@ import {
 import { runCommand } from "../../src/worker/process.js";
 import {
   ProcessTimeoutError,
+  ProcessExecutionError,
 } from "../../src/worker/process.js";
 import { Phase, Priority } from "../../src/worker/models.js";
 import type { RepositoryConfig, Issue } from "../../src/worker/models.js";
@@ -163,7 +164,25 @@ describe("fetchIssues", () => {
 
     await expect(
       fetchIssues(makeRepoConfig(), Phase.PLAN),
-    ).rejects.toThrow(ProcessTimeoutError);
+    ).rejects.toThrow(GitHubCLIError);
+    await expect(
+      fetchIssues(makeRepoConfig(), Phase.PLAN),
+    ).rejects.toThrow("gh command timed out after 120 seconds");
+  });
+
+  it("ProcessExecutionError が GitHubCLIError にラップされる", async () => {
+    const execError = Object.assign(new Error("spawn gh ENOENT"), {
+      name: "ProcessExecutionError",
+    });
+    Object.setPrototypeOf(execError, ProcessExecutionError.prototype);
+    mockedRunCommand.mockRejectedValue(execError);
+
+    await expect(
+      fetchIssues(makeRepoConfig(), Phase.PLAN),
+    ).rejects.toThrow(GitHubCLIError);
+    await expect(
+      fetchIssues(makeRepoConfig(), Phase.PLAN),
+    ).rejects.toThrow("spawn gh ENOENT");
   });
 });
 
