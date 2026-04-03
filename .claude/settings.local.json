@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/Users/nonz250/MyApp/claude-issue-worker/.venv/bin/python -m pytest /Users/nonz250/MyApp/claude-issue-worker/tests/test_prompt.py -v)",
+      "Bash(/Users/nonz250/MyApp/claude-issue-worker/.venv/bin/python -m pytest /Users/nonz250/MyApp/claude-issue-worker/tests/ -v)",
+      "Bash(/Users/nonz250/MyApp/claude-issue-worker/.venv/bin/python -m pytest tests/ -v)",
+      "Bash(PYTHONPATH=src python3 -c \"from label import transition_to_in_progress, transition_to_done, transition_to_failed, LabelError; print\\('import OK'\\)\")",
+      "Bash(PYTHONPATH=src python3 -c \"from executor import run_claude, ExecutorError, DEFAULT_TIMEOUT_SECONDS; print\\('import OK'\\)\")",
+      "Bash(/Users/nonz250/MyApp/claude-issue-worker/.venv/bin/python -m pytest /Users/nonz250/MyApp/claude-issue-worker/tests/test_label.py /Users/nonz250/MyApp/claude-issue-worker/tests/test_executor.py /Users/nonz250/MyApp/claude-issue-worker/tests/test_comment.py /Users/nonz250/MyApp/claude-issue-worker/tests/test_models.py -v)",
+      "Bash(/Users/nonz250/MyApp/claude-issue-worker/.venv/bin/python -m pytest /Users/nonz250/MyApp/claude-issue-worker/tests/test_worktree.py -v)",
+      "Bash(/Users/nonz250/MyApp/claude-issue-worker/.venv/bin/python -m pytest /Users/nonz250/MyApp/claude-issue-worker/tests/test_main.py -v)",
+      "Bash(/Users/nonz250/MyApp/claude-issue-worker/.venv/bin/python -m pytest tests/ -q)"
+    ]
+  }
+}
