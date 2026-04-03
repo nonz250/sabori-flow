@@ -41,6 +41,16 @@ node dist/index.js install
 
 The `install` command performs the build, generates the plist file, and registers with launchd.
 
+### Adding a Repository
+
+To add a new repository to an existing `config.yml`:
+
+```bash
+node dist/index.js add
+```
+
+This interactively prompts for owner, repo, and local path, then appends the entry to `config.yml`. If the same owner/repo already exists, you will be asked whether to overwrite it.
+
 ### Uninstall
 
 ```bash

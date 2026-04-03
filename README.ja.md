@@ -41,6 +41,16 @@ node dist/index.js install
 
 `install` コマンドはビルド、plist 生成、launchd への登録をまとめて行います。
 
+### リポジトリの追加
+
+既存の `config.yml` に新しいリポジトリを追加するには:
+
+```bash
+node dist/index.js add
+```
+
+owner、repo、ローカルパスを対話的に入力し、`config.yml` にエントリを追加します。同じ owner/repo が既に存在する場合は上書き確認が表示されます。
+
 ### アンインストール
 
 ```bash
