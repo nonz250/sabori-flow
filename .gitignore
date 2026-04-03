@@ -6,6 +6,6 @@ __pycache__/
 logs/
 .venv/
 launchd/*.plist
-.claude-worker-worktrees/
+.sabori-flow-worktrees/
 cli/node_modules/
 cli/dist/
