@@ -196,7 +196,7 @@ describe("ラベル自動作成", () => {
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
       stdout: "",
-      stderr: "label 'claude/plan:in-progress' not found",
+      stderr: "failed to update https://github.com/nonz250/example-app/issues/42: 'claude/plan:in-progress' not found\nfailed to update 1 issue",
     });
     mockedRunCommand.mockResolvedValueOnce({
       success: true,
@@ -249,7 +249,7 @@ describe("ラベル自動作成", () => {
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
       stdout: "",
-      stderr: "label 'claude/plan:in-progress' not found",
+      stderr: "failed to update https://github.com/nonz250/example-app/issues/42: 'claude/plan:in-progress' not found\nfailed to update 1 issue",
     });
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
@@ -273,7 +273,7 @@ describe("ラベル自動作成", () => {
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
       stdout: "",
-      stderr: "label 'claude/plan:in-progress' not found",
+      stderr: "failed to update https://github.com/nonz250/example-app/issues/42: 'claude/plan:in-progress' not found\nfailed to update 1 issue",
     });
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
@@ -293,7 +293,7 @@ describe("ラベル自動作成", () => {
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
       stdout: "",
-      stderr: "label 'claude/plan:in-progress' not found",
+      stderr: "failed to update https://github.com/nonz250/example-app/issues/42: 'claude/plan:in-progress' not found\nfailed to update 1 issue",
     });
     mockedRunCommand.mockResolvedValueOnce({
       success: true,
@@ -317,7 +317,7 @@ describe("ラベル自動作成", () => {
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
       stdout: "",
-      stderr: "label 'claude/plan:in-progress' not found",
+      stderr: "failed to update https://github.com/nonz250/example-app/issues/42: 'claude/plan:in-progress' not found\nfailed to update 1 issue",
     });
     mockedRunCommand.mockRejectedValueOnce(new ProcessTimeoutError(120_000));
 
@@ -347,7 +347,7 @@ describe("ラベル自動作成", () => {
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
       stdout: "",
-      stderr: "label 'claude/plan:in-progress' not found",
+      stderr: "failed to update https://github.com/nonz250/example-app/issues/42: 'claude/plan:in-progress' not found\nfailed to update 1 issue",
     });
     mockedRunCommand.mockRejectedValueOnce(new ProcessTimeoutError(120_000));
 
@@ -362,7 +362,7 @@ describe("ラベル自動作成", () => {
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
       stdout: "",
-      stderr: "label 'claude/plan:in-progress' not found",
+      stderr: "failed to update https://github.com/nonz250/example-app/issues/42: 'claude/plan:in-progress' not found\nfailed to update 1 issue",
     });
     mockedRunCommand.mockRejectedValueOnce(
       new ProcessExecutionError("spawn gh ENOENT"),
@@ -383,7 +383,7 @@ describe("ラベル自動作成", () => {
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
       stdout: "",
-      stderr: "label 'claude/plan:in-progress' not found",
+      stderr: "failed to update https://github.com/nonz250/example-app/issues/42: 'claude/plan:in-progress' not found\nfailed to update 1 issue",
     });
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
@@ -400,5 +400,20 @@ describe("ラベル自動作成", () => {
     await expect(
       transitionToInProgress("nonz250/example-app", 42, phaseLabels),
     ).rejects.toThrow(LabelError);
+  });
+
+  it("not found を含むがラベル名を含まないエラーではリトライしない", async () => {
+    // Arrange: "repository not found" のようなエラー
+    mockedRunCommand.mockResolvedValueOnce({
+      success: false,
+      stdout: "",
+      stderr: "repository not found",
+    });
+
+    // Act & Assert
+    await expect(
+      transitionToInProgress("nonz250/example-app", 42, phaseLabels),
+    ).rejects.toThrow(LabelError);
+    expect(mockedRunCommand).toHaveBeenCalledTimes(1);
   });
 });
