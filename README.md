@@ -1,10 +1,22 @@
-[English](README.md) | [日本語](README.ja.md)
+<div align="center">
 
-# sabori-flow
+<img src="assets/logo.svg" alt="sabori-flow" width="480">
 
-A macOS worker that automatically detects GitHub Issues with specific labels and resolves them using Claude Code CLI. It runs periodically every hour via launchd.
+<p><strong>Automated GitHub Issue resolver powered by Claude Code CLI.</strong><br>
+Add a label to an Issue -- sabori-flow handles the rest: planning, implementation, and pull request creation.</p>
 
-Just add a label to an Issue -- sabori-flow handles the rest: planning, implementation, and pull request creation.
+<p>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+  <img src="https://img.shields.io/badge/Node.js-v20%2B-339933?logo=node.js&logoColor=white" alt="Node.js v20+">
+  <img src="https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
+  <img src="https://img.shields.io/badge/Platform-macOS-000000?logo=apple&logoColor=white" alt="macOS">
+</p>
+
+<p>
+  <a href="README.md">English</a> | <a href="README.ja.md">日本語</a>
+</p>
+
+</div>
 
 ## Prerequisites
 
