@@ -1,42 +1,85 @@
+[English](README.md) | [日本語](README.ja.md)
+
 # sabori-flow
 
-GitHub Issue に特定のラベルを付けるだけで、Claude Code CLI が自動的に方針策定・実装を行うワーカー。
-macOS の launchd で 1 時間ごとに定期実行される。
+A macOS worker that automatically detects GitHub Issues with specific labels and resolves them using Claude Code CLI. It runs periodically every hour via launchd.
 
-## 前提条件
+Just add a label to an Issue -- sabori-flow handles the rest: planning, implementation, and pull request creation.
+
+## Prerequisites
 
 - macOS
-- Node.js (v20+)
+- Node.js v20+
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (`claude`)
-- [GitHub CLI](https://cli.github.com/) (`gh`) -- 認証済みであること
+- [GitHub CLI](https://cli.github.com/) (`gh`) -- must be authenticated
 
-## セットアップ
+## Setup
 
 ```bash
-# 1. 依存インストール + ビルド
+# 1. Install dependencies and build
 npm install
 npm run build
 
-# 2. 対話的に config.yml を作成
+# 2. Create config.yml interactively
 node dist/index.js init
 
-# 3. セットアップ + 定期実行登録
+# 3. Register with launchd for periodic execution
 node dist/index.js install
 ```
 
-`install` コマンドはビルド、plist 生成、launchd への登録をまとめて行う。
+The `install` command performs the build, generates the plist file, and registers with launchd.
 
-## アンインストール
+### Uninstall
 
 ```bash
 node dist/index.js uninstall
 ```
 
-launchd からの登録解除と関連ファイルの削除が行われる。
+This unregisters from launchd and removes related files.
 
-## 運用
+## Usage
 
-### 登録状況の確認
+### Workflow
+
+Add a label to an Issue. The worker automatically detects it every hour and processes it.
+
+```mermaid
+flowchart TD
+    A[User adds claude/plan label to Issue] --> B[Worker runs Plan Phase]
+    B --> C{Plan succeeded?}
+    C -- Yes --> D[Plan comment posted to Issue]
+    C -- No --> E[claude/plan:failed label applied]
+    D --> F[User reviews plan and adds claude/impl label]
+    F --> G[Worker runs Impl Phase]
+    G --> H{Impl succeeded?}
+    H -- Yes --> I[Pull Request created]
+    H -- No --> J[claude/impl:failed label applied]
+```
+
+### Label Transitions
+
+```
+You add the label          Worker transitions automatically
+-----------------     ------------------------------------------
+
+claude/plan  -->  claude/plan:in-progress  --+--> claude/plan:done
+                                             +--> claude/plan:failed
+
+claude/impl  -->  claude/impl:in-progress  --+--> claude/impl:done
+                                             +--> claude/impl:failed
+```
+
+### Handling Failures
+
+When processing fails, a `failed` label is applied and a failure comment is posted to the Issue.
+
+1. Check `logs/worker.log` for details
+2. Fix the Issue content as needed
+3. Remove the `failed` label and re-apply `claude/plan` or `claude/impl`
+
+### Operations
+
+**Check registration status:**
 
 ```bash
 launchctl list | grep sabori-flow
@@ -46,108 +89,32 @@ launchctl list | grep sabori-flow
 -	0	com.github.nonz250.sabori-flow
 ```
 
-左から PID（未実行なら `-`）、最後の終了コード、ラベル名。
+The columns are: PID (`-` if not running), last exit code, and label name.
 
-### スケジュールを待たず即時実行
+**Run immediately without waiting for schedule:**
 
 ```bash
 launchctl start com.github.nonz250.sabori-flow
 ```
 
-### ログの確認
+**Log locations:**
 
 ```
-logs/worker.log              # ワーカーのログ（日次ローテーション、7日保持）
-logs/launchd_stdout.log      # launchd 経由の標準出力
-logs/launchd_stderr.log      # launchd 経由の標準エラー出力
+logs/worker.log              # Worker log (daily rotation, 7-day retention)
+logs/launchd_stdout.log      # stdout via launchd
+logs/launchd_stderr.log      # stderr via launchd
 ```
 
-## 使い方
+## Configuration
 
-Issue にラベルを付けるだけ。ワーカーが 1 時間ごとに自動検出して処理する。
-
-```
-あなたがやること                       ワーカーが自動でやること
------------------------------------------------------------------------
-
-  Issue にラベルを付ける               1時間ごとに Issue をチェック
-
-  +-----------------+                  +---------------------+
-  | Issue #42       |                  | claude/plan ラベル   |
-  | Labels:         |   ---------->    | が付いた Issue を発見 |
-  |  claude/plan    |                  +----------+----------+
-  +-----------------+                             |
-                                                  v
-                                       +---------------------+
-                                       | Plan フェーズ        |
-                                       |                     |
-                                       | label: -> in-progress
-                                       | worktree 作成       |
-                                       | claude -p で方針策定 |
-                                       | label: -> done       |
-                                       | 結果を Issue にコメント
-                                       | worktree 削除       |
-                                       +----------+----------+
-                                                  |
-                                                  v
-  +-----------------+                  +---------------------+
-  | コメントを確認   |<--------------  | Issue に方針コメント |
-  | 方針に問題なければ|                  | が投稿される        |
-  | impl ラベルを付与 |                  +---------------------+
-  +--------+--------+
-           |
-           |  claude/impl ラベルを追加
-           v
-  +-----------------+                  +---------------------+
-  | Issue #42       |                  | Impl フェーズ        |
-  | Labels:         |   ---------->    |                     |
-  |  claude/impl    |                  | label: -> in-progress
-  +-----------------+                  | worktree 作成       |
-                                       | claude -p で実装     |
-                                       | PR 作成 (close #42)  |
-                                       | label: -> done       |
-                                       | 結果を Issue にコメント
-                                       | worktree 削除       |
-                                       +----------+----------+
-                                                  |
-                                                  v
-  +-----------------+                  +---------------------+
-  | PR をレビュー    |<--------------  | PR が作成される      |
-  | マージ           |                  | close #42 付き      |
-  +-----------------+                  +---------------------+
-```
-
-### ラベル遷移
-
-```
-  あなたが付ける          ワーカーが自動遷移
-  --------------     ------------------------------------------
-
-  claude/plan  -->  claude/plan:in-progress  --+--> claude/plan:done
-                                               +--> claude/plan:failed
-
-  claude/impl  -->  claude/impl:in-progress  --+--> claude/impl:done
-                                               +--> claude/impl:failed
-```
-
-### 失敗した場合
-
-`failed` ラベルが付き、Issue に失敗コメントが投稿される。
-
-1. `logs/worker.log` で詳細を確認
-2. Issue の内容を修正
-3. `failed` ラベルを外して、再度 `claude/plan` または `claude/impl` を付ける
-
-## config.yml
-
-`config.yml.example` を参考に作成する。`node dist/index.js init` で対話的に生成することもできる。
+Create `config.yml` based on `config.yml.example`, or generate it interactively with `node dist/index.js init`.
 
 ```yaml
 repositories:
-  - owner: nonz250              # リポジトリオーナー
-    repo: example-app           # リポジトリ名
-    local_path: /path/to/repo   # ローカルのクローン先パス
-    labels:                     # ラベル名のカスタマイズ（省略時はデフォルト値）
+  - owner: nonz250
+    repo: example-app
+    local_path: /path/to/repo
+    labels:
       plan:
         trigger: claude/plan
         in_progress: "claude/plan:in-progress"
@@ -158,104 +125,25 @@ repositories:
         in_progress: "claude/impl:in-progress"
         done: "claude/impl:done"
         failed: "claude/impl:failed"
-    priority_labels:            # 優先度ラベル（上から高い順）
+    priority_labels:
       - priority:high
       - priority:low
 
 execution:
-  max_parallel: 1               # 並列実行数（デフォルト: 1）
+  max_parallel: 1
 ```
 
-| 項目 | 説明 |
-|------|------|
-| `repositories[].owner` | リポジトリオーナー |
-| `repositories[].repo` | リポジトリ名 |
-| `repositories[].local_path` | ローカルのクローン先パス |
-| `repositories[].labels` | 各フェーズのラベル名（カスタマイズ可能） |
-| `repositories[].priority_labels` | 優先度ラベル。リストの上位ほど先に処理される |
-| `execution.max_parallel` | 並列実行数。デフォルトは 1（逐次実行） |
+| Key | Description |
+|-----|-------------|
+| `repositories[].owner` | Repository owner |
+| `repositories[].repo` | Repository name |
+| `repositories[].local_path` | Local path to the cloned repository |
+| `repositories[].labels` | Label names for each phase (customizable) |
+| `repositories[].labels.plan` | Labels for the plan phase: `trigger`, `in_progress`, `done`, `failed` |
+| `repositories[].labels.impl` | Labels for the impl phase: `trigger`, `in_progress`, `done`, `failed` |
+| `repositories[].priority_labels` | Priority labels. Issues with labels higher in the list are processed first |
+| `execution.max_parallel` | Number of parallel executions. Default is `1` (sequential) |
 
-## プロンプトのカスタマイズ
+## License
 
-Claude Code CLI に渡すプロンプトは以下のファイルで管理されている。
-
-- `prompts/plan.md` -- 方針策定フェーズのプロンプト
-- `prompts/impl.md` -- 実装フェーズのプロンプト
-
-プロジェクトに合わせて編集することで、Claude Code の振る舞いを調整できる。
-プロンプト内のプレースホルダー（`{repo_full_name}`, `{issue_number}`, `{issue_title}`, `{issue_url}`, `{issue_body}`）はワーカーが実行時に自動置換する。
-
-## プロジェクト構成
-
-```
-sabori-flow/
-├── src/
-│   ├── index.ts            # CLI エントリポイント
-│   ├── worker.ts           # ワーカーエントリポイント
-│   ├── commands/            # CLI コマンド (init, install, uninstall)
-│   ├── worker/              # ワーカー本体
-│   │   ├── main.ts          # メインロジック・並列実行制御
-│   │   ├── config.ts        # config.yml 読み込み・バリデーション
-│   │   ├── models.ts        # データモデル (interface, enum)
-│   │   ├── fetcher.ts       # Issue 取得・優先度ソート
-│   │   ├── pipeline.ts      # Issue 処理パイプライン
-│   │   ├── prompt.ts        # プロンプトテンプレート展開
-│   │   ├── executor.ts      # Claude CLI 実行
-│   │   ├── worktree.ts      # git worktree 管理
-│   │   ├── label.ts         # ラベル遷移操作
-│   │   ├── comment.ts       # Issue コメント投稿
-│   │   ├── logger.ts        # ロガー
-│   │   └── process.ts       # child_process ラッパー
-│   └── utils/               # 共有ユーティリティ
-│       ├── paths.ts          # パス定義
-│       ├── config-defaults.ts # デフォルト設定値
-│       ├── plist.ts          # plist テンプレート展開
-│       └── shell.ts          # シェルコマンド実行
-├── tests/                   # テスト (vitest)
-├── prompts/                 # Claude Code プロンプトテンプレート
-│   ├── plan.md               # 方針策定フェーズ
-│   └── impl.md               # 実装フェーズ
-├── launchd/                 # launchd plist テンプレート
-├── config.yml.example       # 設定ファイルのサンプル
-├── package.json
-├── tsconfig.json
-└── vitest.config.ts
-```
-
-## 開発
-
-### ビルド
-
-```bash
-npm run build
-```
-
-TypeScript ソースを `dist/` にコンパイルする。
-
-### 開発実行
-
-```bash
-npm run dev:worker
-```
-
-`tsx` によりビルドなしでワーカーを直接実行する。
-
-### テスト
-
-```bash
-# テスト実行
-npm test
-
-# ウォッチモード
-npm run test:watch
-
-# カバレッジ計測
-npm run test:coverage
-```
-
-テストフレームワークは vitest。`tests/` ディレクトリ配下にモジュール単位のテストがある。
-依存性注入 (DI) パターンとモックを活用した単体テスト構成。
-
-## ライセンス
-
-MIT
+[MIT](LICENSE)
