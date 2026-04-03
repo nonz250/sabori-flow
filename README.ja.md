@@ -1,10 +1,22 @@
-[English](README.md) | [日本語](README.ja.md)
+<div align="center">
 
-# sabori-flow
+<img src="assets/logo.svg" alt="sabori-flow" width="480">
 
-GitHub Issue に特定のラベルを付けるだけで、Claude Code CLI が自動的に方針策定・実装を行う macOS ワーカー。launchd で 1 時間ごとに定期実行されます。
+<p><strong>Claude Code CLI で GitHub Issue を自動解決するワーカー。</strong><br>
+ラベルを付けるだけで、方針策定から実装、Pull Request 作成まで sabori-flow が自動で処理します。</p>
 
-ラベルを付けるだけで、方針策定から実装、Pull Request 作成まで sabori-flow が自動で処理します。
+<p>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+  <img src="https://img.shields.io/badge/Node.js-v20%2B-339933?logo=node.js&logoColor=white" alt="Node.js v20+">
+  <img src="https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
+  <img src="https://img.shields.io/badge/Platform-macOS-000000?logo=apple&logoColor=white" alt="macOS">
+</p>
+
+<p>
+  <a href="README.md">English</a> | <a href="README.ja.md">日本語</a>
+</p>
+
+</div>
 
 ## 前提条件
 
