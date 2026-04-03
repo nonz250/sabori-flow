@@ -8,8 +8,8 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>__PYTHON_PATH__</string>
-        <string>__PROJECT_ROOT__/src/main.py</string>
+        <string>__NODE_PATH__</string>
+        <string>__PROJECT_ROOT__/dist/worker.js</string>
     </array>
 
     <key>WorkingDirectory</key>
