@@ -70,15 +70,15 @@ flowchart TD
 
 ### ラベル遷移
 
-```
-あなたが付けるラベル       ワーカーが自動遷移
------------------     ------------------------------------------
+```mermaid
+flowchart LR
+    A["claude/plan"] --> B["claude/plan:in-progress"]
+    B --> C["claude/plan:done"]
+    B --> D["claude/plan:failed"]
 
-claude/plan  -->  claude/plan:in-progress  --+--> claude/plan:done
-                                             +--> claude/plan:failed
-
-claude/impl  -->  claude/impl:in-progress  --+--> claude/impl:done
-                                             +--> claude/impl:failed
+    E["claude/impl"] --> F["claude/impl:in-progress"]
+    F --> G["claude/impl:done"]
+    F --> H["claude/impl:failed"]
 ```
 
 ### 失敗した場合
