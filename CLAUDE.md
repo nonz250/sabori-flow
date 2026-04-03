@@ -91,6 +91,27 @@ src/
 - エラーメッセージのサニタイズ（内部パス情報を Issue コメントに含めない）
 - 全 `child_process.execFile` / `spawn` に shell 非経由 + タイムアウト設定
 
+### テスト
+
+- フレームワーク: vitest
+- テストディレクトリ: `tests/worker/`
+- ヘルパー:
+  - `tests/worker/helpers/factories.ts`: テスト用ファクトリ（`makeIssue()`, `makeRepoConfig()` など）
+  - `tests/worker/helpers/mock-deps.ts`: DI 用モック生成（`createMockPipelineDeps()`, `createMockWorkerDeps()`）
+- 方針: 依存性注入 + vitest の `vi.fn()` によるモックベースの単体テスト
+- カバレッジ除外: `src/index.ts`, `src/worker.ts`（エントリポイント）
+
+### npm スクリプト
+
+| コマンド | 説明 |
+|---|---|
+| `npm run build` | TypeScript コンパイル（`tsc` → `dist/`） |
+| `npm run worker` | ビルド済みワーカー実行（`node dist/worker.js`） |
+| `npm run dev:worker` | `tsx` で開発実行（ビルド不要） |
+| `npm test` | テスト実行 |
+| `npm run test:watch` | ウォッチモード |
+| `npm run test:coverage` | カバレッジ計測 |
+
 ## コーディング規約
 
 - TypeScript の strict モードを使用する
