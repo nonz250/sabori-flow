@@ -33,10 +33,10 @@ npm install
 npm run build
 
 # 2. Create config.yml interactively
-node dist/index.js init
+npx sabori-flow init
 
 # 3. Register with launchd for periodic execution
-node dist/index.js install
+npx sabori-flow install
 ```
 
 The `install` command performs the build, generates the plist file, and registers with launchd.
@@ -46,7 +46,7 @@ The `install` command performs the build, generates the plist file, and register
 To add a new repository to an existing `config.yml`:
 
 ```bash
-node dist/index.js add
+npx sabori-flow add
 ```
 
 This interactively prompts for owner, repo, and local path, then appends the entry to `config.yml`. If the same owner/repo already exists, you will be asked whether to overwrite it.
@@ -54,7 +54,7 @@ This interactively prompts for owner, repo, and local path, then appends the ent
 ### Uninstall
 
 ```bash
-node dist/index.js uninstall
+npx sabori-flow uninstall
 ```
 
 This unregisters from launchd and removes related files.
@@ -129,7 +129,7 @@ logs/launchd_stderr.log      # stderr via launchd
 
 ## Configuration
 
-Create `config.yml` based on `config.yml.example`, or generate it interactively with `node dist/index.js init`.
+Create `config.yml` based on `config.yml.example`, or generate it interactively with `npx sabori-flow init`.
 
 ```yaml
 repositories:
