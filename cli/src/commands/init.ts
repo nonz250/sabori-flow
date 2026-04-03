@@ -3,7 +3,7 @@ import { stringify } from "yaml";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { CONFIG_PATH } from "../utils/paths";
+import { CONFIG_PATH, LOGS_DIR } from "../utils/paths";
 
 function expandTilde(p: string): string {
   if (p.startsWith("~/")) {
@@ -45,7 +45,7 @@ async function promptRepository(): Promise<RepositoryInput> {
   return { owner, repo, local_path };
 }
 
-function buildConfigData(repos: RepositoryInput[]) {
+function buildConfigData(repos: RepositoryInput[], logDir: string) {
   return {
     repositories: repos.map((r) => ({
       owner: r.owner,
@@ -54,7 +54,7 @@ function buildConfigData(repos: RepositoryInput[]) {
       labels: getDefaultLabels(),
       priority_labels: getDefaultPriorityLabels(),
     })),
-    execution: getDefaultExecution(),
+    execution: { ...getDefaultExecution(), log_dir: logDir },
   };
 }
 
@@ -82,8 +82,19 @@ export async function initCommand(): Promise<void> {
     })
   );
 
+  // ログ出力先
+  const rawLogDir = await input({
+    message: `ログ出力先のパスを入力してください (~/ 可):`,
+    default: LOGS_DIR,
+    validate: (v) => {
+      const expanded = expandTilde(v);
+      return path.isAbsolute(expanded) || "絶対パスを入力してください (~/... も可)";
+    },
+  });
+  const logDir = expandTilde(rawLogDir);
+
   // YAML 生成・書き込み
-  const config = buildConfigData(repos);
+  const config = buildConfigData(repos, logDir);
   const yamlStr = stringify(config);
   fs.writeFileSync(CONFIG_PATH, yamlStr, "utf-8");
 
