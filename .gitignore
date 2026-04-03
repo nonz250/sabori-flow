@@ -1,11 +1,8 @@
 config.yml
-*.pyc
-__pycache__/
 .env
 *.log
 logs/
-.venv/
 launchd/*.plist
 .sabori-flow-worktrees/
-cli/node_modules/
-cli/dist/
+node_modules/
+dist/
