@@ -97,6 +97,8 @@ def _parse_repositories(raw: list) -> list[RepositoryConfig]:
         if not isinstance(local_path, str) or local_path == "":
             raise ConfigValidationError(f"{prefix}.local_path: must be a non-empty string")
 
+        local_path = os.path.expanduser(local_path)
+
         if not os.path.isabs(local_path):
             raise ConfigValidationError(f"{prefix}.local_path: must be an absolute path, got '{local_path}'")
 
@@ -217,6 +219,9 @@ def _parse_phase_labels(raw: dict, phase_name: str) -> PhaseLabels:
     )
 
 
+_DEFAULT_LOG_DIR: str = str(Path(__file__).resolve().parent.parent / "logs")
+
+
 def _parse_execution(raw: dict | None) -> ExecutionConfig:
     """execution セクションをパースする。
 
@@ -224,13 +229,13 @@ def _parse_execution(raw: dict | None) -> ExecutionConfig:
         raw: YAML から読み込んだ execution の辞書、または None
 
     Returns:
-        ExecutionConfig（省略時はデフォルト max_parallel=1）
+        ExecutionConfig（省略時はデフォルト max_parallel=1, log_dir=logs/）
 
     Raises:
         ConfigValidationError: バリデーションエラー
     """
     if raw is None:
-        return ExecutionConfig(max_parallel=1)
+        return ExecutionConfig(max_parallel=1, log_dir=_DEFAULT_LOG_DIR)
 
     if not isinstance(raw, dict):
         raise ConfigValidationError("'execution' must be a mapping")
@@ -247,4 +252,18 @@ def _parse_execution(raw: dict | None) -> ExecutionConfig:
             f"execution.max_parallel: must be >= 1, got {max_parallel}"
         )
 
-    return ExecutionConfig(max_parallel=max_parallel)
+    log_dir = raw.get("log_dir", _DEFAULT_LOG_DIR)
+
+    if not isinstance(log_dir, str) or log_dir == "":
+        raise ConfigValidationError(
+            "execution.log_dir: must be a non-empty string"
+        )
+
+    log_dir = os.path.expanduser(log_dir)
+
+    if not os.path.isabs(log_dir):
+        raise ConfigValidationError(
+            f"execution.log_dir: must be an absolute path, got '{log_dir}'"
+        )
+
+    return ExecutionConfig(max_parallel=max_parallel, log_dir=log_dir)

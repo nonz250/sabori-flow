@@ -70,6 +70,7 @@ class ExecutionConfig:
     """実行設定"""
 
     max_parallel: int
+    log_dir: str
 
 
 @dataclass(frozen=True)

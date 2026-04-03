@@ -19,10 +19,10 @@
     <integer>3600</integer>
 
     <key>StandardOutPath</key>
-    <string>__PROJECT_ROOT__/logs/launchd_stdout.log</string>
+    <string>__LOG_DIR__/launchd_stdout.log</string>
 
     <key>StandardErrorPath</key>
-    <string>__PROJECT_ROOT__/logs/launchd_stderr.log</string>
+    <string>__LOG_DIR__/launchd_stderr.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>

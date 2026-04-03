@@ -1,123 +1,153 @@
 # claude-issue-worker
 
-Python スクリプトと Claude Code CLI を使って GitHub Issue を自動的に検出し、定期的に対象 Issue を解決する仕組み。
+GitHub Issue に特定のラベルを付けるだけで、Claude Code CLI が自動的に方針策定・実装を行うワーカー。
+macOS の launchd で 1 時間ごとに定期実行される。
 
-## 概要
+## 前提条件
 
-ローカルマシンのスケジューラ（launchd / cron）で Python スクリプトを定期実行し、GitHub Issue のポーリング・ラベル管理を行います。Issue の実際の解決には Claude Code CLI を非対話モードで呼び出します。
+- macOS
+- Python 3.x
+- Node.js（Claude Code CLI がインストール済みであれば存在する）
+- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (`claude`)
+- [GitHub CLI](https://cli.github.com/) (`gh`) -- 認証済みであること
 
-### リポジトリ構成
+## セットアップ
 
-```
-claude-issue-worker/
-├── CLAUDE.md              # 開発時の Claude Code への指示
-├── README.md              # ドキュメント
-├── config.yml             # 対象リポジトリ・ラベル・実行設定
-├── src/
-│   ├── main.py            # エントリポイント
-│   ├── config.py          # config.yml の読み込み
-│   ├── fetcher.py         # Issue 取得・フィルタリング・ソート
-│   ├── labeler.py         # ラベル遷移管理
-│   ├── planner.py         # plan フェーズ（Claude Code CLI で方針策定）
-│   └── implementer.py     # impl フェーズ（Claude Code CLI で実装）
-└── launchd/
-    └── com.nonz250.claude-issue-worker.plist  # macOS launchd 定義
-```
+```bash
+# 1. CLI の依存インストール
+cd cli && npm install && cd ..
 
-### 主な機能
+# 2. 対話的に config.yml を作成
+npx ts-node cli/src/index.ts init
 
-- 複数リポジトリの GitHub Issue を定期的に検出・取得
-- **plan フェーズ**: Issue の調査・方針策定を行い、Issue コメントとして方針を提示
-- **impl フェーズ**: 方針に基づいてコード修正・Draft PR を作成
-- ラベル遷移による処理状態の管理
-- 優先度ラベル（`priority:high` / `priority:low`）による処理順の制御
-- 失敗時の Issue コメントによるフィードバック
-
-## アーキテクチャ
-
-### 実行基盤
-
-macOS の launchd（または cron）で Python スクリプトを 1 時間ごとに定期実行します。
-
-### 処理フロー
-
-```
-[launchd/cron] ─(1時間ごと)─> [Python: main.py]
-                                  │
-                                  ├─ config.yml から対象リポジトリ一覧を取得
-                                  ├─ gh コマンドで Issue を取得・ラベル遷移
-                                  │
-                                  ├─ 【plan フェーズ】
-                                  │   ├─ claude/plan ラベル付き Issue を取得
-                                  │   ├─ 優先度ラベルでソート
-                                  │   ├─ ラベルを claude/plan:in-progress に遷移
-                                  │   ├─ Claude Code CLI で方針策定
-                                  │   ├─ 成功 → 方針を Issue コメント + claude/plan:done
-                                  │   └─ 失敗 → 理由を Issue コメント + claude/plan:failed
-                                  │
-                                  ├─ 【impl フェーズ】
-                                  │   ├─ claude/impl ラベル付き Issue を取得
-                                  │   ├─ 優先度ラベルでソート
-                                  │   ├─ ラベルを claude/impl:in-progress に遷移
-                                  │   ├─ Claude Code CLI で実装
-                                  │   ├─ 成功 → Draft PR 作成 + claude/impl:done
-                                  │   └─ 失敗 → 理由を Issue コメント + claude/impl:failed
+# 3. セットアップ + 定期実行登録
+npx ts-node cli/src/index.ts install
 ```
 
-### 責務分担
+`install` コマンドは Python 仮想環境の作成、依存インストール、launchd への登録をまとめて行う。
 
-| レイヤー | 担当 |
-|----------|------|
-| スケジューリング | launchd / cron |
-| Issue 取得・ラベル管理・ログ | Python スクリプト（`gh` コマンド経由） |
-| Issue の解決（方針策定・実装） | Claude Code CLI（`claude -p "プロンプト"` で非対話実行） |
+## アンインストール
+
+```bash
+npx ts-node cli/src/index.ts uninstall
+```
+
+launchd からの登録解除と関連ファイルの削除が行われる。
+
+## 運用
+
+### 登録状況の確認
+
+```bash
+launchctl list | grep claude-issue-worker
+```
+
+```
+-	0	com.github.nonz250.claude-issue-worker
+```
+
+左から PID（未実行なら `-`）、最後の終了コード、ラベル名。
+
+### スケジュールを待たず即時実行
+
+```bash
+launchctl start com.github.nonz250.claude-issue-worker
+```
+
+### ログの確認
+
+```
+logs/worker.log              # ワーカーのログ（日次ローテーション、7日保持）
+logs/launchd_stdout.log      # launchd 経由の標準出力
+logs/launchd_stderr.log      # launchd 経由の標準エラー出力
+```
+
+## 使い方
+
+Issue にラベルを付けるだけ。ワーカーが 1 時間ごとに自動検出して処理する。
+
+```
+あなたがやること                       ワーカーが自動でやること
+-----------------------------------------------------------------------
+
+  Issue にラベルを付ける               1時間ごとに Issue をチェック
+
+  +-----------------+                  +---------------------+
+  | Issue #42       |                  | claude/plan ラベル   |
+  | Labels:         |   ---------->    | が付いた Issue を発見 |
+  |  claude/plan    |                  +----------+----------+
+  +-----------------+                             |
+                                                  v
+                                       +---------------------+
+                                       | Plan フェーズ        |
+                                       |                     |
+                                       | label: -> in-progress
+                                       | worktree 作成       |
+                                       | claude -p で方針策定 |
+                                       | label: -> done       |
+                                       | 結果を Issue にコメント
+                                       | worktree 削除       |
+                                       +----------+----------+
+                                                  |
+                                                  v
+  +-----------------+                  +---------------------+
+  | コメントを確認   |<--------------  | Issue に方針コメント |
+  | 方針に問題なければ|                  | が投稿される        |
+  | impl ラベルを付与 |                  +---------------------+
+  +--------+--------+
+           |
+           |  claude/impl ラベルを追加
+           v
+  +-----------------+                  +---------------------+
+  | Issue #42       |                  | Impl フェーズ        |
+  | Labels:         |   ---------->    |                     |
+  |  claude/impl    |                  | label: -> in-progress
+  +-----------------+                  | worktree 作成       |
+                                       | claude -p で実装     |
+                                       | PR 作成 (close #42)  |
+                                       | label: -> done       |
+                                       | 結果を Issue にコメント
+                                       | worktree 削除       |
+                                       +----------+----------+
+                                                  |
+                                                  v
+  +-----------------+                  +---------------------+
+  | PR をレビュー    |<--------------  | PR が作成される      |
+  | マージ           |                  | close #42 付き      |
+  +-----------------+                  +---------------------+
+```
 
 ### ラベル遷移
 
-#### plan フェーズ
-
 ```
-claude/plan → claude/plan:in-progress → claude/plan:done
-                                      → claude/plan:failed
-```
+  あなたが付ける          ワーカーが自動遷移
+  --------------     ------------------------------------------
 
-#### impl フェーズ
+  claude/plan  -->  claude/plan:in-progress  --+--> claude/plan:done
+                                               +--> claude/plan:failed
 
-```
-claude/impl → claude/impl:in-progress → claude/impl:done
-                                       → claude/impl:failed
+  claude/impl  -->  claude/impl:in-progress  --+--> claude/impl:done
+                                               +--> claude/impl:failed
 ```
 
-#### 全体フロー
+### 失敗した場合
 
-```
-[人間] claude/plan 付与
-  → 方針策定 → claude/plan:done（方針を Issue にコメント）
-  → [人間が確認] → claude/impl 付与
-  → 実装 → claude/impl:done（Draft PR 作成）
-```
+`failed` ラベルが付き、Issue に失敗コメントが投稿される。
 
-| ラベル | 状態 |
-|--------|------|
-| `claude/plan` | 方針策定を依頼（人間が付与） |
-| `claude/plan:in-progress` | 方針策定中 |
-| `claude/plan:done` | 方針策定完了（Issue にコメント済み） |
-| `claude/plan:failed` | 方針策定失敗 |
-| `claude/impl` | 実装を依頼（人間が付与） |
-| `claude/impl:in-progress` | 実装中 |
-| `claude/impl:done` | 実装完了（Draft PR 作成済み） |
-| `claude/impl:failed` | 実装失敗 |
+1. `logs/worker.log` で詳細を確認
+2. Issue の内容を修正
+3. `failed` ラベルを外して、再度 `claude/plan` または `claude/impl` を付ける
 
-## 設定ファイル
+## config.yml
 
-`config.yml` で対象リポジトリと実行設定を管理します。
+`config.yml.example` を参考に作成する。`npx ts-node cli/src/index.ts init` で対話的に生成することもできる。
 
 ```yaml
-# 対象リポジトリ
 repositories:
-  - owner: nonz250
-    repo: example-app
-    labels:
+  - owner: nonz250              # リポジトリオーナー
+    repo: example-app           # リポジトリ名
+    local_path: /path/to/repo   # ローカルのクローン先パス
+    labels:                     # ラベル名のカスタマイズ（省略時はデフォルト値）
       plan:
         trigger: claude/plan
         in_progress: "claude/plan:in-progress"
@@ -128,43 +158,32 @@ repositories:
         in_progress: "claude/impl:in-progress"
         done: "claude/impl:done"
         failed: "claude/impl:failed"
-    priority_labels:
+    priority_labels:            # 優先度ラベル（上から高い順）
       - priority:high
       - priority:low
 
-# 実行設定
 execution:
-  max_parallel: 1
+  max_parallel: 1               # 並列実行数（デフォルト: 1）
 ```
 
-## 前提条件
+| 項目 | 説明 |
+|------|------|
+| `repositories[].owner` | リポジトリオーナー |
+| `repositories[].repo` | リポジトリ名 |
+| `repositories[].local_path` | ローカルのクローン先パス |
+| `repositories[].labels` | 各フェーズのラベル名（カスタマイズ可能） |
+| `repositories[].priority_labels` | 優先度ラベル。リストの上位ほど先に処理される |
+| `execution.max_parallel` | 並列実行数。デフォルトは 1（逐次実行） |
 
-- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) がインストール済みであること
-- Claude Code Max プランのサブスクリプション
-- GitHub CLI (`gh`) がインストール・認証済みであること
-- Python 3.x
-- 対象リポジトリへの書き込み権限があること
+## プロンプトのカスタマイズ
 
-## セットアップ
+Claude Code CLI に渡すプロンプトは以下のファイルで管理されている。
 
-```bash
-git clone git@github.com:nonz250/claude-issue-worker.git
-cd claude-issue-worker
-cp config.yml.example config.yml  # 設定ファイルを作成し、対象リポジトリを記載
-```
+- `prompts/plan.md` -- 方針策定フェーズのプロンプト
+- `prompts/impl.md` -- 実装フェーズのプロンプト
 
-### launchd の設定（macOS）
-
-```bash
-cp launchd/com.nonz250.claude-issue-worker.plist ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/com.nonz250.claude-issue-worker.plist
-```
-
-### 手動実行
-
-```bash
-python src/main.py
-```
+プロジェクトに合わせて編集することで、Claude Code の振る舞いを調整できる。
+プロンプト内のプレースホルダー（`{repo_full_name}`, `{issue_number}`, `{issue_title}`, `{issue_url}`, `{issue_body}`）はワーカーが実行時に自動置換する。
 
 ## ライセンス
 
