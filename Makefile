@@ -1,4 +1,4 @@
-PLIST_LABEL    := com.github.nonz250.claude-issue-worker
+PLIST_LABEL    := com.github.nonz250.sabori-flow
 PLIST_TEMPLATE := launchd/$(PLIST_LABEL).plist.template
 PLIST_FILE     := launchd/$(PLIST_LABEL).plist
 PLIST_DEST     := $(HOME)/Library/LaunchAgents/$(PLIST_LABEL).plist

@@ -3,6 +3,6 @@ config.yml
 *.log
 logs/
 launchd/*.plist
-.claude-worker-worktrees/
+.sabori-flow-worktrees/
 node_modules/
 dist/

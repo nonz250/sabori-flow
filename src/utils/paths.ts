@@ -17,7 +17,7 @@ export const CONFIG_EXAMPLE_PATH = path.join(
 );
 export const LOGS_DIR = path.join(PROJECT_ROOT, "logs");
 
-export const PLIST_LABEL = "com.github.nonz250.claude-issue-worker";
+export const PLIST_LABEL = "com.github.nonz250.sabori-flow";
 export const PLIST_TEMPLATE_PATH = path.join(
   PROJECT_ROOT,
   "launchd",
