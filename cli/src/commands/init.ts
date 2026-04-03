@@ -1,8 +1,16 @@
 import { input, confirm } from "@inquirer/prompts";
 import { stringify } from "yaml";
 import fs from "fs";
+import os from "os";
 import path from "path";
 import { CONFIG_PATH } from "../utils/paths";
+
+function expandTilde(p: string): string {
+  if (p.startsWith("~/")) {
+    return path.join(os.homedir(), p.slice(2));
+  }
+  return p;
+}
 import {
   getDefaultLabels,
   getDefaultPriorityLabels,
@@ -26,10 +34,14 @@ async function promptRepository(): Promise<RepositoryInput> {
     validate: (v) =>
       /^[a-zA-Z0-9._-]+$/.test(v) || "英数字, '.', '_', '-' のみ使用できます",
   });
-  const local_path = await input({
-    message: "ローカルクローンの絶対パスを入力してください:",
-    validate: (v) => path.isAbsolute(v) || "絶対パスを入力してください",
+  const rawPath = await input({
+    message: "ローカルクローンのパスを入力してください (~/ 可):",
+    validate: (v) => {
+      const expanded = expandTilde(v);
+      return path.isAbsolute(expanded) || "絶対パスを入力してください (~/... も可)";
+    },
   });
+  const local_path = expandTilde(rawPath);
   return { owner, repo, local_path };
 }
 
