@@ -7,5 +7,7 @@ logs/
 .venv/
 launchd/*.plist
 .claude-worker-worktrees/
+node_modules/
+dist/
 cli/node_modules/
 cli/dist/
