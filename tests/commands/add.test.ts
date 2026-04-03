@@ -197,6 +197,160 @@ describe("addCommand - 正常系: 新規追加", () => {
   });
 });
 
+describe("addCommand - 正常系: 既存リポジトリがある状態での新規追加", () => {
+  it("既存エントリを保持したまま新しいリポジトリが追加される", async () => {
+    const existingRepo = {
+      owner: "existing-owner",
+      repo: "existing-repo",
+      local_path: "/tmp/existing-owner/existing-repo",
+      labels: {
+        plan: { trigger: "claude/plan" },
+        impl: { trigger: "claude/impl" },
+      },
+      priority_labels: ["priority:high"],
+    };
+    const repoInput = makeRepoInput();
+
+    mockedExistsSync.mockReturnValue(true);
+    mockedReadFileSync.mockReturnValue(makeValidConfig([existingRepo]));
+    mockedPromptRepository.mockResolvedValue(repoInput);
+
+    await runAddCommand();
+
+    expect(mockedWriteFileSync).toHaveBeenCalledTimes(1);
+
+    const written = parseWrittenYaml() as Record<string, unknown>;
+    const repos = written.repositories as Array<Record<string, unknown>>;
+    expect(repos).toHaveLength(2);
+
+    // 既存エントリが保持されている
+    expect(repos[0].owner).toBe("existing-owner");
+    expect(repos[0].repo).toBe("existing-repo");
+    expect(repos[0].local_path).toBe("/tmp/existing-owner/existing-repo");
+
+    // 新規エントリが追加されている
+    expect(repos[1].owner).toBe("test-owner");
+    expect(repos[1].repo).toBe("test-repo");
+  });
+});
+
+describe("addCommand - 正常系: execution セクションがない config への追加", () => {
+  it("execution なしでも正常に追加され、余計なキーが生成されない", async () => {
+    const repoInput = makeRepoInput();
+    mockedExistsSync.mockReturnValue(true);
+    mockedReadFileSync.mockReturnValue(makeValidConfig([]));
+    mockedPromptRepository.mockResolvedValue(repoInput);
+
+    await runAddCommand();
+
+    expect(mockedWriteFileSync).toHaveBeenCalledTimes(1);
+
+    const written = parseWrittenYaml() as Record<string, unknown>;
+    const repos = written.repositories as Array<Record<string, unknown>>;
+    expect(repos).toHaveLength(1);
+    expect(repos[0].owner).toBe("test-owner");
+
+    // execution キーが勝手に追加されていない
+    expect(written).not.toHaveProperty("execution");
+  });
+});
+
+describe("addCommand - 重複チェック: owner のみ一致は重複としない", () => {
+  it("同じ owner で異なる repo なら confirm なしで追加される", async () => {
+    const existingRepo = {
+      owner: "test-owner",
+      repo: "different-repo",
+      local_path: "/tmp/test-owner/different-repo",
+    };
+    const repoInput = makeRepoInput();
+
+    mockedExistsSync.mockReturnValue(true);
+    mockedReadFileSync.mockReturnValue(makeValidConfig([existingRepo]));
+    mockedPromptRepository.mockResolvedValue(repoInput);
+
+    await runAddCommand();
+
+    // confirm が呼ばれていない（重複扱いされていない）
+    expect(mockedConfirm).not.toHaveBeenCalled();
+
+    expect(mockedWriteFileSync).toHaveBeenCalledTimes(1);
+
+    const written = parseWrittenYaml() as Record<string, unknown>;
+    const repos = written.repositories as Array<Record<string, unknown>>;
+    expect(repos).toHaveLength(2);
+  });
+});
+
+describe("addCommand - 重複チェック: repo のみ一致は重複としない", () => {
+  it("異なる owner で同じ repo なら confirm なしで追加される", async () => {
+    const existingRepo = {
+      owner: "different-owner",
+      repo: "test-repo",
+      local_path: "/tmp/different-owner/test-repo",
+    };
+    const repoInput = makeRepoInput();
+
+    mockedExistsSync.mockReturnValue(true);
+    mockedReadFileSync.mockReturnValue(makeValidConfig([existingRepo]));
+    mockedPromptRepository.mockResolvedValue(repoInput);
+
+    await runAddCommand();
+
+    // confirm が呼ばれていない（重複扱いされていない）
+    expect(mockedConfirm).not.toHaveBeenCalled();
+
+    expect(mockedWriteFileSync).toHaveBeenCalledTimes(1);
+
+    const written = parseWrittenYaml() as Record<string, unknown>;
+    const repos = written.repositories as Array<Record<string, unknown>>;
+    expect(repos).toHaveLength(2);
+  });
+});
+
+describe("addCommand - 正常系: writeFileSync の引数検証", () => {
+  it("CONFIG_PATH に utf-8 エンコーディングで書き込まれる", async () => {
+    const repoInput = makeRepoInput();
+    mockedExistsSync.mockReturnValue(true);
+    mockedReadFileSync.mockReturnValue(makeValidConfig([]));
+    mockedPromptRepository.mockResolvedValue(repoInput);
+
+    await runAddCommand();
+
+    expect(mockedWriteFileSync).toHaveBeenCalledTimes(1);
+    const [filePath, , encoding] = mockedWriteFileSync.mock.calls[0];
+    expect(filePath).toContain("config.yml");
+    expect(encoding).toBe("utf-8");
+  });
+});
+
+describe("addCommand - config.yml が不正: repositories が数値", () => {
+  it("repositories が数値の場合エラーメッセージを出力する", async () => {
+    mockedExistsSync.mockReturnValue(true);
+    mockedReadFileSync.mockReturnValue(YAML.stringify({ repositories: 42 }));
+
+    await runAddCommand();
+
+    expect(consoleSpy.error).toHaveBeenCalledWith(
+      expect.stringContaining("repositories"),
+    );
+    expect(mockedWriteFileSync).not.toHaveBeenCalled();
+  });
+
+  it("repositories がオブジェクトの場合エラーメッセージを出力する", async () => {
+    mockedExistsSync.mockReturnValue(true);
+    mockedReadFileSync.mockReturnValue(
+      YAML.stringify({ repositories: { key: "value" } }),
+    );
+
+    await runAddCommand();
+
+    expect(consoleSpy.error).toHaveBeenCalledWith(
+      expect.stringContaining("repositories"),
+    );
+    expect(mockedWriteFileSync).not.toHaveBeenCalled();
+  });
+});
+
 describe("addCommand - 重複: 上書き Yes", () => {
   it("既存エントリが置き換えられる", async () => {
     const existingRepo = {
