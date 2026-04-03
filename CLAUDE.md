@@ -2,7 +2,7 @@
 
 ## プロジェクト概要
 
-Python スクリプトと Claude Code CLI を使って GitHub Issue を自動的に検出し、定期的に対象 Issue を解決するワーカー。
+TypeScript (Node.js) と Claude Code CLI を使って GitHub Issue を自動的に検出し、定期的に対象 Issue を解決するワーカー。
 ローカルマシンの launchd で 1 時間ごとに定期実行される。
 
 ## リポジトリ情報
@@ -12,42 +12,51 @@ Python スクリプトと Claude Code CLI を使って GitHub Issue を自動的
 
 ## 技術スタック
 
-- Python 3.x（ワーカー本体）
-- TypeScript / Node.js（セットアップ CLI）
+- TypeScript / Node.js（ワーカー本体 + CLI）
 - Claude Code CLI（Issue 解決エンジン。`claude -p --dangerously-skip-permissions` で非対話実行）
 - GitHub CLI (`gh`)（Issue 取得・PR 作成・ラベル操作・コメント投稿）
-- YAML（設定ファイル `config.yml`）
+- yaml（設定ファイル `config.yml` の読み込み）
+- vitest（テストフレームワーク）
 - launchd（macOS スケジューリング）
 
 ## アーキテクチャ
 
 ### 責務分担
 
-- **Python ワーカー** (`src/`): Issue 取得、ラベル遷移、優先度ソート、プロンプト生成、Claude Code CLI の呼び出し、結果判定、コメント投稿、ログ出力
-- **Claude Code CLI**: Issue の解決（方針策定・実装）。Python から stdin 経由でプロンプトを渡して非対話実行
-- **TypeScript CLI** (`cli/`): 対話的セットアップ（config.yml 生成、venv 構築、launchd 登録・解除）
+- **TypeScript ワーカー** (`src/worker/`): Issue 取得、ラベル遷移、優先度ソート、プロンプト生成、Claude Code CLI の呼び出し、結果判定、コメント投稿、ログ出力
+- **Claude Code CLI**: Issue の解決（方針策定・実装）。Node.js から stdin 経由でプロンプトを渡して非対話実行
+- **TypeScript CLI** (`src/commands/`): 対話的セットアップ（config.yml 生成、launchd 登録・解除）
 - **launchd**: 定期実行のスケジューリング
 
-### Python モジュール構成
+### TypeScript モジュール構成
 
 ```
 src/
-  main.py         # エントリポイント、ログ設定、並列実行制御
-  config.py       # config.yml 読み込み・バリデーション
-  models.py       # データモデル（Issue, Phase, RepositoryConfig 等）
-  fetcher.py      # gh issue list で Issue 取得・優先度ソート
-  prompt.py       # プロンプトテンプレート読み込み・プレースホルダ展開
-  pipeline.py     # 1 Issue の処理パイプライン（ラベル遷移→実行→結果判定）
-  worktree.py     # git worktree のライフサイクル管理（コンテキストマネージャ）
-  executor.py     # claude -p の実行（stdin 経由、タイムアウト付き）
-  label.py        # gh issue edit でラベル追加・削除
-  comment.py      # gh issue comment で結果コメント投稿
+  index.ts          # CLI エントリポイント
+  worker.ts         # ワーカーエントリポイント
+  commands/          # CLI コマンド
+    init.ts, install.ts, uninstall.ts
+  worker/            # ワーカー本体
+    main.ts          # メインロジック、並列実行制御
+    config.ts        # config.yml 読み込み・バリデーション
+    models.ts        # データモデル（interface, enum）
+    fetcher.ts       # gh issue list で Issue 取得・優先度ソート
+    pipeline.ts      # 1 Issue の処理パイプライン（DI パターン）
+    prompt.ts        # プロンプトテンプレート読み込み・展開
+    executor.ts      # Claude CLI 実行
+    worktree.ts      # git worktree ライフサイクル管理
+    label.ts         # ラベル遷移操作
+    comment.ts       # Issue コメント投稿
+    logger.ts        # 軽量ロガー
+    process.ts       # child_process ラッパー
+  utils/             # 共有ユーティリティ
+    paths.ts, plist.ts, shell.ts, config-defaults.ts
 ```
 
 ### 処理フロー
 
 1. `config.yml` から対象リポジトリ一覧を読み込む
-2. リポジトリ単位で `ThreadPoolExecutor` により並列実行
+2. リポジトリ単位で `Promise.all` により並列実行
 3. 各リポジトリで plan → impl の順にフェーズを処理
 4. 各 Issue に対して以下のパイプラインを実行:
    - ラベル遷移: trigger → in-progress
@@ -71,22 +80,22 @@ src/
 ### 並列実行
 
 - `config.yml` の `execution.max_parallel` で制御
-- `ThreadPoolExecutor` で repo 単位の並列実行
+- `Promise.all` で repo 単位の並列実行
 - 同一リポジトリ内の Issue は逐次処理
 
 ### セキュリティ
 
-- `str.replace()` によるプレースホルダ展開（`str.format_map()` の属性アクセスリスクを回避）
+- `String.replace(() => value)` の関数ラッパーによるプレースホルダ展開（テンプレートリテラルの意図しない展開を回避）
 - ユーザー入力由来の変数（issue_body, issue_title）を最後に展開（二重展開防止）
 - `<issue-body>` タグでプロンプトインジェクション対策（データ境界の明示）
 - エラーメッセージのサニタイズ（内部パス情報を Issue コメントに含めない）
-- 全 `subprocess.run` に `shell=False` + タイムアウト設定
+- 全 `child_process.execFile` / `spawn` に shell 非経由 + タイムアウト設定
 
 ## コーディング規約
 
-- Python コードは型ヒントを使用する
+- TypeScript の strict モードを使用する
 - エラーハンドリングを適切に行い、失敗時はログを残す
 - 機密情報（トークン等）はスクリプトにハードコードしない
 - 設定値はすべて `config.yml` で管理する
-- `gh` / `git` コマンドの実行は `subprocess` 経由、`shell=False`、タイムアウト付きで行う
+- `gh` / `git` コマンドの実行は `child_process` 経由、shell 非経由、タイムアウト付きで行う
 - プロンプトテンプレートは `prompts/` ディレクトリの Markdown ファイルで管理する

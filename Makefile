@@ -3,14 +3,14 @@ PLIST_TEMPLATE := launchd/$(PLIST_LABEL).plist.template
 PLIST_FILE     := launchd/$(PLIST_LABEL).plist
 PLIST_DEST     := $(HOME)/Library/LaunchAgents/$(PLIST_LABEL).plist
 PROJECT_ROOT   := $(shell pwd)
-PYTHON_PATH    := $(PROJECT_ROOT)/.venv/bin/python
+NODE_PATH      := $(shell which node)
 CURRENT_PATH   := $(shell echo $$PATH)
 
 .PHONY: check-config setup install uninstall
 
 setup:
-	python3 -m venv .venv
-	.venv/bin/pip install -r requirements.txt
+	npm install
+	npm run build
 	@echo "Setup complete. Run 'make install' to register with launchd."
 
 check-config:
@@ -32,7 +32,7 @@ uninstall:
 
 $(PLIST_FILE): $(PLIST_TEMPLATE)
 	mkdir -p logs
-	sed -e 's|__PYTHON_PATH__|$(PYTHON_PATH)|g' \
+	sed -e 's|__NODE_PATH__|$(NODE_PATH)|g' \
 	    -e 's|__PROJECT_ROOT__|$(PROJECT_ROOT)|g' \
 	    -e 's|__PATH__|$(CURRENT_PATH)|g' \
 	    -e 's|__LOG_DIR__|$(PROJECT_ROOT)/logs|g' \
