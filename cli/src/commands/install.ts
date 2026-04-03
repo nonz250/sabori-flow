@@ -1,4 +1,5 @@
 import fs from "fs";
+import YAML from "yaml";
 import {
   CONFIG_PATH,
   VENV_DIR,
@@ -14,6 +15,19 @@ import {
 } from "../utils/paths";
 import { exec, commandExists, ShellError } from "../utils/shell";
 import { renderPlist } from "../utils/plist";
+
+function getLogDir(): string {
+  try {
+    const raw = YAML.parse(fs.readFileSync(CONFIG_PATH, "utf-8"));
+    const logDir = raw?.execution?.log_dir;
+    if (typeof logDir === "string" && logDir !== "") {
+      return logDir;
+    }
+  } catch {
+    // config パース失敗時はデフォルト
+  }
+  return LOGS_DIR;
+}
 
 export async function installCommand(): Promise<void> {
   // 1. config.yml チェック
@@ -46,7 +60,8 @@ export async function installCommand(): Promise<void> {
     exec(`${PIP_PATH} install -r ${REQUIREMENTS_PATH}`);
 
     // 4. logs ディレクトリ作成
-    fs.mkdirSync(LOGS_DIR, { recursive: true });
+    const logDir = getLogDir();
+    fs.mkdirSync(logDir, { recursive: true });
 
     // 5. plist 生成
     console.log("plist を生成中...");
@@ -55,6 +70,7 @@ export async function installCommand(): Promise<void> {
       pythonPath: VENV_PYTHON_PATH,
       projectRoot: PROJECT_ROOT,
       path: process.env.PATH || "",
+      logDir,
     });
     fs.writeFileSync(PLIST_GENERATED_PATH, plist, "utf-8");
 
