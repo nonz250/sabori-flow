@@ -1,6 +1,7 @@
 import path from "path";
 import { fileURLToPath } from "node:url";
-import { dirname } from "node:path";
+import { dirname, resolve } from "node:path";
+import { homedir } from "node:os";
 
 // ESM で __dirname を代替
 // src/utils/ → ../../ = project root
@@ -37,3 +38,15 @@ export const PLIST_DEST_PATH = path.join(
   PLIST_DEST_DIR,
   `${PLIST_LABEL}.plist`,
 );
+
+// ---------- Tilde expansion ----------
+
+export function expandTilde(filePath: string): string {
+  if (filePath === "~") {
+    return homedir();
+  }
+  if (filePath.startsWith("~/")) {
+    return resolve(homedir(), filePath.slice(2));
+  }
+  return filePath;
+}
