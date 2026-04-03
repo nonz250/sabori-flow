@@ -1,5 +1,3 @@
-import { exec } from "./shell.js";
-
 export interface PlistPlaceholders {
   nodePath: string;
   projectRoot: string;

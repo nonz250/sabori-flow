@@ -62,18 +62,21 @@ export async function runCommand(
 
     const timeoutTimer = setTimeout(() => {
       killed = true;
-      try {
-        process.kill(-child.pid!, "SIGTERM");
-      } catch {
-        // Process may have already exited
-      }
-      killTimer = setTimeout(() => {
+      if (child.pid !== undefined) {
+        const pgid = -child.pid;
         try {
-          process.kill(-child.pid!, "SIGKILL");
+          process.kill(pgid, "SIGTERM");
         } catch {
           // Process may have already exited
         }
-      }, SIGKILL_DELAY_MS);
+        killTimer = setTimeout(() => {
+          try {
+            process.kill(pgid, "SIGKILL");
+          } catch {
+            // Process may have already exited
+          }
+        }, SIGKILL_DELAY_MS);
+      }
     }, timeoutMs);
 
     child.stdout!.on("data", (chunk: Buffer) => {

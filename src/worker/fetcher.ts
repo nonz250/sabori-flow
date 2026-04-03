@@ -1,6 +1,10 @@
 import type { Issue, RepositoryConfig } from "./models.js";
 import { Phase, Priority, repoFullName } from "./models.js";
-import { runCommand } from "./process.js";
+import {
+  runCommand,
+  ProcessTimeoutError,
+  ProcessExecutionError,
+} from "./process.js";
 
 /** gh コマンドの実行エラー */
 export class GitHubCLIError extends Error {
@@ -75,13 +79,28 @@ export async function fetchIssues(
  * @throws {GitHubCLIError} コマンドの終了コードが 0 でない場合、またはタイムアウト時
  */
 async function runGhCommand(args: readonly string[]): Promise<string> {
-  const result = await runCommand("gh", args, { timeoutMs: GH_TIMEOUT_MS });
+  try {
+    const result = await runCommand("gh", args, { timeoutMs: GH_TIMEOUT_MS });
 
-  if (!result.success) {
-    throw new GitHubCLIError(result.stderr);
+    if (!result.success) {
+      throw new GitHubCLIError(result.stderr);
+    }
+
+    return result.stdout;
+  } catch (error: unknown) {
+    if (error instanceof GitHubCLIError) {
+      throw error;
+    }
+    if (error instanceof ProcessTimeoutError) {
+      throw new GitHubCLIError(
+        `gh command timed out after ${GH_TIMEOUT_MS / 1_000} seconds`,
+      );
+    }
+    if (error instanceof ProcessExecutionError) {
+      throw new GitHubCLIError(error.message);
+    }
+    throw error;
   }
-
-  return result.stdout;
 }
 
 /**
