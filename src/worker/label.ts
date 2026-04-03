@@ -149,14 +149,14 @@ async function runGhEdit(
 /**
  * stderr が「ラベルが存在しない」エラーかどうかを判定する。
  *
- * gh CLI v2.x 時点のエラーメッセージに基づく判定。
+ * gh CLI の `gh issue edit --add-label` で存在しないラベルを指定した際の
+ * エラーメッセージ（例: `'labelName' not found`）に基づく判定。
  * gh のバージョンアップでメッセージが変わった場合、リトライが発動しなくなるが、
  * 既存の LabelError フォールバックにより安全に劣化する。
  */
 function isLabelNotFoundError(stderr: string, labelName: string): boolean {
   const lower = stderr.toLowerCase();
   return (
-    lower.includes("label") &&
     lower.includes("not found") &&
     lower.includes(labelName.toLowerCase())
   );
