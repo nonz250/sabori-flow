@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
+import { addCommand } from "./commands/add.js";
 import { initCommand } from "./commands/init.js";
 import { installCommand } from "./commands/install.js";
 import { uninstallCommand } from "./commands/uninstall.js";
@@ -10,6 +11,11 @@ program
   .name("sabori-flow")
   .description("CLI for sabori-flow setup and management")
   .version("0.1.0");
+
+program
+  .command("add")
+  .description("既存の config.yml にリポジトリを追加します")
+  .action(addCommand);
 
 program
   .command("init")
