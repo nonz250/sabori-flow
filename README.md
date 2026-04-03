@@ -57,15 +57,15 @@ Add a label to an Issue. The worker automatically detects it every hour and proc
 
 ```mermaid
 flowchart TD
-    A[User adds claude/plan label to Issue] --> B[Worker runs Plan Phase]
-    B --> C{Plan succeeded?}
-    C -- Yes --> D[Plan comment posted to Issue]
-    C -- No --> E[claude/plan:failed label applied]
-    D --> F[User reviews plan and adds claude/impl label]
-    F --> G[Worker runs Impl Phase]
-    G --> H{Impl succeeded?}
-    H -- Yes --> I[Pull Request created]
-    H -- No --> J[claude/impl:failed label applied]
+    A["User adds claude/plan label to Issue"] --> B["Worker runs Plan Phase"]
+    B --> C{"Plan succeeded?"}
+    C -- Yes --> D["Plan comment posted to Issue"]
+    C -- No --> E["claude/plan:failed label applied"]
+    D --> F["User reviews plan and adds claude/impl label"]
+    F --> G["Worker runs Impl Phase"]
+    G --> H{"Impl succeeded?"}
+    H -- Yes --> I["Pull Request created"]
+    H -- No --> J["claude/impl:failed label applied"]
 ```
 
 ### Label Transitions
