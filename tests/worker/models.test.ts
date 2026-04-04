@@ -72,6 +72,7 @@ describe("型の構造テスト", () => {
       body: "Issue body",
       labels: ["claude/plan"],
       url: "https://github.com/owner/repo/issues/1",
+      authorAssociation: "OWNER",
       phase: Phase.PLAN,
       priority: Priority.HIGH,
     };
@@ -88,6 +89,7 @@ describe("型の構造テスト", () => {
       body: null,
       labels: [],
       url: "https://github.com/owner/repo/issues/2",
+      authorAssociation: "COLLABORATOR",
       phase: Phase.IMPL,
       priority: Priority.NONE,
     };
@@ -123,7 +125,7 @@ describe("型の構造テスト", () => {
 
     const executionConfig: ExecutionConfig = {
       maxParallel: 4,
-      logDir: "/tmp/logs",
+      maxIssuesPerRepo: 5,
     };
 
     const appConfig: AppConfig = {
