@@ -4,6 +4,7 @@ import { Command } from "commander";
 import { addCommand } from "./commands/add.js";
 import { initCommand } from "./commands/init.js";
 import { installCommand } from "./commands/install.js";
+import { reinstallCommand } from "./commands/reinstall.js";
 import { uninstallCommand } from "./commands/uninstall.js";
 import { setLanguage, loadLanguageFromConfig, t } from "./i18n/index.js";
 import { getConfigPath } from "./utils/paths.js";
@@ -40,6 +41,12 @@ program
   .command("uninstall")
   .description(t("cli.descriptionUninstall"))
   .action(uninstallCommand);
+
+program
+  .command("reinstall")
+  .description("launchd の登録を再インストールします（解除 + plist 再生成 + 登録）")
+  .option("--local", "ローカルビルドのワーカーを登録します")
+  .action((options) => reinstallCommand(options));
 
 program
   .command("worker")
