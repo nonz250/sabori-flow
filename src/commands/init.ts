@@ -2,7 +2,7 @@ import { input, confirm } from "@inquirer/prompts";
 import { stringify } from "yaml";
 import fs from "fs";
 import path from "path";
-import { CONFIG_PATH, LOGS_DIR, expandTilde } from "../utils/paths.js";
+import { getConfigDir, getConfigPath, getLogsDir, expandTilde } from "../utils/paths.js";
 import {
   getDefaultLabels,
   getDefaultPriorityLabels,
@@ -28,7 +28,10 @@ function buildConfigData(repos: RepositoryInput[], logDir: string) {
 
 export async function initCommand(): Promise<void> {
   // config.yml 存在チェック
-  if (fs.existsSync(CONFIG_PATH)) {
+  // XDG 準拠: config ディレクトリを事前作成
+  fs.mkdirSync(getConfigDir(), { recursive: true, mode: 0o700 });
+
+  if (fs.existsSync(getConfigPath())) {
     const overwrite = await confirm({
       message: "config.yml は既に存在します。上書きしますか?",
       default: false,
@@ -53,7 +56,7 @@ export async function initCommand(): Promise<void> {
   // ログ出力先
   const rawLogDir = await input({
     message: `ログ出力先のパスを入力してください (~/ 可):`,
-    default: LOGS_DIR,
+    default: getLogsDir(),
     validate: (v) => {
       const expanded = expandTilde(v);
       return path.isAbsolute(expanded) || "絶対パスを入力してください (~/... も可)";
@@ -64,9 +67,9 @@ export async function initCommand(): Promise<void> {
   // YAML 生成・書き込み
   const config = buildConfigData(repos, logDir);
   const yamlStr = stringify(config);
-  fs.writeFileSync(CONFIG_PATH, yamlStr, "utf-8");
+  fs.writeFileSync(getConfigPath(), yamlStr, { encoding: "utf-8", mode: 0o600 });
 
-  console.log(`\nconfig.yml を作成しました: ${CONFIG_PATH}`);
+  console.log(`\nconfig.yml を作成しました: ${getConfigPath()}`);
   console.log(
     "次は `npx sabori-flow install` を実行してください。",
   );
