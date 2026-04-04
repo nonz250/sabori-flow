@@ -278,7 +278,7 @@ function parsePhaseLabels(raw: unknown, phaseName: string): PhaseLabels {
 
 function parseExecution(raw: unknown): ExecutionConfig {
   if (raw === undefined || raw === null) {
-    return { maxParallel: 1, logDir: DEFAULT_LOG_DIR };
+    return { maxParallel: 1, maxIssuesPerRepo: 1, logDir: DEFAULT_LOG_DIR };
   }
 
   if (typeof raw !== "object" || Array.isArray(raw)) {
@@ -303,6 +303,22 @@ function parseExecution(raw: unknown): ExecutionConfig {
     );
   }
 
+  // max_issues_per_repo
+  const rawMaxIssuesPerRepo =
+    "max_issues_per_repo" in record ? record["max_issues_per_repo"] : 1;
+
+  if (typeof rawMaxIssuesPerRepo !== "number" || !Number.isInteger(rawMaxIssuesPerRepo)) {
+    throw new ConfigValidationError(
+      `execution.max_issues_per_repo: must be an integer, got ${typeof rawMaxIssuesPerRepo}`,
+    );
+  }
+
+  if (rawMaxIssuesPerRepo < 1) {
+    throw new ConfigValidationError(
+      `execution.max_issues_per_repo: must be >= 1, got ${rawMaxIssuesPerRepo}`,
+    );
+  }
+
   // log_dir
   const rawLogDir = "log_dir" in record ? record["log_dir"] : DEFAULT_LOG_DIR;
 
@@ -320,7 +336,7 @@ function parseExecution(raw: unknown): ExecutionConfig {
     );
   }
 
-  return { maxParallel: rawMaxParallel, logDir };
+  return { maxParallel: rawMaxParallel, maxIssuesPerRepo: rawMaxIssuesPerRepo, logDir };
 }
 
 // ---------- Helpers ----------
