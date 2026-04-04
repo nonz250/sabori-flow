@@ -18,6 +18,27 @@ Add a label to an Issue -- sabori-flow handles the rest: planning, implementatio
 
 </div>
 
+## What is sabori?
+
+The name "sabori" comes from the Japanese word "サボり" (sabori), meaning to slack off or skip work. But there is a twist -- sabori-flow lets you slack off **responsibly** by delegating tedious, well-defined tasks to AI so you can focus on the work that actually needs a human brain.
+
+Just add a label to a GitHub Issue, and sabori-flow takes care of the rest: it reads the issue, creates a plan, implements the code, and opens a pull request -- all running quietly in the background on your machine. It is a **set-and-forget** workflow for the boring stuff.
+
+## sabori-flow vs Claude App
+
+sabori-flow and [Claude](https://claude.ai/) (the chat interface) are both powered by the same AI, but they serve very different purposes:
+
+| | sabori-flow | Claude App |
+|---|---|---|
+| **Execution** | Background, automated (launchd) | Manual chat |
+| **Trigger** | GitHub Issue label | User prompt |
+| **Code access** | Direct access to local repository | Copy-paste or file upload |
+| **Output** | Pull request + Issue comment | Chat response |
+| **Best for** | Routine tasks, well-defined Issues | Interactive design, research, discussion |
+| **Human involvement** | Label + plan review only | Continuous conversation |
+
+**Use sabori-flow** when the task is clear enough to describe in an Issue and you do not need a back-and-forth conversation. **Use Claude App** when you want to explore ideas, ask follow-up questions, or work through ambiguous problems interactively.
+
 ## Prerequisites
 
 - macOS
