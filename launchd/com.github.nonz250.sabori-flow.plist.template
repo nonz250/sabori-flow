@@ -23,5 +23,8 @@ __PROGRAM_ARGUMENTS__
         <key>PATH</key>
         <string>__PATH__</string>
     </dict>
+
+    <key>ExitTimeOut</key>
+    <integer>300</integer>
 </dict>
 </plist>
