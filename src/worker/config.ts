@@ -50,7 +50,7 @@ export function loadConfig(configPath: string): AppConfig {
 
   let data: unknown;
   try {
-    data = YAML.parse(rawText);
+    data = YAML.parse(rawText, { maxAliasCount: 100 });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : String(e);
     throw new ConfigValidationError(`Failed to parse YAML: ${message}`);
