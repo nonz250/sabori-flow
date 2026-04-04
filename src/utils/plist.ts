@@ -10,8 +10,8 @@ export function renderPlist(
   placeholders: PlistPlaceholders,
 ): string {
   return template
-    .replace(/__NODE_PATH__/g, placeholders.nodePath)
-    .replace(/__PROJECT_ROOT__/g, placeholders.projectRoot)
-    .replace(/__PATH__/g, placeholders.path)
-    .replace(/__LOG_DIR__/g, placeholders.logDir);
+    .replace(/__PROJECT_ROOT__/g, () => placeholders.projectRoot)
+    .replace(/__LOG_DIR__/g, () => placeholders.logDir)
+    .replace(/__NODE_PATH__/g, () => placeholders.nodePath)
+    .replace(/__PATH__/g, () => placeholders.path);
 }
