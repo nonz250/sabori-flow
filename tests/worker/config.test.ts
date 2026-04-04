@@ -392,13 +392,13 @@ describe("loadConfig - execution validation", () => {
   it("max_issues_per_repo デフォルト値 (execution あり)", () => {
     mockYaml(VALID_YAML);
     const result = loadConfig("/path/to/config.yml");
-    expect(result.execution.maxIssuesPerRepo).toBe(5);
+    expect(result.execution.maxIssuesPerRepo).toBe(1);
   });
 
   it("max_issues_per_repo デフォルト値 (execution 省略)", () => {
     mockYaml(VALID_YAML_NO_EXECUTION);
     const result = loadConfig("/path/to/config.yml");
-    expect(result.execution.maxIssuesPerRepo).toBe(5);
+    expect(result.execution.maxIssuesPerRepo).toBe(1);
   });
 
   it("max_issues_per_repo zero", () => {

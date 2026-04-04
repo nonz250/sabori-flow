@@ -20,5 +20,5 @@ export function getDefaultPriorityLabels(): string[] {
 }
 
 export function getDefaultExecution() {
-  return { max_parallel: 1, max_issues_per_repo: 5 };
+  return { max_parallel: 1, max_issues_per_repo: 1 };
 }
