@@ -36,7 +36,6 @@ vi.mock("../../src/utils/paths.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../../src/utils/paths.js")>();
   return {
     ...original,
-    PACKAGE_ROOT: "/mock/package-root",
     PLIST_TEMPLATE_PATH: "/mock/package-root/launchd/template.plist",
     PLIST_DEST_DIR: "/mock/home/Library/LaunchAgents",
     PLIST_DEST_PATH: "/mock/home/Library/LaunchAgents/com.github.nonz250.sabori-flow.plist",
@@ -97,20 +96,20 @@ async function runInstallCommand(): Promise<void> {
 /** 正常系の前提条件をセットアップする */
 function setupNormalFlow(overrides?: {
   configYaml?: string;
-  nodePath?: string;
+  npxPath?: string;
   templateContent?: string;
   renderedPlist?: string;
 }): void {
   const {
     configYaml = YAML.stringify({ repositories: [] }),
-    nodePath = "/usr/local/bin/node",
+    npxPath = "/usr/local/bin/npx",
     templateContent = "<plist>template</plist>",
     renderedPlist = "<plist>rendered</plist>",
   } = overrides ?? {};
 
   // config.yml が存在する
   mockedFs.existsSync.mockReturnValue(true);
-  // node コマンドが存在する
+  // npx コマンドが存在する
   mockedCommandExists.mockReturnValue(true);
   // config.yml の内容
   mockedFs.readFileSync.mockImplementation((filePath: unknown) => {
@@ -118,9 +117,9 @@ function setupNormalFlow(overrides?: {
     if (filePath === "/mock/package-root/launchd/template.plist") return templateContent;
     return "";
   });
-  // which node の結果
+  // which npx の結果
   mockedExec.mockImplementation((file: string, args: readonly string[]) => {
-    if (file === "which" && args[0] === "node") return nodePath;
+    if (file === "which" && args[0] === "npx") return npxPath;
     return "";
   });
   // renderPlist の戻り値
@@ -146,7 +145,7 @@ describe("installCommand - config.yml が存在しない場合", () => {
   });
 });
 
-describe("installCommand - node コマンドが見つからない場合", () => {
+describe("installCommand - npx コマンドが見つからない場合", () => {
   it("エラーメッセージを出力し、早期 return する", async () => {
     mockedFs.existsSync.mockReturnValue(true);
     mockedCommandExists.mockReturnValue(false);
@@ -154,46 +153,46 @@ describe("installCommand - node コマンドが見つからない場合", () => 
     await runInstallCommand();
 
     expect(consoleSpy.error).toHaveBeenCalledWith(
-      expect.stringContaining("node が見つかりません"),
+      expect.stringContaining("npx が見つかりません"),
     );
     expect(mockedFs.mkdirSync).not.toHaveBeenCalled();
     expect(mockedFs.writeFileSync).not.toHaveBeenCalled();
   });
 });
 
-describe("installCommand - which node の結果が空文字列の場合", () => {
+describe("installCommand - which npx の結果が空文字列の場合", () => {
   it("エラーメッセージを出力し、早期 return する", async () => {
     mockedFs.existsSync.mockReturnValue(true);
     mockedCommandExists.mockReturnValue(true);
     mockedFs.readFileSync.mockReturnValue(YAML.stringify({ repositories: [] }));
     mockedExec.mockImplementation((file: string, args: readonly string[]) => {
-      if (file === "which" && args[0] === "node") return "";
+      if (file === "which" && args[0] === "npx") return "";
       return "";
     });
 
     await runInstallCommand();
 
     expect(consoleSpy.error).toHaveBeenCalledWith(
-      expect.stringContaining("node のパスを正しく解決できませんでした"),
+      expect.stringContaining("npx のパスを正しく解決できませんでした"),
     );
     expect(mockedRenderPlist).not.toHaveBeenCalled();
   });
 });
 
-describe("installCommand - which node の結果が相対パスの場合", () => {
+describe("installCommand - which npx の結果が相対パスの場合", () => {
   it("エラーメッセージを出力し、早期 return する", async () => {
     mockedFs.existsSync.mockReturnValue(true);
     mockedCommandExists.mockReturnValue(true);
     mockedFs.readFileSync.mockReturnValue(YAML.stringify({ repositories: [] }));
     mockedExec.mockImplementation((file: string, args: readonly string[]) => {
-      if (file === "which" && args[0] === "node") return "node";
+      if (file === "which" && args[0] === "npx") return "npx";
       return "";
     });
 
     await runInstallCommand();
 
     expect(consoleSpy.error).toHaveBeenCalledWith(
-      expect.stringContaining("node のパスを正しく解決できませんでした"),
+      expect.stringContaining("npx のパスを正しく解決できませんでした"),
     );
     expect(mockedRenderPlist).not.toHaveBeenCalled();
   });
@@ -231,7 +230,7 @@ describe("installCommand - 正常フロー", () => {
       return undefined;
     });
     mockedExec.mockImplementation((file: string, args: readonly string[]) => {
-      if (file === "which" && args[0] === "node") return "/usr/local/bin/node";
+      if (file === "which" && args[0] === "npx") return "/usr/local/bin/npx";
       if (file === "launchctl") callOrder.push("launchctl");
       return "";
     });
@@ -268,8 +267,7 @@ describe("installCommand - 正常フロー", () => {
     expect(mockedRenderPlist).toHaveBeenCalledTimes(1);
     const [template, placeholders] = mockedRenderPlist.mock.calls[0];
     expect(template).toBe("<plist>template</plist>");
-    expect(placeholders.nodePath).toBe("/usr/local/bin/node");
-    expect(placeholders.projectRoot).toBe("/mock/package-root");
+    expect(placeholders.npxPath).toBe("/usr/local/bin/npx");
     expect(placeholders.logDir).toBe("/mock/data/logs");
     // path は buildMinimalPath の結果: STANDARD_PATHS + which で解決したディレクトリ
     expect(placeholders.path).toContain("/usr/local/bin");
@@ -329,6 +327,7 @@ describe("installCommand - buildMinimalPath の間接検証", () => {
     mockedExec.mockImplementation((file: string, args: readonly string[]) => {
       if (file === "which") {
         const cmdPathMap: Record<string, string> = {
+          npx: "/usr/local/bin/npx",
           node: "/usr/local/bin/node",
           git: "/usr/bin/git",
           gh: "/opt/homebrew/bin/gh",
@@ -355,6 +354,7 @@ describe("installCommand - buildMinimalPath の間接検証", () => {
     setupNormalFlow();
     mockedExec.mockImplementation((file: string, args: readonly string[]) => {
       if (file === "which") {
+        if (args[0] === "npx") return "/usr/local/bin/npx";
         if (args[0] === "node") return "/usr/local/bin/node";
         // それ以外のコマンドは失敗
         throw new Error("not found");
@@ -373,7 +373,7 @@ describe("installCommand - buildMinimalPath の間接検証", () => {
 
   it("重複するディレクトリは1回のみ含まれる", async () => {
     setupNormalFlow();
-    // 全コマンドが同じディレクトリを返す
+    // 全コマンドが同じディレクトリを返す（which npx も含む）
     mockedExec.mockImplementation((file: string, args: readonly string[]) => {
       if (file === "which") return "/usr/local/bin/" + args[0];
       return "";
@@ -393,7 +393,7 @@ describe("installCommand - ShellError 発生時", () => {
     setupNormalFlow();
     // launchctl load で ShellError を発生させる
     mockedExec.mockImplementation((file: string, args: readonly string[]) => {
-      if (file === "which" && args[0] === "node") return "/usr/local/bin/node";
+      if (file === "which" && args[0] === "npx") return "/usr/local/bin/npx";
       if (file === "launchctl") {
         throw new ShellError("launchctl の実行に失敗しました", "stderr output");
       }
@@ -411,7 +411,7 @@ describe("installCommand - ShellError 発生時", () => {
   it("ShellError に stderr がない場合は stderr 行が出力されない", async () => {
     setupNormalFlow();
     mockedExec.mockImplementation((file: string, args: readonly string[]) => {
-      if (file === "which" && args[0] === "node") return "/usr/local/bin/node";
+      if (file === "which" && args[0] === "npx") return "/usr/local/bin/npx";
       if (file === "launchctl") {
         throw new ShellError("launchctl の実行に失敗しました", "");
       }

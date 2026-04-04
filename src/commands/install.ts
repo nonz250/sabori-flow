@@ -2,7 +2,6 @@ import fs from "fs";
 import path from "path";
 import YAML from "yaml";
 import {
-  PACKAGE_ROOT,
   PLIST_TEMPLATE_PATH,
   PLIST_DEST_DIR,
   PLIST_DEST_PATH,
@@ -55,10 +54,10 @@ export async function installCommand(): Promise<void> {
     return;
   }
 
-  // 2. node チェック
-  if (!commandExists("node")) {
+  // 2. npx チェック
+  if (!commandExists("npx")) {
     console.error(
-      "Error: node が見つかりません。Node.js をインストールしてください。",
+      "Error: npx が見つかりません。Node.js をインストールしてください。",
     );
     return;
   }
@@ -72,14 +71,13 @@ export async function installCommand(): Promise<void> {
     console.log("plist を生成中...");
     fs.mkdirSync(getDataDir(), { recursive: true, mode: 0o700 });
     const template = fs.readFileSync(PLIST_TEMPLATE_PATH, "utf-8");
-    const nodePath = exec("which", ["node"]);
-    if (!nodePath || !nodePath.startsWith("/")) {
-      console.error("Error: node のパスを正しく解決できませんでした。");
+    const npxPath = exec("which", ["npx"]);
+    if (!npxPath || !npxPath.startsWith("/")) {
+      console.error("Error: npx のパスを正しく解決できませんでした。");
       return;
     }
     const plist = renderPlist(template, {
-      nodePath,
-      projectRoot: PACKAGE_ROOT,
+      npxPath,
       path: buildMinimalPath(),
       logDir,
     });
