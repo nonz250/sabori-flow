@@ -1,4 +1,4 @@
-import { input } from "@inquirer/prompts";
+import { input, confirm } from "@inquirer/prompts";
 import path from "node:path";
 import { expandTilde } from "../../utils/paths.js";
 import { t } from "../../i18n/index.js";
@@ -7,6 +7,7 @@ export interface RepositoryInput {
   owner: string;
   repo: string;
   local_path: string;
+  auto_impl_after_plan: boolean;
 }
 
 export async function promptRepository(): Promise<RepositoryInput> {
@@ -28,5 +29,9 @@ export async function promptRepository(): Promise<RepositoryInput> {
     },
   });
   const local_path = expandTilde(rawPath);
-  return { owner, repo, local_path };
+  const auto_impl_after_plan = await confirm({
+    message: "Plan 完了後に自動で impl ラベルを付与しますか?",
+    default: false,
+  });
+  return { owner, repo, local_path, auto_impl_after_plan };
 }
