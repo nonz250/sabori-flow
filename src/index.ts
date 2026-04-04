@@ -1,16 +1,20 @@
 #!/usr/bin/env node
+import { createRequire } from "node:module";
 import { Command } from "commander";
 import { addCommand } from "./commands/add.js";
 import { initCommand } from "./commands/init.js";
 import { installCommand } from "./commands/install.js";
 import { uninstallCommand } from "./commands/uninstall.js";
 
+const require = createRequire(import.meta.url);
+const pkg = require("../package.json") as { version: string };
+
 const program = new Command();
 
 program
   .name("sabori-flow")
   .description("CLI for sabori-flow setup and management")
-  .version("0.1.0");
+  .version(pkg.version);
 
 program
   .command("add")
@@ -24,7 +28,7 @@ program
 
 program
   .command("install")
-  .description("npm install + ビルド + launchd 登録を行います")
+  .description("plist 生成 + launchd 登録を行います")
   .action(installCommand);
 
 program
