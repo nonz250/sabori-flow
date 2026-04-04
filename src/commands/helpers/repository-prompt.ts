@@ -1,6 +1,7 @@
 import { input } from "@inquirer/prompts";
 import path from "node:path";
 import { expandTilde } from "../../utils/paths.js";
+import { t } from "../../i18n/index.js";
 
 export interface RepositoryInput {
   owner: string;
@@ -10,20 +11,20 @@ export interface RepositoryInput {
 
 export async function promptRepository(): Promise<RepositoryInput> {
   const owner = await input({
-    message: "リポジトリの owner を入力してください:",
+    message: t("prompt.enterOwner"),
     validate: (v) =>
-      /^[a-zA-Z0-9._-]+$/.test(v) || "英数字, '.', '_', '-' のみ使用できます",
+      /^[a-zA-Z0-9._-]+$/.test(v) || t("prompt.validationAlphanumeric"),
   });
   const repo = await input({
-    message: "リポジトリ名を入力してください:",
+    message: t("prompt.enterRepo"),
     validate: (v) =>
-      /^[a-zA-Z0-9._-]+$/.test(v) || "英数字, '.', '_', '-' のみ使用できます",
+      /^[a-zA-Z0-9._-]+$/.test(v) || t("prompt.validationAlphanumeric"),
   });
   const rawPath = await input({
-    message: "ローカルクローンのパスを入力してください (~/ 可):",
+    message: t("prompt.enterLocalPath"),
     validate: (v) => {
       const expanded = expandTilde(v);
-      return path.isAbsolute(expanded) || "絶対パスを入力してください (~/... も可)";
+      return path.isAbsolute(expanded) || t("prompt.validationAbsolutePath");
     },
   });
   const local_path = expandTilde(rawPath);
