@@ -439,6 +439,52 @@ describe("loadConfig - execution validation", () => {
     mockYaml(yaml);
     expect(() => loadConfig("/path/to/config.yml")).toThrow(ConfigValidationError);
   });
+
+  it("max_parallel が上限値 10 を超える場合にエラーになる", () => {
+    const yaml = VALID_YAML.replace("max_parallel: 4", "max_parallel: 11");
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /max_parallel: must be <= 10/,
+    );
+  });
+
+  it("max_parallel が上限値 10 ちょうどの場合は正常", () => {
+    const yaml = VALID_YAML.replace("max_parallel: 4", "max_parallel: 10");
+    mockYaml(yaml);
+
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.maxParallel).toBe(10);
+  });
+
+  it("max_issues_per_repo が上限値 20 を超える場合にエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  max_issues_per_repo: 21",
+    );
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /max_issues_per_repo: must be <= 20/,
+    );
+  });
+
+  it("max_issues_per_repo が上限値 20 ちょうどの場合は正常", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  max_issues_per_repo: 20",
+    );
+    mockYaml(yaml);
+
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.maxIssuesPerRepo).toBe(20);
+  });
 });
 
 describe("loadConfig - local_path validation", () => {
