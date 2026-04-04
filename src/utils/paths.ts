@@ -86,9 +86,9 @@ export function getDataDir(): string {
   return path.join(base, APP_NAME);
 }
 
-/** getDataDir()/logs */
+/** ~/.sabori-flow/logs */
 export function getLogsDir(): string {
-  return path.join(getDataDir(), "logs");
+  return path.join(homedir(), ".sabori-flow", "logs");
 }
 
 /** getDataDir()/{PLIST_LABEL}.plist — 生成済み plist の保存先 */

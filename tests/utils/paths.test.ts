@@ -104,11 +104,10 @@ describe("getLogsDir", () => {
     vi.unstubAllEnvs();
   });
 
-  it("getDataDir()/logs を返す", async () => {
-    vi.stubEnv("XDG_DATA_HOME", "");
+  it("~/.sabori-flow/logs を返す", async () => {
     const { getLogsDir } = await import("../../src/utils/paths.js");
     expect(getLogsDir()).toBe(
-      path.join("/mock/home", ".local", "share", "sabori-flow", "logs"),
+      path.join("/mock/home", ".sabori-flow", "logs"),
     );
   });
 });
