@@ -61,6 +61,10 @@ export async function installCommand(): Promise<void> {
     fs.mkdirSync(getDataDir(), { recursive: true, mode: 0o700 });
     const template = fs.readFileSync(PLIST_TEMPLATE_PATH, "utf-8");
     const nodePath = exec("which", ["node"]);
+    if (!nodePath || !nodePath.startsWith("/")) {
+      console.error("Error: node のパスを正しく解決できませんでした。");
+      return;
+    }
     const plist = renderPlist(template, {
       nodePath,
       projectRoot: PACKAGE_ROOT,
