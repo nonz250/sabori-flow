@@ -251,7 +251,7 @@ describe("buildPrompt - 異常系", () => {
     ).toThrow(PromptTemplateError);
     expect(() =>
       buildPrompt(makeIssue(), makeRepoConfig(), "/tmp/user-prompts", "/tmp/default-prompts"),
-    ).toThrow("Template file not found");
+    ).toThrow("Template file not found: plan.md");
   });
 
   it("ファイルが存在するが読み込みに失敗した場合、PromptTemplateError が発生する", () => {
@@ -267,7 +267,7 @@ describe("buildPrompt - 異常系", () => {
     ).toThrow(PromptTemplateError);
     expect(() =>
       buildPrompt(makeIssue(), makeRepoConfig(), "/tmp/user-prompts", "/tmp/default-prompts"),
-    ).toThrow("Failed to read template file");
+    ).toThrow("Failed to read template file: plan.md");
   });
 });
 

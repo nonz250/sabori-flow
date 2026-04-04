@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { basename, resolve } from "node:path";
 
 import type { Issue, RepositoryConfig } from "./models.js";
 import { Phase, repoFullName } from "./models.js";
@@ -76,7 +76,7 @@ function loadTemplate(
   }
 
   throw new PromptTemplateError(
-    `Template file not found: ${userTemplatePath} or ${defaultTemplatePath}`,
+    `Template file not found: ${filename}`,
   );
 }
 
@@ -90,7 +90,7 @@ function readTemplateFile(templatePath: string): string {
     return readFileSync(templatePath, "utf-8");
   } catch {
     throw new PromptTemplateError(
-      `Failed to read template file: ${templatePath}`,
+      `Failed to read template file: ${basename(templatePath)}`,
     );
   }
 }
