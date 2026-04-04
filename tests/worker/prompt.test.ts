@@ -63,15 +63,32 @@ const MINIMAL_PLAN_TEMPLATE = [
   "Name: {repo_name}",
   "Issue #{issue_number}: {issue_title}",
   "URL: {issue_url}",
-  "Body: {issue_body}",
+  "{boundary_open}",
+  "{issue_body}",
+  "{boundary_close}",
 ].join("\n") + "\n";
 
 const MINIMAL_IMPL_TEMPLATE = [
   "Implement for {repo_full_name}",
   "Issue #{issue_number}: {issue_title}",
   "close {issue_url}",
-  "Body: {issue_body}",
+  "{boundary_open}",
+  "{issue_body}",
+  "{boundary_close}",
 ].join("\n") + "\n";
+
+/** UUID v4 の形式にマッチする正規表現 */
+const UUID_PATTERN = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+
+/** バウンダリ開始マーカーの正規表現 */
+const BOUNDARY_OPEN_PATTERN = new RegExp(
+  `<!-- BOUNDARY-${UUID_PATTERN} DATA START -->`,
+);
+
+/** バウンダリ終了マーカーの正規表現 */
+const BOUNDARY_CLOSE_PATTERN = new RegExp(
+  `<!-- BOUNDARY-${UUID_PATTERN} DATA END -->`,
+);
 
 // ---------------------------------------------------------------------------
 // 正常系テスト
@@ -93,14 +110,14 @@ describe("buildPrompt - 正常系", () => {
       "/tmp/default-prompts",
     );
 
-    expect(result).toBe(
-      "Repo: testowner/testrepo\n" +
-      "Owner: testowner\n" +
-      "Name: testrepo\n" +
-      "Issue #42: Test Issue Title\n" +
-      "URL: https://github.com/testowner/testrepo/issues/42\n" +
-      "Body: This is the issue body.\n",
-    );
+    expect(result).toContain("Repo: testowner/testrepo");
+    expect(result).toContain("Owner: testowner");
+    expect(result).toContain("Name: testrepo");
+    expect(result).toContain("Issue #42: Test Issue Title");
+    expect(result).toContain("URL: https://github.com/testowner/testrepo/issues/42");
+    expect(result).toContain("This is the issue body.");
+    expect(result).toMatch(BOUNDARY_OPEN_PATTERN);
+    expect(result).toMatch(BOUNDARY_CLOSE_PATTERN);
     expect(mockedExistsSync).toHaveBeenCalledWith(
       resolve("/tmp/user-prompts", "plan.md"),
     );
@@ -156,7 +173,7 @@ describe("buildPrompt - 正常系", () => {
 
   it("issue.body が null の場合、空文字列に変換される", () => {
     mockedExistsSync.mockReturnValue(true);
-    mockedReadFileSync.mockReturnValue("Body: {issue_body}");
+    mockedReadFileSync.mockReturnValue("{boundary_open}\n{issue_body}\n{boundary_close}");
 
     const result = buildPrompt(
       makeIssue({ body: null }),
@@ -165,7 +182,11 @@ describe("buildPrompt - 正常系", () => {
       "/tmp/default-prompts",
     );
 
-    expect(result).toBe("Body: ");
+    expect(result).toMatch(BOUNDARY_OPEN_PATTERN);
+    expect(result).toMatch(BOUNDARY_CLOSE_PATTERN);
+    // バウンダリの間が空行（空文字列に変換されている）
+    const lines = result.split("\n");
+    expect(lines[1]).toBe("");
   });
 
   it("テンプレートに含まれない変数があっても問題なく動作する", () => {
@@ -179,12 +200,12 @@ describe("buildPrompt - 正常系", () => {
       "/tmp/default-prompts",
     );
 
-    expect(result).toBe("Only title: Test Issue Title");
+    expect(result).toContain("Only title: Test Issue Title");
   });
 
   it("Issue 本文に { や } が含まれていてもエラーにならない", () => {
     mockedExistsSync.mockReturnValue(true);
-    mockedReadFileSync.mockReturnValue("Body: {issue_body}");
+    mockedReadFileSync.mockReturnValue("{boundary_open}\n{issue_body}\n{boundary_close}");
     const bodyWithBraces = "function() { return {key: value}; }";
 
     const result = buildPrompt(
@@ -194,13 +215,13 @@ describe("buildPrompt - 正常系", () => {
       "/tmp/default-prompts",
     );
 
-    expect(result).toBe(`Body: ${bodyWithBraces}`);
+    expect(result).toContain(bodyWithBraces);
   });
 
   it("Issue 本文にプレースホルダ風文字列が含まれていても二重展開されない", () => {
     mockedExistsSync.mockReturnValue(true);
     mockedReadFileSync.mockReturnValue(
-      "Body: {issue_body}\nURL: {issue_url}",
+      "{boundary_open}\n{issue_body}\n{boundary_close}\nURL: {issue_url}",
     );
     const maliciousBody = "See {issue_url} for details";
 
@@ -211,16 +232,15 @@ describe("buildPrompt - 正常系", () => {
       "/tmp/default-prompts",
     );
 
-    const lines = result.split("\n");
-    expect(lines[0]).toBe("Body: See {issue_url} for details");
-    expect(lines[1]).toBe(
+    expect(result).toContain("See {issue_url} for details");
+    expect(result).toContain(
       "URL: https://github.com/testowner/testrepo/issues/42",
     );
   });
 
   it("Issue 本文に $& や $' を含む場合でも安全に展開される", () => {
     mockedExistsSync.mockReturnValue(true);
-    mockedReadFileSync.mockReturnValue("Body: {issue_body}");
+    mockedReadFileSync.mockReturnValue("{boundary_open}\n{issue_body}\n{boundary_close}");
     const bodyWithDollar = "price is $& and $' and $` and $$";
 
     const result = buildPrompt(
@@ -230,7 +250,7 @@ describe("buildPrompt - 正常系", () => {
       "/tmp/default-prompts",
     );
 
-    expect(result).toBe(`Body: ${bodyWithDollar}`);
+    expect(result).toContain(bodyWithDollar);
   });
 });
 
@@ -272,6 +292,122 @@ describe("buildPrompt - 異常系", () => {
 });
 
 // ---------------------------------------------------------------------------
+// ランダムバウンダリテスト
+// ---------------------------------------------------------------------------
+
+describe("buildPrompt - ランダムバウンダリ", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("レンダリング結果にランダムバウンダリが含まれる", () => {
+    mockedExistsSync.mockReturnValue(true);
+    mockedReadFileSync.mockReturnValue(
+      "{boundary_open}\n{issue_body}\n{boundary_close}",
+    );
+
+    const result = buildPrompt(
+      makeIssue(),
+      makeRepoConfig(),
+      "/tmp/user-prompts",
+      "/tmp/default-prompts",
+    );
+
+    expect(result).toMatch(BOUNDARY_OPEN_PATTERN);
+    expect(result).toMatch(BOUNDARY_CLOSE_PATTERN);
+  });
+
+  it("固定の <issue-body> タグが結果に含まれない", () => {
+    mockedExistsSync.mockReturnValue(true);
+    mockedReadFileSync.mockReturnValue(
+      "{boundary_open}\n{issue_body}\n{boundary_close}",
+    );
+
+    const result = buildPrompt(
+      makeIssue(),
+      makeRepoConfig(),
+      "/tmp/user-prompts",
+      "/tmp/default-prompts",
+    );
+
+    expect(result).not.toContain("<issue-body>");
+    expect(result).not.toContain("</issue-body>");
+  });
+
+  it("バウンダリの形式が <!-- BOUNDARY- で始まる", () => {
+    mockedExistsSync.mockReturnValue(true);
+    mockedReadFileSync.mockReturnValue(
+      "{boundary_open}\n{issue_body}\n{boundary_close}",
+    );
+
+    const result = buildPrompt(
+      makeIssue(),
+      makeRepoConfig(),
+      "/tmp/user-prompts",
+      "/tmp/default-prompts",
+    );
+
+    const lines = result.split("\n");
+    expect(lines[0]).toMatch(/^<!-- BOUNDARY-/);
+    expect(lines[0]).toMatch(/ DATA START -->$/);
+    expect(lines[2]).toMatch(/^<!-- BOUNDARY-/);
+    expect(lines[2]).toMatch(/ DATA END -->$/);
+  });
+
+  it("バウンダリの開始と終了に同一のトークンが使われる", () => {
+    mockedExistsSync.mockReturnValue(true);
+    mockedReadFileSync.mockReturnValue(
+      "{boundary_open}\n{issue_body}\n{boundary_close}",
+    );
+
+    const result = buildPrompt(
+      makeIssue(),
+      makeRepoConfig(),
+      "/tmp/user-prompts",
+      "/tmp/default-prompts",
+    );
+
+    const openMatch = result.match(
+      /<!-- BOUNDARY-([0-9a-f-]+) DATA START -->/,
+    );
+    const closeMatch = result.match(
+      /<!-- BOUNDARY-([0-9a-f-]+) DATA END -->/,
+    );
+    expect(openMatch).not.toBeNull();
+    expect(closeMatch).not.toBeNull();
+    expect(openMatch![1]).toBe(closeMatch![1]);
+  });
+
+  it("呼び出しごとに異なるトークンが生成される", () => {
+    mockedExistsSync.mockReturnValue(true);
+    mockedReadFileSync.mockReturnValue(
+      "{boundary_open}\n{issue_body}\n{boundary_close}",
+    );
+
+    const result1 = buildPrompt(
+      makeIssue(),
+      makeRepoConfig(),
+      "/tmp/user-prompts",
+      "/tmp/default-prompts",
+    );
+    const result2 = buildPrompt(
+      makeIssue(),
+      makeRepoConfig(),
+      "/tmp/user-prompts",
+      "/tmp/default-prompts",
+    );
+
+    const token1 = result1.match(
+      /<!-- BOUNDARY-([0-9a-f-]+) DATA START -->/,
+    )![1];
+    const token2 = result2.match(
+      /<!-- BOUNDARY-([0-9a-f-]+) DATA START -->/,
+    )![1];
+    expect(token1).not.toBe(token2);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // インテグレーションテスト（実際のテンプレートファイルを使用）
 // ---------------------------------------------------------------------------
 
@@ -284,6 +420,8 @@ describe("buildPrompt - インテグレーション", () => {
     "issue_title",
     "issue_url",
     "issue_body",
+    "boundary_open",
+    "boundary_close",
   ];
 
   function findUnexpandedPlaceholders(text: string): string[] {
@@ -322,6 +460,10 @@ describe("buildPrompt - インテグレーション", () => {
     expect(result).toContain("testowner/testrepo");
     expect(result).toContain("#101");
     expect(result).toContain("Add new feature");
+    expect(result).toMatch(BOUNDARY_OPEN_PATTERN);
+    expect(result).toMatch(BOUNDARY_CLOSE_PATTERN);
+    expect(result).not.toContain("<issue-body>");
+    expect(result).not.toContain("</issue-body>");
   });
 
   it("実際の impl.md テンプレートで全プレースホルダが展開される", () => {
@@ -341,6 +483,10 @@ describe("buildPrompt - インテグレーション", () => {
     expect(result).toContain("testowner/testrepo");
     expect(result).toContain("#202");
     expect(result).toContain("Implement search feature");
+    expect(result).toMatch(BOUNDARY_OPEN_PATTERN);
+    expect(result).toMatch(BOUNDARY_CLOSE_PATTERN);
+    expect(result).not.toContain("<issue-body>");
+    expect(result).not.toContain("</issue-body>");
   });
 
   it("impl.md のプロンプトに close {issue_url} の展開結果が含まれる", () => {

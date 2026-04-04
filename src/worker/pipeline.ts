@@ -8,7 +8,11 @@ import {
   transitionToDone,
   transitionToFailed,
 } from "./label.js";
-import { postSuccessComment, postFailureComment } from "./comment.js";
+import {
+  postSuccessComment,
+  postFailureComment,
+  sanitizeOutput,
+} from "./comment.js";
 import { withWorktree } from "./worktree.js";
 import { createLogger } from "./logger.js";
 
@@ -173,7 +177,7 @@ export async function processIssue(
         }
 
         try {
-          await deps.postSuccessComment(repo, issue.number, result.stdout);
+          await deps.postSuccessComment(repo, issue.number, sanitizeOutput(result.stdout));
         } catch (error: unknown) {
           logger.warn(
             "Issue #%s: 成功コメントの投稿に失敗しました [repo=%s]: %s",

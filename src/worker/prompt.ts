@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 
@@ -96,12 +97,37 @@ function readTemplateFile(templatePath: string): string {
 }
 
 /**
+ * ランダムバウンダリトークンを生成する。
+ *
+ * 固定タグ（例: `<issue-body>`）ではなく、予測不能なトークンを使うことで
+ * 攻撃者がバウンダリを偽装するプロンプトインジェクションを困難にする。
+ */
+function generateBoundaryToken(): string {
+  return randomUUID();
+}
+
+/**
+ * Issue ボディからバウンダリ終了パターンを除去する。
+ *
+ * トークンが予測不能なため衝突はほぼ起きないが、
+ * 防御的にバウンダリ終了マーカーと一致するパターンを除去する。
+ */
+function sanitizeBoundaryInBody(body: string, token: string): string {
+  const closePattern = `<!-- BOUNDARY-${token} DATA END -->`;
+  return body.replaceAll(closePattern, "");
+}
+
+/**
  * プレースホルダに対応する変数マップを構築する。
  */
 function buildVariables(
   issue: Issue,
   repoConfig: RepositoryConfig,
 ): Map<string, string> {
+  const token = generateBoundaryToken();
+  const rawBody = issue.body ?? "";
+  const sanitizedBody = sanitizeBoundaryInBody(rawBody, token);
+
   return new Map<string, string>([
     ["repo_full_name", repoFullName(repoConfig)],
     ["repo_owner", repoConfig.owner],
@@ -109,7 +135,9 @@ function buildVariables(
     ["issue_number", String(issue.number)],
     ["issue_title", issue.title],
     ["issue_url", issue.url],
-    ["issue_body", issue.body ?? ""],
+    ["boundary_open", `<!-- BOUNDARY-${token} DATA START -->`],
+    ["boundary_close", `<!-- BOUNDARY-${token} DATA END -->`],
+    ["issue_body", sanitizedBody],
   ]);
 }
 

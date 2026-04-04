@@ -106,6 +106,27 @@ describe("processIssue", () => {
         IMPL_LABELS,
       );
     });
+
+    it("stdout にシークレットが含まれる場合、sanitizeOutput 適用後の値で成功コメントが呼ばれる", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
+      vi.mocked(deps.runClaude).mockResolvedValue(
+        makeProcessResult({
+          stdout: "Found token: ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijkl in output",
+        }),
+      );
+
+      const result = await processIssue(issue, repoConfig, deps);
+
+      expect(result).toBe(true);
+      expect(deps.postSuccessComment).toHaveBeenCalledOnce();
+      expect(deps.postSuccessComment).toHaveBeenCalledWith(
+        "testowner/testrepo",
+        42,
+        "Found token: [REDACTED] in output",
+      );
+    });
   });
 
   // -----------------------------------------------------------------------
