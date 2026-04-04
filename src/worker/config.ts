@@ -1,6 +1,4 @@
 import { readFileSync } from "node:fs";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
 import YAML from "yaml";
 
 import type {
@@ -10,7 +8,7 @@ import type {
   LabelsConfig,
   PhaseLabels,
 } from "./models.js";
-import { expandTilde } from "../utils/paths.js";
+import { expandTilde, getLogsDir } from "../utils/paths.js";
 
 // ---------- Custom error ----------
 
@@ -26,15 +24,6 @@ export class ConfigValidationError extends Error {
 const OWNER_REPO_PATTERN = /^[a-zA-Z0-9._-]+$/;
 const LABEL_PATTERN = /^[a-zA-Z0-9./:_ -]+$/;
 const PHASE_LABEL_KEYS = ["trigger", "in_progress", "done", "failed"] as const;
-
-// ---------- Default values ----------
-
-const DEFAULT_LOG_DIR = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "..",
-  "logs",
-);
 
 // ---------- Public API ----------
 
@@ -278,7 +267,7 @@ function parsePhaseLabels(raw: unknown, phaseName: string): PhaseLabels {
 
 function parseExecution(raw: unknown): ExecutionConfig {
   if (raw === undefined || raw === null) {
-    return { maxParallel: 1, maxIssuesPerRepo: 1, logDir: DEFAULT_LOG_DIR };
+    return { maxParallel: 1, maxIssuesPerRepo: 1, logDir: getLogsDir() };
   }
 
   if (typeof raw !== "object" || Array.isArray(raw)) {
@@ -320,7 +309,7 @@ function parseExecution(raw: unknown): ExecutionConfig {
   }
 
   // log_dir
-  const rawLogDir = "log_dir" in record ? record["log_dir"] : DEFAULT_LOG_DIR;
+  const rawLogDir = "log_dir" in record ? record["log_dir"] : getLogsDir();
 
   if (typeof rawLogDir !== "string" || rawLogDir === "") {
     throw new ConfigValidationError(

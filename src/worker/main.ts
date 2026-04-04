@@ -1,6 +1,3 @@
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-
 import type { AppConfig, Issue, Phase, RepositoryConfig } from "./models.js";
 import { repoFullName } from "./models.js";
 import { Phase as PhaseEnum } from "./models.js";
@@ -8,11 +5,9 @@ import { loadConfig } from "./config.js";
 import { fetchIssues } from "./fetcher.js";
 import { processIssue } from "./pipeline.js";
 import { configureLogger, createLogger, rotateOldLogs } from "./logger.js";
+import { getConfigPath } from "../utils/paths.js";
 
 const logger = createLogger("main");
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_CONFIG_PATH = resolve(__dirname, "..", "..", "config.yml");
 
 // ---------- Dependency Injection ----------
 
@@ -170,7 +165,7 @@ class Semaphore {
  * @returns 終了コード (0: 成功, 1: 失敗)
  */
 export async function workerMain(
-  configPath: string = DEFAULT_CONFIG_PATH,
+  configPath: string = getConfigPath(),
   deps: WorkerDeps = defaultWorkerDeps,
 ): Promise<number> {
   // config 読み込み
