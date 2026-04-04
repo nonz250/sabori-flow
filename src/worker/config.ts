@@ -221,12 +221,25 @@ function parseRepositories(raw: unknown): readonly RepositoryConfig[] {
       }
     }
 
+    // auto_impl_after_plan (optional, default: false)
+    let autoImplAfterPlan = false;
+    if ("auto_impl_after_plan" in record) {
+      const rawAutoImpl = record["auto_impl_after_plan"];
+      if (typeof rawAutoImpl !== "boolean") {
+        throw new ConfigValidationError(
+          `${prefix}.auto_impl_after_plan: must be a boolean, got ${typeof rawAutoImpl}`,
+        );
+      }
+      autoImplAfterPlan = rawAutoImpl;
+    }
+
     configs.push({
       owner,
       repo,
       localPath: resolvedLocalPath,
       labels,
       priorityLabels: priorityRaw as string[],
+      autoImplAfterPlan,
     });
   }
 
