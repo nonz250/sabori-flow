@@ -175,8 +175,8 @@ git clone https://github.com/nonz250/sabori-flow.git
 cd sabori-flow
 npm install
 npm run build
-npx sabori-flow init
-npx sabori-flow install --local
+node dist/index.js init
+node dist/index.js install --local
 ```
 
 ## ライセンス
