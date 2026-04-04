@@ -1,15 +1,17 @@
 {
   "name": "sabori-flow",
   "version": "0.2.0",
-  "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "bin": {
     "sabori-flow": "./dist/index.js"
   },
   "files": [
     "dist/",
     "prompts/",
-    "launchd/",
+    "launchd/*.plist.template",
     "config.yml.example"
   ],
   "scripts": {
@@ -18,7 +20,8 @@
     "dev:worker": "tsx src/worker.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "commander": "^13.0.0",

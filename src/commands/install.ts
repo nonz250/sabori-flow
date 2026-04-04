@@ -50,7 +50,7 @@ export async function installCommand(): Promise<void> {
   if (!fs.existsSync(getConfigPath())) {
     console.error("Error: config.yml が見つかりません。");
     console.error(
-      "先に `npx sabori-flow init` を実行してください。",
+      "先に `sabori-flow init` を実行してください。",
     );
     return;
   }
@@ -64,18 +64,11 @@ export async function installCommand(): Promise<void> {
   }
 
   try {
-    // 3. npm install + ビルド
-    console.log("依存パッケージをインストール中...");
-    exec("npm", ["install"], { cwd: PACKAGE_ROOT });
-
-    console.log("TypeScript をビルド中...");
-    exec("npx", ["tsc"], { cwd: PACKAGE_ROOT });
-
-    // 4. logs ディレクトリ作成
+    // 3. logs ディレクトリ作成
     const logDir = getLogDir();
     fs.mkdirSync(logDir, { recursive: true, mode: 0o700 });
 
-    // 5. plist 生成
+    // 4. plist 生成
     console.log("plist を生成中...");
     fs.mkdirSync(getDataDir(), { recursive: true, mode: 0o700 });
     const template = fs.readFileSync(PLIST_TEMPLATE_PATH, "utf-8");
@@ -92,7 +85,7 @@ export async function installCommand(): Promise<void> {
     });
     fs.writeFileSync(getPlistGeneratedPath(), plist, { encoding: "utf-8", mode: 0o600 });
 
-    // 6. launchd 登録
+    // 5. launchd 登録
     console.log("launchd に登録中...");
     fs.mkdirSync(PLIST_DEST_DIR, { recursive: true });
     fs.copyFileSync(getPlistGeneratedPath(), PLIST_DEST_PATH);
