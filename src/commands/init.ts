@@ -23,6 +23,7 @@ function buildConfigData(repos: RepositoryInput[], language: string) {
       local_path: r.local_path,
       labels: getDefaultLabels(),
       priority_labels: getDefaultPriorityLabels(),
+      auto_impl_after_plan: r.auto_impl_after_plan,
     })),
     execution: getDefaultExecution(),
   };
