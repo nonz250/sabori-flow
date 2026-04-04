@@ -5,6 +5,7 @@ import {
   ProcessTimeoutError,
   ProcessExecutionError,
 } from "./process.js";
+import { createLogger } from "./logger.js";
 
 /** gh コマンドの実行エラー */
 export class GitHubCLIError extends Error {
@@ -24,6 +25,15 @@ export class IssueParseError extends Error {
 
 const GH_TIMEOUT_MS = 120_000;
 
+const logger = createLogger("fetcher");
+
+/** 処理を許可する authorAssociation の一覧 */
+const PERMITTED_ASSOCIATIONS: ReadonlySet<string> = new Set([
+  "OWNER",
+  "MEMBER",
+  "COLLABORATOR",
+]);
+
 /** gh issue list の JSON レスポンス内の label 構造 */
 interface GhLabel {
   readonly name: string;
@@ -36,6 +46,7 @@ interface GhIssueItem {
   readonly body?: string | null;
   readonly labels?: readonly GhLabel[];
   readonly url?: string;
+  readonly authorAssociation?: string;
 }
 
 /**
@@ -63,14 +74,15 @@ export async function fetchIssues(
     "--state",
     "open",
     "--json",
-    "number,title,body,labels,url",
+    "number,title,body,labels,url,authorAssociation",
     "--limit",
     "100",
   ];
 
   const rawJson = await runGhCommand(args);
   const issues = parseIssues(rawJson, phase, repoConfig);
-  return sortByPriority(issues);
+  const permitted = filterByAuthorAssociation(issues);
+  return sortByPriority(permitted);
 }
 
 /**
@@ -140,6 +152,7 @@ function parseIssues(
       body: item.body ?? null,
       labels,
       url: item.url,
+      authorAssociation: item.authorAssociation ?? "",
       phase,
       priority,
     };
@@ -172,6 +185,24 @@ function determinePriority(
   }
 
   return Priority.NONE;
+}
+
+/**
+ * authorAssociation が許可リストに含まれない Issue を除外する。
+ * 除外された Issue は WARNING ログに記録する。
+ */
+function filterByAuthorAssociation(issues: Issue[]): Issue[] {
+  return issues.filter((issue) => {
+    if (PERMITTED_ASSOCIATIONS.has(issue.authorAssociation)) {
+      return true;
+    }
+    logger.warn(
+      "Issue #%s skipped: author association '%s' is not permitted",
+      issue.number,
+      issue.authorAssociation,
+    );
+    return false;
+  });
 }
 
 /**
