@@ -9,7 +9,7 @@
     "sabori-flow": "./dist/index.js"
   },
   "files": [
-    "dist/",
+    "dist/**/*.js",
     "prompts/",
     "launchd/*.plist.template",
     "config.yml.example"
