@@ -1,5 +1,4 @@
 import { execFileSync } from "node:child_process";
-import { PROJECT_ROOT } from "./paths.js";
 
 export class ShellError extends Error {
   constructor(
@@ -19,7 +18,7 @@ export function exec(
 ): string {
   try {
     return execFileSync(file, [...args], {
-      cwd: options?.cwd ?? PROJECT_ROOT,
+      cwd: options?.cwd ?? process.cwd(),
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
     }).trim();
