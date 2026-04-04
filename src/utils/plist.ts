@@ -2,6 +2,7 @@ export interface PlistPlaceholders {
   programArguments: readonly string[];
   path: string;
   logDir: string;
+  startInterval: number;
 }
 
 function escapeXml(s: string): string {
@@ -27,6 +28,7 @@ export function renderPlist(
   // 展開順序: logDir（内部由来）を先、programArguments と path（ユーザー入力由来）を後
   return template
     .replace(/__LOG_DIR__/g, () => escapeXml(placeholders.logDir))
+    .replace(/__START_INTERVAL__/g, () => String(placeholders.startInterval))
     .replace(/__PROGRAM_ARGUMENTS__/g, () =>
       buildProgramArgumentsXml(placeholders.programArguments),
     )

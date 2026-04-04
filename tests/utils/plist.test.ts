@@ -11,6 +11,7 @@ function makePlaceholders(
     programArguments: ["/usr/local/bin/npx", "sabori-flow", "worker"],
     path: "/usr/local/bin:/usr/bin:/bin",
     logDir: "/home/user/.local/share/sabori-flow/logs",
+    startInterval: 3600,
     ...overrides,
   };
 }
@@ -20,6 +21,7 @@ const TEMPLATE = [
   "__PROGRAM_ARGUMENTS__",
   "<string>__PATH__</string>",
   "<string>__LOG_DIR__</string>",
+  "<integer>__START_INTERVAL__</integer>",
 ].join("\n");
 
 // ---------- Tests ----------
@@ -68,6 +70,22 @@ describe("renderPlist", () => {
       expect(result).toContain(
         "<string>/home/user/.local/share/sabori-flow/logs</string>",
       );
+    });
+
+    it("__START_INTERVAL__ が startInterval の値に展開される", () => {
+      const placeholders = makePlaceholders();
+
+      const result = renderPlist(TEMPLATE, placeholders);
+
+      expect(result).toContain("<integer>3600</integer>");
+    });
+
+    it("カスタム startInterval が正しく展開される", () => {
+      const placeholders = makePlaceholders({ startInterval: 600 });
+
+      const result = renderPlist(TEMPLATE, placeholders);
+
+      expect(result).toContain("<integer>600</integer>");
     });
 
     it("同一プレースホルダが複数回出現しても全て展開される", () => {

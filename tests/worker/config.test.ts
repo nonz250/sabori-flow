@@ -127,6 +127,7 @@ describe("loadConfig - normal", () => {
     expect(result.language).toBe("ja");
     expect(result.execution.language).toBe("ja");
     expect(result.execution.autonomy).toBe("interactive");
+    expect(result.execution.intervalMinutes).toBe(60);
   });
 
   it("execution default (max_parallel=1 when execution is omitted)", () => {
@@ -582,6 +583,104 @@ describe("loadConfig - execution validation", () => {
     );
     expect(() => loadConfig("/path/to/config.yml")).toThrow(
       /execution.autonomy: must be a string, got number/,
+    );
+  });
+
+  it("interval_minutes の指定値が正しくパースされる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  interval_minutes: 30",
+    );
+    mockYaml(yaml);
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.intervalMinutes).toBe(30);
+  });
+
+  it("interval_minutes デフォルト値 (execution あり)", () => {
+    mockYaml(VALID_YAML);
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.intervalMinutes).toBe(60);
+  });
+
+  it("interval_minutes デフォルト値 (execution 省略)", () => {
+    mockYaml(VALID_YAML_NO_EXECUTION);
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.intervalMinutes).toBe(60);
+  });
+
+  it("interval_minutes が下限値 10 ちょうどの場合は正常", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  interval_minutes: 10",
+    );
+    mockYaml(yaml);
+
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.intervalMinutes).toBe(10);
+  });
+
+  it("interval_minutes が上限値 1440 ちょうどの場合は正常", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  interval_minutes: 1440",
+    );
+    mockYaml(yaml);
+
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.intervalMinutes).toBe(1440);
+  });
+
+  it("interval_minutes が下限値 10 未満の場合にエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  interval_minutes: 9",
+    );
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /interval_minutes: must be >= 10/,
+    );
+  });
+
+  it("interval_minutes が上限値 1440 を超える場合にエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  interval_minutes: 1441",
+    );
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /interval_minutes: must be <= 1440/,
+    );
+  });
+
+  it("interval_minutes string", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      'max_parallel: 4\n  interval_minutes: "sixty"',
+    );
+    mockYaml(yaml);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(ConfigValidationError);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /interval_minutes: must be an integer/,
+    );
+  });
+
+  it("interval_minutes float", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  interval_minutes: 30.5",
+    );
+    mockYaml(yaml);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(ConfigValidationError);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /interval_minutes: must be an integer/,
     );
   });
 });
