@@ -5,6 +5,7 @@ import {
   ProcessTimeoutError,
   ProcessExecutionError,
 } from "./process.js";
+import { createLogger } from "./logger.js";
 
 /** gh コマンドの実行エラー */
 export class GitHubCLIError extends Error {
@@ -24,18 +25,28 @@ export class IssueParseError extends Error {
 
 const GH_TIMEOUT_MS = 120_000;
 
-/** gh issue list の JSON レスポンス内の label 構造 */
+const logger = createLogger("fetcher");
+
+/** 処理を許可する authorAssociation の一覧 */
+const PERMITTED_ASSOCIATIONS: ReadonlySet<string> = new Set([
+  "OWNER",
+  "MEMBER",
+  "COLLABORATOR",
+]);
+
+/** GitHub REST API の Issue レスポンス内の label 構造 */
 interface GhLabel {
   readonly name: string;
 }
 
-/** gh issue list の JSON レスポンス内の 1 Issue 構造 */
+/** GitHub REST API の Issue レスポンス内の 1 Issue 構造 */
 interface GhIssueItem {
   readonly number?: number;
   readonly title?: string;
   readonly body?: string | null;
   readonly labels?: readonly GhLabel[];
-  readonly url?: string;
+  readonly html_url?: string;
+  readonly author_association?: string;
 }
 
 /**
@@ -54,23 +65,22 @@ export async function fetchIssues(
       : repoConfig.labels.impl.trigger;
 
   const args = [
-    "issue",
-    "list",
-    "--repo",
-    repoFullName(repoConfig),
-    "--label",
-    triggerLabel,
-    "--state",
-    "open",
-    "--json",
-    "number,title,body,labels,url",
-    "--limit",
-    "100",
+    "api",
+    `repos/${repoFullName(repoConfig)}/issues`,
+    "--method",
+    "GET",
+    "--field",
+    `labels=${triggerLabel}`,
+    "--field",
+    "state=open",
+    "--field",
+    "per_page=100",
   ];
 
   const rawJson = await runGhCommand(args);
   const issues = parseIssues(rawJson, phase, repoConfig);
-  return sortByPriority(issues);
+  const permitted = filterByAuthorAssociation(issues);
+  return sortByPriority(permitted);
 }
 
 /**
@@ -130,8 +140,8 @@ function parseIssues(
     if (item.title === undefined) {
       throw new IssueParseError("Missing required field in issue data: title");
     }
-    if (item.url === undefined) {
-      throw new IssueParseError("Missing required field in issue data: url");
+    if (item.html_url === undefined) {
+      throw new IssueParseError("Missing required field in issue data: html_url");
     }
 
     return {
@@ -139,7 +149,8 @@ function parseIssues(
       title: item.title,
       body: item.body ?? null,
       labels,
-      url: item.url,
+      url: item.html_url,
+      authorAssociation: item.author_association ?? "",
       phase,
       priority,
     };
@@ -172,6 +183,24 @@ function determinePriority(
   }
 
   return Priority.NONE;
+}
+
+/**
+ * authorAssociation が許可リストに含まれない Issue を除外する。
+ * 除外された Issue は WARNING ログに記録する。
+ */
+function filterByAuthorAssociation(issues: Issue[]): Issue[] {
+  return issues.filter((issue) => {
+    if (PERMITTED_ASSOCIATIONS.has(issue.authorAssociation)) {
+      return true;
+    }
+    logger.warn(
+      "Issue #%s skipped: author association '%s' is not permitted",
+      issue.number,
+      issue.authorAssociation,
+    );
+    return false;
+  });
 }
 
 /**

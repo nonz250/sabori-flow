@@ -24,6 +24,7 @@ export interface Issue {
   readonly body: string | null;
   readonly labels: readonly string[];
   readonly url: string;
+  readonly authorAssociation: string;
   readonly phase: Phase;
   readonly priority: Priority;
 }
@@ -55,7 +56,6 @@ export interface RepositoryConfig {
 export interface ExecutionConfig {
   readonly maxParallel: number;
   readonly maxIssuesPerRepo: number;
-  readonly logDir: string;
 }
 
 /** アプリケーション全体の設定 */

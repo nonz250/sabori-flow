@@ -3,18 +3,21 @@ import { homedir } from "node:os";
 
 vi.mock("node:fs");
 
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import {
   loadConfig,
   ConfigValidationError,
 } from "../../src/worker/config.js";
 
 const mockedReadFileSync = vi.mocked(readFileSync);
+const mockedRealpathSync = vi.mocked(realpathSync);
 
 // ---------- Helper ----------
 
 function mockYaml(content: string): void {
   mockedReadFileSync.mockReturnValue(content);
+  // realpathSync はデフォルトで受け取ったパスをそのまま返す
+  mockedRealpathSync.mockImplementation((p) => p as string);
 }
 
 function mockFileNotFound(): void {
@@ -436,6 +439,52 @@ describe("loadConfig - execution validation", () => {
     mockYaml(yaml);
     expect(() => loadConfig("/path/to/config.yml")).toThrow(ConfigValidationError);
   });
+
+  it("max_parallel が上限値 10 を超える場合にエラーになる", () => {
+    const yaml = VALID_YAML.replace("max_parallel: 4", "max_parallel: 11");
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /max_parallel: must be <= 10/,
+    );
+  });
+
+  it("max_parallel が上限値 10 ちょうどの場合は正常", () => {
+    const yaml = VALID_YAML.replace("max_parallel: 4", "max_parallel: 10");
+    mockYaml(yaml);
+
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.maxParallel).toBe(10);
+  });
+
+  it("max_issues_per_repo が上限値 20 を超える場合にエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  max_issues_per_repo: 21",
+    );
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /max_issues_per_repo: must be <= 20/,
+    );
+  });
+
+  it("max_issues_per_repo が上限値 20 ちょうどの場合は正常", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  max_issues_per_repo: 20",
+    );
+    mockYaml(yaml);
+
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.maxIssuesPerRepo).toBe(20);
+  });
 });
 
 describe("loadConfig - local_path validation", () => {
@@ -468,37 +517,28 @@ describe("loadConfig - local_path validation", () => {
       /local_path: must be an absolute path/,
     );
   });
-});
 
-describe("loadConfig - log_dir validation", () => {
-  it("log_dir is empty string", () => {
-    const yaml = VALID_YAML.replace(
-      "max_parallel: 4",
-      'max_parallel: 4\n  log_dir: ""',
-    );
-    mockYaml(yaml);
+  it("local_path が存在しないパスの場合にエラーになる", () => {
+    mockYaml(VALID_YAML);
+    mockedRealpathSync.mockImplementation(() => {
+      throw new Error("ENOENT: no such file or directory");
+    });
 
     expect(() => loadConfig("/path/to/config.yml")).toThrow(
       ConfigValidationError,
     );
     expect(() => loadConfig("/path/to/config.yml")).toThrow(
-      /log_dir: must be a non-empty string/,
+      /local_path: path does not exist/,
     );
   });
 
-  it("log_dir is a relative path", () => {
-    const yaml = VALID_YAML.replace(
-      "max_parallel: 4",
-      "max_parallel: 4\n  log_dir: relative/logs",
-    );
-    mockYaml(yaml);
+  it("local_path のシンボリックリンクが解決される", () => {
+    mockYaml(VALID_YAML);
+    mockedRealpathSync.mockReturnValue("/resolved/real/path");
 
-    expect(() => loadConfig("/path/to/config.yml")).toThrow(
-      ConfigValidationError,
-    );
-    expect(() => loadConfig("/path/to/config.yml")).toThrow(
-      /log_dir: must be an absolute path/,
-    );
+    const result = loadConfig("/path/to/config.yml");
+
+    expect(result.repositories[0].localPath).toBe("/resolved/real/path");
   });
 });
 
@@ -516,16 +556,4 @@ describe("loadConfig - tilde expansion", () => {
     expect(result.repositories[0].localPath).toBe(expected);
   });
 
-  it("log_dir with tilde is expanded", () => {
-    const yaml = VALID_YAML.replace(
-      "max_parallel: 4",
-      "max_parallel: 4\n  log_dir: ~/logs",
-    );
-    mockYaml(yaml);
-
-    const result = loadConfig("/path/to/config.yml");
-    const expected = `${homedir()}/logs`;
-
-    expect(result.execution.logDir).toBe(expected);
-  });
 });

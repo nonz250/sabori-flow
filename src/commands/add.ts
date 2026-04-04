@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { confirm } from "@inquirer/prompts";
 import YAML from "yaml";
-import { CONFIG_PATH } from "../utils/paths.js";
+import { getConfigPath } from "../utils/paths.js";
 import {
   getDefaultLabels,
   getDefaultPriorityLabels,
@@ -10,16 +10,16 @@ import { promptRepository } from "./helpers/repository-prompt.js";
 
 export async function addCommand(): Promise<void> {
   // 1. config.yml 存在チェック
-  if (!existsSync(CONFIG_PATH)) {
+  if (!existsSync(getConfigPath())) {
     console.error("Error: config.yml が見つかりません。");
-    console.error("先に `npx sabori-flow init` を実行してください。");
+    console.error("先に `sabori-flow init` を実行してください。");
     return;
   }
 
   // 2. 読み込み + パース
   let config: unknown;
   try {
-    const raw = readFileSync(CONFIG_PATH, "utf-8");
+    const raw = readFileSync(getConfigPath(), "utf-8");
     config = YAML.parse(raw);
   } catch {
     console.error(
@@ -74,7 +74,7 @@ export async function addCommand(): Promise<void> {
 
   // 7. 書き戻し
   try {
-    writeFileSync(CONFIG_PATH, YAML.stringify(configObj), "utf-8");
+    writeFileSync(getConfigPath(), YAML.stringify(configObj), { encoding: "utf-8", mode: 0o600 });
   } catch {
     console.error("Error: config.yml の書き込みに失敗しました。");
     return;

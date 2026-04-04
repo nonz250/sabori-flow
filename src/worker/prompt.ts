@@ -1,9 +1,10 @@
-import { readFileSync } from "node:fs";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { randomUUID } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
+import { basename, resolve } from "node:path";
 
 import type { Issue, RepositoryConfig } from "./models.js";
 import { Phase, repoFullName } from "./models.js";
+import { getDefaultPromptsDir } from "../utils/paths.js";
 
 /** テンプレート関連のエラー */
 export class PromptTemplateError extends Error {
@@ -12,9 +13,6 @@ export class PromptTemplateError extends Error {
     Object.setPrototypeOf(this, PromptTemplateError.prototype);
   }
 }
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_PROMPTS_DIR = resolve(__dirname, "..", "..", "prompts");
 
 const TEMPLATE_FILES: Record<Phase, string> = {
   [Phase.PLAN]: "plan.md",
@@ -34,13 +32,15 @@ const USER_INPUT_KEYS: ReadonlySet<string> = new Set([
  * Issue とリポジトリ設定からプロンプト文字列を組み立てる。
  *
  * テンプレートファイルを読み込み、プレースホルダを展開して返す。
+ * ユーザーカスタムプロンプトが存在すればそちらを優先し、
+ * 存在しなければパッケージ同梱のデフォルトテンプレートにフォールバックする。
  *
  * @throws {PromptTemplateError} テンプレートの読み込みまたは展開に失敗した場合
  */
 export function buildPrompt(
   issue: Issue,
   repoConfig: RepositoryConfig,
-  promptsDir: string = DEFAULT_PROMPTS_DIR,
+  promptsDir: string = getDefaultPromptsDir(),
 ): string {
   const template = loadTemplate(issue.phase, promptsDir);
   const variables = buildVariables(issue, repoConfig);
@@ -50,32 +50,64 @@ export function buildPrompt(
 /**
  * テンプレートファイルを読み込む。
  *
- * @throws {PromptTemplateError} フェーズが未定義またはファイルの読み込みに失敗した場合
+ * パッケージ同梱のプロンプトディレクトリからのみ読み込む。
+ * ユーザーカスタムプロンプトは将来的にセキュアな設計で提供予定（Issue #22）。
+ *
+ * @throws {PromptTemplateError} フェーズが未定義またはテンプレートが存在しない場合
  */
-function loadTemplate(phase: Phase, promptsDir: string): string {
+function loadTemplate(
+  phase: Phase,
+  promptsDir: string,
+): string {
   const filename = TEMPLATE_FILES[phase];
   if (filename === undefined) {
     throw new PromptTemplateError(`Unknown phase: ${phase}`);
   }
 
   const templatePath = resolve(promptsDir, filename);
+  if (existsSync(templatePath)) {
+    return readTemplateFile(templatePath);
+  }
 
+  throw new PromptTemplateError(
+    `Template file not found: ${filename}`,
+  );
+}
+
+/**
+ * テンプレートファイルを読み込む内部ヘルパー。
+ *
+ * @throws {PromptTemplateError} ファイルの読み込みに失敗した場合
+ */
+function readTemplateFile(templatePath: string): string {
   try {
     return readFileSync(templatePath, "utf-8");
-  } catch (error: unknown) {
-    if (
-      error instanceof Error &&
-      "code" in error &&
-      (error as NodeJS.ErrnoException).code === "ENOENT"
-    ) {
-      throw new PromptTemplateError(
-        `Template file not found: ${templatePath}`,
-      );
-    }
+  } catch {
     throw new PromptTemplateError(
-      `Failed to read template file: ${templatePath}`,
+      `Failed to read template file: ${basename(templatePath)}`,
     );
   }
+}
+
+/**
+ * ランダムバウンダリトークンを生成する。
+ *
+ * 固定タグ（例: `<issue-body>`）ではなく、予測不能なトークンを使うことで
+ * 攻撃者がバウンダリを偽装するプロンプトインジェクションを困難にする。
+ */
+function generateBoundaryToken(): string {
+  return randomUUID();
+}
+
+/**
+ * Issue ボディからバウンダリ終了パターンを除去する。
+ *
+ * トークンが予測不能なため衝突はほぼ起きないが、
+ * 防御的にバウンダリ終了マーカーと一致するパターンを除去する。
+ */
+function sanitizeBoundaryInBody(body: string, token: string): string {
+  const closePattern = `<!-- BOUNDARY-${token} DATA END -->`;
+  return body.replaceAll(closePattern, "");
 }
 
 /**
@@ -85,6 +117,10 @@ function buildVariables(
   issue: Issue,
   repoConfig: RepositoryConfig,
 ): Map<string, string> {
+  const token = generateBoundaryToken();
+  const rawBody = issue.body ?? "";
+  const sanitizedBody = sanitizeBoundaryInBody(rawBody, token);
+
   return new Map<string, string>([
     ["repo_full_name", repoFullName(repoConfig)],
     ["repo_owner", repoConfig.owner],
@@ -92,7 +128,9 @@ function buildVariables(
     ["issue_number", String(issue.number)],
     ["issue_title", issue.title],
     ["issue_url", issue.url],
-    ["issue_body", issue.body ?? ""],
+    ["boundary_open", `<!-- BOUNDARY-${token} DATA START -->`],
+    ["boundary_close", `<!-- BOUNDARY-${token} DATA END -->`],
+    ["issue_body", sanitizedBody],
   ]);
 }
 

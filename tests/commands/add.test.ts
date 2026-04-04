@@ -317,9 +317,9 @@ describe("addCommand - 正常系: writeFileSync の引数検証", () => {
     await runAddCommand();
 
     expect(mockedWriteFileSync).toHaveBeenCalledTimes(1);
-    const [filePath, , encoding] = mockedWriteFileSync.mock.calls[0];
+    const [filePath, , options] = mockedWriteFileSync.mock.calls[0];
     expect(filePath).toContain("config.yml");
-    expect(encoding).toBe("utf-8");
+    expect(options).toEqual({ encoding: "utf-8", mode: 0o600 });
   });
 });
 

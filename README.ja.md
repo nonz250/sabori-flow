@@ -28,18 +28,14 @@
 ## セットアップ
 
 ```bash
-# 1. 依存インストール + ビルド
-npm install
-npm run build
-
-# 2. 対話的に config.yml を作成
+# 1. 対話的に config.yml を作成
 npx sabori-flow init
 
-# 3. launchd に登録して定期実行を開始
+# 2. launchd に登録して定期実行を開始
 npx sabori-flow install
 ```
 
-`install` コマンドはビルド、plist 生成、launchd への登録をまとめて行います。
+`install` コマンドは plist 生成と launchd への登録を行います。
 
 ### リポジトリの追加
 
@@ -95,7 +91,7 @@ flowchart LR
 
 処理が失敗すると `failed` ラベルが付き、Issue に失敗コメントが投稿されます。
 
-1. `logs/worker.log` で詳細を確認
+1. `~/.sabori-flow/logs/worker.log` で詳細を確認
 2. 必要に応じて Issue の内容を修正
 3. `failed` ラベルを外して、再度 `claude/plan` または `claude/impl` を付ける
 
@@ -122,14 +118,14 @@ launchctl start com.github.nonz250.sabori-flow
 **ログの場所:**
 
 ```
-logs/worker.log              # ワーカーのログ（日次ローテーション、7日保持）
-logs/launchd_stdout.log      # launchd 経由の標準出力
-logs/launchd_stderr.log      # launchd 経由の標準エラー出力
+~/.sabori-flow/logs/worker.log              # ワーカーのログ（日次ローテーション、7日保持）
+~/.sabori-flow/logs/launchd_stdout.log      # launchd 経由の標準出力
+~/.sabori-flow/logs/launchd_stderr.log      # launchd 経由の標準エラー出力
 ```
 
 ## 設定
 
-`config.yml.example` を参考に `config.yml` を作成するか、`npx sabori-flow init` で対話的に生成できます。
+設定ファイルは `~/.config/sabori-flow/config.yml` に保存されます。`config.yml.example` を参考に作成するか、`npx sabori-flow init` で対話的に生成できます。
 
 ```yaml
 repositories:
@@ -153,6 +149,7 @@ repositories:
 
 execution:
   max_parallel: 1
+  max_issues_per_repo: 1
 ```
 
 | キー | 説明 |
@@ -165,6 +162,30 @@ execution:
 | `repositories[].labels.impl` | impl フェーズのラベル: `trigger`, `in_progress`, `done`, `failed` |
 | `repositories[].priority_labels` | 優先度ラベル。リストの上位ほど先に処理される |
 | `execution.max_parallel` | 並列実行数。デフォルトは `1`（逐次実行） |
+| `execution.max_issues_per_repo` | リポジトリあたりの Issue 処理上限。デフォルトは `1` |
+
+## セキュリティ
+
+このツールは Claude Code CLI を `--dangerously-skip-permissions` で実行するため、マシン上でほぼ任意の操作が可能です。launchd により定期的にユーザー操作なしで実行されます。
+
+デフォルトの `npx` 方式では、実行時に npm レジストリからパッケージを取得します。万が一 npm パッケージが侵害された場合、悪意あるコードがスケジューラにより自動実行される可能性があります。
+
+加えて、以下の防御策が組み込まれています:
+
+- **Issue 作成者の権限チェック** -- OWNER、MEMBER、COLLABORATOR 以外のユーザーが作成した Issue は自動的にスキップされます。
+- **シークレットマスキング** -- 成功コメント投稿前に出力をスキャンし、シークレットを自動的にマスクします。
+- **ランダムバウンダリトークン** -- プロンプトにランダムなバウンダリトークンを使用し、プロンプトインジェクションを緩和します。
+
+このリスクを軽減するには、`--local` フラグを使用して、監査済みのローカルビルドから実行してください:
+
+```bash
+git clone https://github.com/nonz250/sabori-flow.git
+cd sabori-flow
+npm install
+npm run build
+node dist/index.js init
+node dist/index.js install --local
+```
 
 ## ライセンス
 

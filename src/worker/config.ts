@@ -1,6 +1,4 @@
-import { readFileSync } from "node:fs";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { readFileSync, realpathSync } from "node:fs";
 import YAML from "yaml";
 
 import type {
@@ -27,15 +25,6 @@ const OWNER_REPO_PATTERN = /^[a-zA-Z0-9._-]+$/;
 const LABEL_PATTERN = /^[a-zA-Z0-9./:_ -]+$/;
 const PHASE_LABEL_KEYS = ["trigger", "in_progress", "done", "failed"] as const;
 
-// ---------- Default values ----------
-
-const DEFAULT_LOG_DIR = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "..",
-  "logs",
-);
-
 // ---------- Public API ----------
 
 /**
@@ -61,7 +50,7 @@ export function loadConfig(configPath: string): AppConfig {
 
   let data: unknown;
   try {
-    data = YAML.parse(rawText);
+    data = YAML.parse(rawText, { maxAliasCount: 100 });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : String(e);
     throw new ConfigValidationError(`Failed to parse YAML: ${message}`);
@@ -130,6 +119,15 @@ function parseRepositories(raw: unknown): readonly RepositoryConfig[] {
     if (!isAbsolutePath(localPath)) {
       throw new ConfigValidationError(
         `${prefix}.local_path: must be an absolute path, got '${localPath}'`,
+      );
+    }
+
+    let resolvedLocalPath: string;
+    try {
+      resolvedLocalPath = realpathSync(localPath);
+    } catch {
+      throw new ConfigValidationError(
+        `${prefix}.local_path: path does not exist: '${localPath}'`,
       );
     }
 
@@ -203,7 +201,7 @@ function parseRepositories(raw: unknown): readonly RepositoryConfig[] {
     configs.push({
       owner,
       repo,
-      localPath,
+      localPath: resolvedLocalPath,
       labels,
       priorityLabels: priorityRaw as string[],
     });
@@ -278,7 +276,7 @@ function parsePhaseLabels(raw: unknown, phaseName: string): PhaseLabels {
 
 function parseExecution(raw: unknown): ExecutionConfig {
   if (raw === undefined || raw === null) {
-    return { maxParallel: 1, maxIssuesPerRepo: 1, logDir: DEFAULT_LOG_DIR };
+    return { maxParallel: 1, maxIssuesPerRepo: 1 };
   }
 
   if (typeof raw !== "object" || Array.isArray(raw)) {
@@ -303,6 +301,12 @@ function parseExecution(raw: unknown): ExecutionConfig {
     );
   }
 
+  if (rawMaxParallel > 10) {
+    throw new ConfigValidationError(
+      `execution.max_parallel: must be <= 10, got ${rawMaxParallel}`,
+    );
+  }
+
   // max_issues_per_repo
   const rawMaxIssuesPerRepo =
     "max_issues_per_repo" in record ? record["max_issues_per_repo"] : 1;
@@ -319,24 +323,13 @@ function parseExecution(raw: unknown): ExecutionConfig {
     );
   }
 
-  // log_dir
-  const rawLogDir = "log_dir" in record ? record["log_dir"] : DEFAULT_LOG_DIR;
-
-  if (typeof rawLogDir !== "string" || rawLogDir === "") {
+  if (rawMaxIssuesPerRepo > 20) {
     throw new ConfigValidationError(
-      "execution.log_dir: must be a non-empty string",
+      `execution.max_issues_per_repo: must be <= 20, got ${rawMaxIssuesPerRepo}`,
     );
   }
 
-  const logDir = expandTilde(rawLogDir);
-
-  if (!isAbsolutePath(logDir)) {
-    throw new ConfigValidationError(
-      `execution.log_dir: must be an absolute path, got '${logDir}'`,
-    );
-  }
-
-  return { maxParallel: rawMaxParallel, maxIssuesPerRepo: rawMaxIssuesPerRepo, logDir };
+  return { maxParallel: rawMaxParallel, maxIssuesPerRepo: rawMaxIssuesPerRepo };
 }
 
 // ---------- Helpers ----------
