@@ -17,6 +17,7 @@ const DEFAULT_TIMEOUT_MS = 1_800_000; // 30 minutes
 export interface RunClaudeOptions {
   readonly cwd?: string;
   readonly timeoutMs?: number;
+  readonly skipPermissions?: boolean;
 }
 
 /**
@@ -35,10 +36,15 @@ export async function runClaude(
 ): Promise<ProcessResult> {
   const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
+  const args = ["-p"];
+  if (options?.skipPermissions !== false) {
+    args.push("--dangerously-skip-permissions");
+  }
+
   try {
     return await runCommand(
       "claude",
-      ["-p", "--dangerously-skip-permissions"],
+      args,
       {
         input: prompt,
         cwd: options?.cwd,
