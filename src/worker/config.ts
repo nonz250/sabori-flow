@@ -278,7 +278,7 @@ function parsePhaseLabels(raw: unknown, phaseName: string): PhaseLabels {
 
 function parseExecution(raw: unknown): ExecutionConfig {
   if (raw === undefined || raw === null) {
-    return { maxParallel: 1, maxIssuesPerRepo: 5, logDir: DEFAULT_LOG_DIR };
+    return { maxParallel: 1, maxIssuesPerRepo: 1, logDir: DEFAULT_LOG_DIR };
   }
 
   if (typeof raw !== "object" || Array.isArray(raw)) {
@@ -305,7 +305,7 @@ function parseExecution(raw: unknown): ExecutionConfig {
 
   // max_issues_per_repo
   const rawMaxIssuesPerRepo =
-    "max_issues_per_repo" in record ? record["max_issues_per_repo"] : 5;
+    "max_issues_per_repo" in record ? record["max_issues_per_repo"] : 1;
 
   if (typeof rawMaxIssuesPerRepo !== "number" || !Number.isInteger(rawMaxIssuesPerRepo)) {
     throw new ConfigValidationError(
