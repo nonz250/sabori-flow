@@ -8,12 +8,10 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>__NODE_PATH__</string>
-        <string>__PROJECT_ROOT__/dist/worker.js</string>
+        <string>__NPX_PATH__</string>
+        <string>sabori-flow</string>
+        <string>worker</string>
     </array>
-
-    <key>WorkingDirectory</key>
-    <string>__PROJECT_ROOT__</string>
 
     <key>StartInterval</key>
     <integer>3600</integer>
