@@ -99,15 +99,14 @@ describe("buildPrompt - 正常系", () => {
     vi.restoreAllMocks();
   });
 
-  it("Plan フェーズでユーザーテンプレートが存在する場合、そちらが使われる", () => {
+  it("Plan フェーズで指定ディレクトリからテンプレートを読み込む", () => {
     mockedExistsSync.mockReturnValue(true);
     mockedReadFileSync.mockReturnValue(MINIMAL_PLAN_TEMPLATE);
 
     const result = buildPrompt(
       makeIssue(),
       makeRepoConfig(),
-      "/tmp/user-prompts",
-      "/tmp/default-prompts",
+      "/tmp/prompts",
     );
 
     expect(result).toContain("Repo: testowner/testrepo");
@@ -119,31 +118,10 @@ describe("buildPrompt - 正常系", () => {
     expect(result).toMatch(BOUNDARY_OPEN_PATTERN);
     expect(result).toMatch(BOUNDARY_CLOSE_PATTERN);
     expect(mockedExistsSync).toHaveBeenCalledWith(
-      resolve("/tmp/user-prompts", "plan.md"),
+      resolve("/tmp/prompts", "plan.md"),
     );
     expect(mockedReadFileSync).toHaveBeenCalledWith(
-      resolve("/tmp/user-prompts", "plan.md"),
-      "utf-8",
-    );
-  });
-
-  it("ユーザーテンプレートが存在しない場合、デフォルトにフォールバックする", () => {
-    mockedExistsSync.mockImplementation((p) => {
-      if (String(p).startsWith("/tmp/user-prompts")) return false;
-      return true;
-    });
-    mockedReadFileSync.mockReturnValue(MINIMAL_PLAN_TEMPLATE);
-
-    const result = buildPrompt(
-      makeIssue(),
-      makeRepoConfig(),
-      "/tmp/user-prompts",
-      "/tmp/default-prompts",
-    );
-
-    expect(result).toContain("Repo: testowner/testrepo");
-    expect(mockedReadFileSync).toHaveBeenCalledWith(
-      resolve("/tmp/default-prompts", "plan.md"),
+      resolve("/tmp/prompts", "plan.md"),
       "utf-8",
     );
   });
@@ -159,14 +137,13 @@ describe("buildPrompt - 正常系", () => {
         title: "Implement feature",
       }),
       makeRepoConfig("myorg", "myapp"),
-      "/tmp/user-prompts",
-      "/tmp/default-prompts",
+      "/tmp/prompts",
     );
 
     expect(result).toContain("Implement for myorg/myapp");
     expect(result).toContain("Issue #99: Implement feature");
     expect(mockedReadFileSync).toHaveBeenCalledWith(
-      resolve("/tmp/user-prompts", "impl.md"),
+      resolve("/tmp/prompts", "impl.md"),
       "utf-8",
     );
   });
@@ -178,8 +155,7 @@ describe("buildPrompt - 正常系", () => {
     const result = buildPrompt(
       makeIssue({ body: null }),
       makeRepoConfig(),
-      "/tmp/user-prompts",
-      "/tmp/default-prompts",
+      "/tmp/prompts",
     );
 
     expect(result).toMatch(BOUNDARY_OPEN_PATTERN);
@@ -196,8 +172,7 @@ describe("buildPrompt - 正常系", () => {
     const result = buildPrompt(
       makeIssue(),
       makeRepoConfig(),
-      "/tmp/user-prompts",
-      "/tmp/default-prompts",
+      "/tmp/prompts",
     );
 
     expect(result).toContain("Only title: Test Issue Title");
@@ -211,8 +186,7 @@ describe("buildPrompt - 正常系", () => {
     const result = buildPrompt(
       makeIssue({ body: bodyWithBraces }),
       makeRepoConfig(),
-      "/tmp/user-prompts",
-      "/tmp/default-prompts",
+      "/tmp/prompts",
     );
 
     expect(result).toContain(bodyWithBraces);
@@ -228,8 +202,7 @@ describe("buildPrompt - 正常系", () => {
     const result = buildPrompt(
       makeIssue({ body: maliciousBody }),
       makeRepoConfig(),
-      "/tmp/user-prompts",
-      "/tmp/default-prompts",
+      "/tmp/prompts",
     );
 
     expect(result).toContain("See {issue_url} for details");
@@ -246,8 +219,7 @@ describe("buildPrompt - 正常系", () => {
     const result = buildPrompt(
       makeIssue({ body: bodyWithDollar }),
       makeRepoConfig(),
-      "/tmp/user-prompts",
-      "/tmp/default-prompts",
+      "/tmp/prompts",
     );
 
     expect(result).toContain(bodyWithDollar);
@@ -263,14 +235,14 @@ describe("buildPrompt - 異常系", () => {
     vi.restoreAllMocks();
   });
 
-  it("両方のディレクトリにテンプレートが存在しない場合、PromptTemplateError が発生する", () => {
+  it("テンプレートファイルが存在しない場合、PromptTemplateError が発生する", () => {
     mockedExistsSync.mockReturnValue(false);
 
     expect(() =>
-      buildPrompt(makeIssue(), makeRepoConfig(), "/tmp/user-prompts", "/tmp/default-prompts"),
+      buildPrompt(makeIssue(), makeRepoConfig(), "/tmp/prompts"),
     ).toThrow(PromptTemplateError);
     expect(() =>
-      buildPrompt(makeIssue(), makeRepoConfig(), "/tmp/user-prompts", "/tmp/default-prompts"),
+      buildPrompt(makeIssue(), makeRepoConfig(), "/tmp/prompts"),
     ).toThrow("Template file not found: plan.md");
   });
 
@@ -283,10 +255,10 @@ describe("buildPrompt - 異常系", () => {
     });
 
     expect(() =>
-      buildPrompt(makeIssue(), makeRepoConfig(), "/tmp/user-prompts", "/tmp/default-prompts"),
+      buildPrompt(makeIssue(), makeRepoConfig(), "/tmp/prompts"),
     ).toThrow(PromptTemplateError);
     expect(() =>
-      buildPrompt(makeIssue(), makeRepoConfig(), "/tmp/user-prompts", "/tmp/default-prompts"),
+      buildPrompt(makeIssue(), makeRepoConfig(), "/tmp/prompts"),
     ).toThrow("Failed to read template file: plan.md");
   });
 });
@@ -309,8 +281,7 @@ describe("buildPrompt - ランダムバウンダリ", () => {
     const result = buildPrompt(
       makeIssue(),
       makeRepoConfig(),
-      "/tmp/user-prompts",
-      "/tmp/default-prompts",
+      "/tmp/prompts",
     );
 
     expect(result).toMatch(BOUNDARY_OPEN_PATTERN);
@@ -326,8 +297,7 @@ describe("buildPrompt - ランダムバウンダリ", () => {
     const result = buildPrompt(
       makeIssue(),
       makeRepoConfig(),
-      "/tmp/user-prompts",
-      "/tmp/default-prompts",
+      "/tmp/prompts",
     );
 
     expect(result).not.toContain("<issue-body>");
@@ -343,8 +313,7 @@ describe("buildPrompt - ランダムバウンダリ", () => {
     const result = buildPrompt(
       makeIssue(),
       makeRepoConfig(),
-      "/tmp/user-prompts",
-      "/tmp/default-prompts",
+      "/tmp/prompts",
     );
 
     const lines = result.split("\n");
@@ -363,8 +332,7 @@ describe("buildPrompt - ランダムバウンダリ", () => {
     const result = buildPrompt(
       makeIssue(),
       makeRepoConfig(),
-      "/tmp/user-prompts",
-      "/tmp/default-prompts",
+      "/tmp/prompts",
     );
 
     const openMatch = result.match(
@@ -387,14 +355,12 @@ describe("buildPrompt - ランダムバウンダリ", () => {
     const result1 = buildPrompt(
       makeIssue(),
       makeRepoConfig(),
-      "/tmp/user-prompts",
-      "/tmp/default-prompts",
+      "/tmp/prompts",
     );
     const result2 = buildPrompt(
       makeIssue(),
       makeRepoConfig(),
-      "/tmp/user-prompts",
-      "/tmp/default-prompts",
+      "/tmp/prompts",
     );
 
     const token1 = result1.match(
