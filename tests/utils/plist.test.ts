@@ -109,6 +109,59 @@ describe("renderPlist", () => {
     });
   });
 
+  describe("XML エスケープ: 特殊文字が正しくエスケープされる", () => {
+    it("programArguments 内の &, <, > がエスケープされる", () => {
+      const placeholders = makePlaceholders({
+        programArguments: ["/path/with&ampersand", "arg<with>brackets"],
+      });
+
+      const result = renderPlist(TEMPLATE, placeholders);
+
+      expect(result).toContain(
+        "    <string>/path/with&amp;ampersand</string>",
+      );
+      expect(result).toContain(
+        "    <string>arg&lt;with&gt;brackets</string>",
+      );
+    });
+
+    it("path 内の &, <, > がエスケープされる", () => {
+      const placeholders = makePlaceholders({
+        path: "/usr/bin&test</path>",
+      });
+
+      const result = renderPlist(TEMPLATE, placeholders);
+
+      expect(result).toContain(
+        "<string>/usr/bin&amp;test&lt;/path&gt;</string>",
+      );
+    });
+
+    it("logDir 内の &, <, > がエスケープされる", () => {
+      const placeholders = makePlaceholders({
+        logDir: "/logs/<dir>&name",
+      });
+
+      const result = renderPlist(TEMPLATE, placeholders);
+
+      expect(result).toContain(
+        "<string>/logs/&lt;dir&gt;&amp;name</string>",
+      );
+    });
+
+    it("引用符もエスケープされる", () => {
+      const placeholders = makePlaceholders({
+        programArguments: [`arg"with'quotes`],
+      });
+
+      const result = renderPlist(TEMPLATE, placeholders);
+
+      expect(result).toContain(
+        "    <string>arg&quot;with&apos;quotes</string>",
+      );
+    });
+  });
+
   describe("$ 特殊文字: value に正規表現の特殊置換パターンが含まれていても正しく展開される", () => {
     it("value に $1 が含まれていてもそのまま展開される", () => {
       const placeholders = makePlaceholders({
@@ -120,7 +173,7 @@ describe("renderPlist", () => {
       expect(result).toContain("    <string>/path/with/$1/npx</string>");
     });
 
-    it("value に $& が含まれていてもそのまま展開される", () => {
+    it("value に $& が含まれていてもそのまま展開される（& は XML エスケープされる）", () => {
       const placeholders = makePlaceholders({
         path: "/usr/bin:$&:/usr/local/bin",
       });
@@ -128,7 +181,7 @@ describe("renderPlist", () => {
       const result = renderPlist(TEMPLATE, placeholders);
 
       expect(result).toContain(
-        "<string>/usr/bin:$&:/usr/local/bin</string>",
+        "<string>/usr/bin:$&amp;:/usr/local/bin</string>",
       );
     });
   });
