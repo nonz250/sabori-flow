@@ -1,9 +1,9 @@
-import { readFileSync } from "node:fs";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 import type { Issue, RepositoryConfig } from "./models.js";
 import { Phase, repoFullName } from "./models.js";
+import { getUserPromptsDir, getDefaultPromptsDir } from "../utils/paths.js";
 
 /** テンプレート関連のエラー */
 export class PromptTemplateError extends Error {
@@ -12,9 +12,6 @@ export class PromptTemplateError extends Error {
     Object.setPrototypeOf(this, PromptTemplateError.prototype);
   }
 }
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_PROMPTS_DIR = resolve(__dirname, "..", "..", "prompts");
 
 const TEMPLATE_FILES: Record<Phase, string> = {
   [Phase.PLAN]: "plan.md",
@@ -34,15 +31,18 @@ const USER_INPUT_KEYS: ReadonlySet<string> = new Set([
  * Issue とリポジトリ設定からプロンプト文字列を組み立てる。
  *
  * テンプレートファイルを読み込み、プレースホルダを展開して返す。
+ * ユーザーカスタムプロンプトが存在すればそちらを優先し、
+ * 存在しなければパッケージ同梱のデフォルトテンプレートにフォールバックする。
  *
  * @throws {PromptTemplateError} テンプレートの読み込みまたは展開に失敗した場合
  */
 export function buildPrompt(
   issue: Issue,
   repoConfig: RepositoryConfig,
-  promptsDir: string = DEFAULT_PROMPTS_DIR,
+  userPromptsDir: string = getUserPromptsDir(),
+  defaultPromptsDir: string = getDefaultPromptsDir(),
 ): string {
-  const template = loadTemplate(issue.phase, promptsDir);
+  const template = loadTemplate(issue.phase, userPromptsDir, defaultPromptsDir);
   const variables = buildVariables(issue, repoConfig);
   return render(template, variables);
 }
@@ -50,28 +50,45 @@ export function buildPrompt(
 /**
  * テンプレートファイルを読み込む。
  *
- * @throws {PromptTemplateError} フェーズが未定義またはファイルの読み込みに失敗した場合
+ * ユーザーカスタムディレクトリにテンプレートが存在すればそちらを優先し、
+ * 存在しなければデフォルトディレクトリにフォールバックする。
+ *
+ * @throws {PromptTemplateError} フェーズが未定義または両方のディレクトリにファイルが存在しない場合
  */
-function loadTemplate(phase: Phase, promptsDir: string): string {
+function loadTemplate(
+  phase: Phase,
+  userPromptsDir: string,
+  defaultPromptsDir: string,
+): string {
   const filename = TEMPLATE_FILES[phase];
   if (filename === undefined) {
     throw new PromptTemplateError(`Unknown phase: ${phase}`);
   }
 
-  const templatePath = resolve(promptsDir, filename);
+  const userTemplatePath = resolve(userPromptsDir, filename);
+  if (existsSync(userTemplatePath)) {
+    return readTemplateFile(userTemplatePath);
+  }
 
+  const defaultTemplatePath = resolve(defaultPromptsDir, filename);
+  if (existsSync(defaultTemplatePath)) {
+    return readTemplateFile(defaultTemplatePath);
+  }
+
+  throw new PromptTemplateError(
+    `Template file not found: ${userTemplatePath} or ${defaultTemplatePath}`,
+  );
+}
+
+/**
+ * テンプレートファイルを読み込む内部ヘルパー。
+ *
+ * @throws {PromptTemplateError} ファイルの読み込みに失敗した場合
+ */
+function readTemplateFile(templatePath: string): string {
   try {
     return readFileSync(templatePath, "utf-8");
-  } catch (error: unknown) {
-    if (
-      error instanceof Error &&
-      "code" in error &&
-      (error as NodeJS.ErrnoException).code === "ENOENT"
-    ) {
-      throw new PromptTemplateError(
-        `Template file not found: ${templatePath}`,
-      );
-    }
+  } catch {
     throw new PromptTemplateError(
       `Failed to read template file: ${templatePath}`,
     );
