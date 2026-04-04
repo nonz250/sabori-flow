@@ -378,6 +378,64 @@ describe("loadConfig - execution validation", () => {
       ConfigValidationError,
     );
   });
+
+  it("max_issues_per_repo の指定値が正しくパースされる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  max_issues_per_repo: 3",
+    );
+    mockYaml(yaml);
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.maxIssuesPerRepo).toBe(3);
+  });
+
+  it("max_issues_per_repo デフォルト値 (execution あり)", () => {
+    mockYaml(VALID_YAML);
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.maxIssuesPerRepo).toBe(5);
+  });
+
+  it("max_issues_per_repo デフォルト値 (execution 省略)", () => {
+    mockYaml(VALID_YAML_NO_EXECUTION);
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.maxIssuesPerRepo).toBe(5);
+  });
+
+  it("max_issues_per_repo zero", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  max_issues_per_repo: 0",
+    );
+    mockYaml(yaml);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(ConfigValidationError);
+  });
+
+  it("max_issues_per_repo negative", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  max_issues_per_repo: -1",
+    );
+    mockYaml(yaml);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(ConfigValidationError);
+  });
+
+  it("max_issues_per_repo string", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      'max_parallel: 4\n  max_issues_per_repo: "five"',
+    );
+    mockYaml(yaml);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(ConfigValidationError);
+  });
+
+  it("max_issues_per_repo float", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  max_issues_per_repo: 1.5",
+    );
+    mockYaml(yaml);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(ConfigValidationError);
+  });
 });
 
 describe("loadConfig - local_path validation", () => {
