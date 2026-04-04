@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { basename, resolve } from "node:path";
 
 import type { Issue, RepositoryConfig } from "./models.js";
 import { Phase, repoFullName } from "./models.js";
 import { getDefaultPromptsDir } from "../utils/paths.js";
+import { createLogger } from "./logger.js";
 
 /** テンプレート関連のエラー */
 export class PromptTemplateError extends Error {
@@ -14,10 +15,21 @@ export class PromptTemplateError extends Error {
   }
 }
 
+const logger = createLogger("prompt");
+
 const TEMPLATE_FILES: Record<Phase, string> = {
   [Phase.PLAN]: "plan.md",
   [Phase.IMPL]: "impl.md",
 };
+
+/** テンプレートファイルの最大サイズ (100KB) */
+const MAX_TEMPLATE_SIZE = 100 * 1024;
+
+/** バウンダリプレースホルダ（セキュリティ上必須） */
+const REQUIRED_BOUNDARY_PLACEHOLDERS = [
+  "{boundary_open}",
+  "{boundary_close}",
+] as const;
 
 /**
  * ユーザー入力由来の変数キー。
@@ -32,17 +44,18 @@ const USER_INPUT_KEYS: ReadonlySet<string> = new Set([
  * Issue とリポジトリ設定からプロンプト文字列を組み立てる。
  *
  * テンプレートファイルを読み込み、プレースホルダを展開して返す。
- * ユーザーカスタムプロンプトが存在すればそちらを優先し、
- * 存在しなければパッケージ同梱のデフォルトテンプレートにフォールバックする。
+ * `repoConfig.promptsDir` が指定されていればそちらを優先し、
+ * ファイルが存在しなければパッケージ同梱のデフォルトテンプレートにフォールバックする。
  *
  * @throws {PromptTemplateError} テンプレートの読み込みまたは展開に失敗した場合
  */
 export function buildPrompt(
   issue: Issue,
   repoConfig: RepositoryConfig,
-  promptsDir: string = getDefaultPromptsDir(),
 ): string {
-  const template = loadTemplate(issue.phase, promptsDir);
+  const customDir = repoConfig.promptsDir;
+  const defaultDir = getDefaultPromptsDir();
+  const template = loadTemplate(issue.phase, customDir, defaultDir);
   const variables = buildVariables(issue, repoConfig);
   return render(template, variables);
 }
@@ -50,23 +63,49 @@ export function buildPrompt(
 /**
  * テンプレートファイルを読み込む。
  *
- * パッケージ同梱のプロンプトディレクトリからのみ読み込む。
- * ユーザーカスタムプロンプトは将来的にセキュアな設計で提供予定（Issue #22）。
+ * カスタムプロンプトディレクトリが指定されている場合はそちらを優先し、
+ * ファイルが存在しなければデフォルトディレクトリにフォールバックする。
+ * ファイルが存在するが読み込めない場合はエラーとする（フォールバックしない）。
  *
- * @throws {PromptTemplateError} フェーズが未定義またはテンプレートが存在しない場合
+ * カスタムテンプレートにはバウンダリプレースホルダの存在を検証し、
+ * 欠落している場合はプロンプトインジェクション防止のためエラーとする。
+ *
+ * @throws {PromptTemplateError} フェーズが未定義、テンプレートが存在しない、
+ *   バウンダリプレースホルダが欠落、またはファイルサイズ超過の場合
  */
 function loadTemplate(
   phase: Phase,
-  promptsDir: string,
+  customDir: string | null,
+  defaultDir: string,
 ): string {
   const filename = TEMPLATE_FILES[phase];
   if (filename === undefined) {
     throw new PromptTemplateError(`Unknown phase: ${phase}`);
   }
 
-  const templatePath = resolve(promptsDir, filename);
-  if (existsSync(templatePath)) {
-    return readTemplateFile(templatePath);
+  // カスタムディレクトリからの読み込みを試行
+  if (customDir !== null) {
+    const customPath = resolve(customDir, filename);
+
+    // パス逸脱チェック: 解決後のパスがカスタムディレクトリ配下であることを検証
+    validatePathContainment(customPath, customDir);
+
+    if (existsSync(customPath)) {
+      const content = readTemplateFile(customPath);
+      validateBoundaryPlaceholders(content, customPath);
+      return content;
+    }
+
+    logger.info(
+      "Custom template not found: %s (falling back to default)",
+      customPath,
+    );
+  }
+
+  // デフォルトディレクトリからの読み込み
+  const defaultPath = resolve(defaultDir, filename);
+  if (existsSync(defaultPath)) {
+    return readTemplateFile(defaultPath);
   }
 
   throw new PromptTemplateError(
@@ -75,14 +114,89 @@ function loadTemplate(
 }
 
 /**
+ * テンプレートファイルパスがディレクトリ配下に収まっていることを検証する。
+ *
+ * シンボリックリンクやパストラバーサルにより、テンプレートファイルが
+ * 指定ディレクトリの外に逸脱することを防止する。
+ *
+ * @throws {PromptTemplateError} パスがディレクトリ外に逸脱している場合
+ */
+function validatePathContainment(
+  filePath: string,
+  dirPath: string,
+): void {
+  // ファイルが存在する場合のみ realpathSync で解決
+  if (!existsSync(filePath)) return;
+
+  let resolvedFile: string;
+  try {
+    resolvedFile = realpathSync(filePath);
+  } catch {
+    throw new PromptTemplateError(
+      `Cannot resolve template file path: ${basename(filePath)}`,
+    );
+  }
+
+  let resolvedDir: string;
+  try {
+    resolvedDir = realpathSync(dirPath);
+  } catch {
+    throw new PromptTemplateError(
+      `Cannot resolve template directory path: ${dirPath}`,
+    );
+  }
+
+  // resolvedFile が resolvedDir 配下であることを確認
+  const normalizedDir = resolvedDir.endsWith("/") ? resolvedDir : `${resolvedDir}/`;
+  if (!resolvedFile.startsWith(normalizedDir)) {
+    throw new PromptTemplateError(
+      `Template file path escapes the prompts directory: ${basename(filePath)}`,
+    );
+  }
+}
+
+/**
+ * カスタムテンプレートにバウンダリプレースホルダが含まれていることを検証する。
+ *
+ * バウンダリマーカーが欠落しているテンプレートは、Issue body 内の
+ * 悪意あるテキストがプロンプトインジェクションとして解釈されるリスクがある。
+ *
+ * @throws {PromptTemplateError} 必須のバウンダリプレースホルダが欠落している場合
+ */
+function validateBoundaryPlaceholders(
+  content: string,
+  templatePath: string,
+): void {
+  const missing = REQUIRED_BOUNDARY_PLACEHOLDERS.filter(
+    (placeholder) => !content.includes(placeholder),
+  );
+
+  if (missing.length > 0) {
+    throw new PromptTemplateError(
+      `Custom template '${basename(templatePath)}' is missing required boundary placeholders: ${missing.join(", ")}. ` +
+      `These are required to prevent prompt injection attacks.`,
+    );
+  }
+}
+
+/**
  * テンプレートファイルを読み込む内部ヘルパー。
  *
- * @throws {PromptTemplateError} ファイルの読み込みに失敗した場合
+ * ファイルサイズの上限チェックを行い、巨大ファイルによる DoS を防止する。
+ *
+ * @throws {PromptTemplateError} ファイルの読み込みに失敗、またはサイズ超過の場合
  */
 function readTemplateFile(templatePath: string): string {
   try {
+    const stat = statSync(templatePath);
+    if (stat.size > MAX_TEMPLATE_SIZE) {
+      throw new PromptTemplateError(
+        `Template file too large: ${basename(templatePath)} (${stat.size} bytes, max ${MAX_TEMPLATE_SIZE} bytes)`,
+      );
+    }
     return readFileSync(templatePath, "utf-8");
-  } catch {
+  } catch (error: unknown) {
+    if (error instanceof PromptTemplateError) throw error;
     throw new PromptTemplateError(
       `Failed to read template file: ${basename(templatePath)}`,
     );
