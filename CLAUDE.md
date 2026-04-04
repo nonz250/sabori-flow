@@ -141,7 +141,6 @@ XDG Base Directory 準拠でパスを解決する。
 | 用途 | パス | 備考 |
 |---|---|---|
 | 設定ファイル | `$XDG_CONFIG_HOME/sabori-flow/config.yml`（デフォルト: `~/.config/sabori-flow/config.yml`） | |
-| ユーザーカスタムプロンプト | `$XDG_CONFIG_HOME/sabori-flow/prompts/` | 存在しなければパッケージ同梱 `prompts/` にフォールバック |
 | データ | `$XDG_DATA_HOME/sabori-flow/`（デフォルト: `~/.local/share/sabori-flow/`） | 生成済み plist 等 |
 | ログ | `~/.sabori-flow/logs` | 固定、設定不可 |
 
@@ -159,3 +158,4 @@ XDG Base Directory 準拠でパスを解決する。
 - 設定値はすべて `config.yml` で管理する
 - `gh` / `git` コマンドの実行は `child_process` 経由、shell 非経由、タイムアウト付きで行う
 - プロンプトテンプレートは `prompts/` ディレクトリの Markdown ファイルで管理する
+- GitHub 上で扱う言語（Issue、PR、コミットメッセージ、コードコメント、README 等）はすべて英語で記述する
