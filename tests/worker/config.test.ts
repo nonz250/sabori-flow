@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 
 vi.mock("node:fs");
 
-import { readFileSync, realpathSync } from "node:fs";
+import { readFileSync, realpathSync, statSync } from "node:fs";
 import {
   loadConfig,
   ConfigValidationError,
@@ -11,6 +11,7 @@ import {
 
 const mockedReadFileSync = vi.mocked(readFileSync);
 const mockedRealpathSync = vi.mocked(realpathSync);
+const mockedStatSync = vi.mocked(statSync);
 
 // ---------- Helper ----------
 
@@ -18,6 +19,10 @@ function mockYaml(content: string): void {
   mockedReadFileSync.mockReturnValue(content);
   // realpathSync はデフォルトで受け取ったパスをそのまま返す
   mockedRealpathSync.mockImplementation((p) => p as string);
+  // statSync はデフォルトでディレクトリとして返す
+  mockedStatSync.mockReturnValue({
+    isDirectory: () => true,
+  } as ReturnType<typeof statSync>);
 }
 
 function mockFileNotFound(): void {
@@ -109,6 +114,7 @@ describe("loadConfig - normal", () => {
     expect(repo.owner).toBe("my-org");
     expect(repo.repo).toBe("my-repo");
     expect(repo.localPath).toBe("/tmp/my-org/my-repo");
+    expect(repo.promptsDir).toBeNull();
     expect(repo.labels.plan.trigger).toBe("plan");
     expect(repo.labels.plan.inProgress).toBe("plan:in-progress");
     expect(repo.labels.plan.done).toBe("plan:done");
@@ -648,7 +654,144 @@ describe("loadConfig - tilde expansion", () => {
 
     expect(result.repositories[0].localPath).toBe(expected);
   });
+});
 
+// ---------- prompts_dir validation ----------
+
+const VALID_YAML_WITH_PROMPTS_DIR = VALID_YAML.replace(
+  "local_path: /tmp/my-org/my-repo",
+  "local_path: /tmp/my-org/my-repo\n    prompts_dir: /tmp/my-org/prompts",
+);
+
+describe("loadConfig - prompts_dir validation", () => {
+  it("prompts_dir が指定されている場合、正しくパースされる", () => {
+    mockYaml(VALID_YAML_WITH_PROMPTS_DIR);
+
+    const result = loadConfig("/path/to/config.yml");
+
+    expect(result.repositories[0].promptsDir).toBe("/tmp/my-org/prompts");
+  });
+
+  it("prompts_dir が省略されている場合、null になる", () => {
+    mockYaml(VALID_YAML);
+
+    const result = loadConfig("/path/to/config.yml");
+
+    expect(result.repositories[0].promptsDir).toBeNull();
+  });
+
+  it("prompts_dir が空文字列の場合にエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "local_path: /tmp/my-org/my-repo",
+      'local_path: /tmp/my-org/my-repo\n    prompts_dir: ""',
+    );
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /prompts_dir: must be a non-empty string/,
+    );
+  });
+
+  it("prompts_dir が相対パスの場合にエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "local_path: /tmp/my-org/my-repo",
+      "local_path: /tmp/my-org/my-repo\n    prompts_dir: relative/path",
+    );
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /prompts_dir: must be an absolute path/,
+    );
+  });
+
+  it("prompts_dir が存在しないパスの場合にエラーになる", () => {
+    const yaml = VALID_YAML_WITH_PROMPTS_DIR;
+    mockedReadFileSync.mockReturnValue(yaml);
+    mockedRealpathSync.mockImplementation((p) => {
+      const path = String(p);
+      if (path === "/tmp/my-org/prompts") {
+        throw new Error("ENOENT");
+      }
+      return path;
+    });
+    mockedStatSync.mockReturnValue({
+      isDirectory: () => true,
+    } as ReturnType<typeof statSync>);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /prompts_dir: path does not exist/,
+    );
+  });
+
+  it("prompts_dir がディレクトリでない場合にエラーになる", () => {
+    const yaml = VALID_YAML_WITH_PROMPTS_DIR;
+    mockedReadFileSync.mockReturnValue(yaml);
+    mockedRealpathSync.mockImplementation((p) => String(p));
+    mockedStatSync.mockImplementation((p) => {
+      const path = String(p);
+      if (path === "/tmp/my-org/prompts") {
+        return { isDirectory: () => false } as ReturnType<typeof statSync>;
+      }
+      return { isDirectory: () => true } as ReturnType<typeof statSync>;
+    });
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /prompts_dir: path is not a directory/,
+    );
+  });
+
+  it("prompts_dir のシンボリックリンクが解決される", () => {
+    mockYaml(VALID_YAML_WITH_PROMPTS_DIR);
+    mockedRealpathSync.mockImplementation((p) => {
+      const path = String(p);
+      if (path === "/tmp/my-org/prompts") return "/resolved/prompts";
+      return path;
+    });
+
+    const result = loadConfig("/path/to/config.yml");
+
+    expect(result.repositories[0].promptsDir).toBe("/resolved/prompts");
+  });
+
+  it("prompts_dir にチルダが使える", () => {
+    const yaml = VALID_YAML.replace(
+      "local_path: /tmp/my-org/my-repo",
+      "local_path: /tmp/my-org/my-repo\n    prompts_dir: ~/prompts/my-repo",
+    );
+    mockYaml(yaml);
+
+    const result = loadConfig("/path/to/config.yml");
+    const expected = `${homedir()}/prompts/my-repo`;
+
+    expect(result.repositories[0].promptsDir).toBe(expected);
+  });
+
+  it("prompts_dir が数値の場合にエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "local_path: /tmp/my-org/my-repo",
+      "local_path: /tmp/my-org/my-repo\n    prompts_dir: 123",
+    );
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /prompts_dir: must be a non-empty string/,
+    );
+  });
 });
 
 describe("loadConfig - language validation", () => {
