@@ -56,7 +56,7 @@ export function configureLogger(options: {
   };
 
   if (globalConfig.logDir) {
-    mkdirSync(globalConfig.logDir, { recursive: true });
+    mkdirSync(globalConfig.logDir, { recursive: true, mode: 0o700 });
   }
 }
 

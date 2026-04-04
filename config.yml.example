@@ -21,4 +21,4 @@ repositories:
 # 実行設定
 execution:
   max_parallel: 1
-  # log_dir: /path/to/logs  # 省略時はプロジェクトルート/logs
+  # log_dir: /path/to/logs  # 省略時は ~/.local/share/sabori-flow/logs

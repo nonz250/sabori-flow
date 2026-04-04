@@ -139,6 +139,7 @@ describe("logger", () => {
 
       expect(mkdirSync).toHaveBeenCalledWith("/tmp/test-logs", {
         recursive: true,
+        mode: 0o700,
       });
       expect(appendFileSync).toHaveBeenCalledTimes(1);
       const [filePath, content] = vi.mocked(appendFileSync).mock.calls[0];

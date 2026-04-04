@@ -6,6 +6,12 @@
   "bin": {
     "sabori-flow": "./dist/index.js"
   },
+  "files": [
+    "dist/",
+    "prompts/",
+    "launchd/",
+    "config.yml.example"
+  ],
   "scripts": {
     "build": "tsc",
     "worker": "node dist/worker.js",
