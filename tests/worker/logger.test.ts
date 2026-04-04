@@ -91,8 +91,24 @@ describe("logger", () => {
 
       // [ISO8601] INFO - [myModule] hello world
       expect(output).toMatch(
-        /^\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z\] INFO - \[myModule\] hello world$/,
+        /^\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2}\] INFO - \[myModule\] hello world$/,
       );
+    });
+
+    it("timestamps include local timezone offset in ±HH:MM format", () => {
+      const logger = createLogger("tz");
+      logger.info("test");
+
+      const output = consoleErrorSpy.mock.calls[0][0] as string;
+      const match = output.match(
+        /\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3})([+-]\d{2}:\d{2})\]/,
+      );
+      expect(match).not.toBeNull();
+
+      const offset = match![2];
+      const [, hours, minutes] = offset.match(/[+-](\d{2}):(\d{2})/)!;
+      expect(Number(hours)).toBeLessThanOrEqual(14);
+      expect(Number(minutes)).toBeLessThanOrEqual(59);
     });
 
     it("レベル名が大文字で出力される", () => {
