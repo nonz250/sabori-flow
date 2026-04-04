@@ -22,7 +22,7 @@ export function getDefaultPriorityLabels(): string[] {
 }
 
 export function getDefaultExecution() {
-  return { max_parallel: 1, max_issues_per_repo: 1 };
+  return { max_parallel: 1, max_issues_per_repo: 1, skip_permissions: true };
 }
 
 export function getDefaultLanguage(): string {

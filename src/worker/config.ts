@@ -312,7 +312,7 @@ function parsePhaseLabels(raw: unknown, phaseName: string): PhaseLabels {
 
 function parseExecution(raw: unknown): ExecutionConfig {
   if (raw === undefined || raw === null) {
-    return { maxParallel: 1, maxIssuesPerRepo: 1 };
+    return { maxParallel: 1, maxIssuesPerRepo: 1, skipPermissions: true };
   }
 
   if (typeof raw !== "object" || Array.isArray(raw)) {
@@ -365,7 +365,17 @@ function parseExecution(raw: unknown): ExecutionConfig {
     );
   }
 
-  return { maxParallel: rawMaxParallel, maxIssuesPerRepo: rawMaxIssuesPerRepo };
+  // skip_permissions
+  const rawSkipPermissions =
+    "skip_permissions" in record ? record["skip_permissions"] : true;
+
+  if (typeof rawSkipPermissions !== "boolean") {
+    throw new ConfigValidationError(
+      `execution.skip_permissions: must be a boolean, got ${typeof rawSkipPermissions}`,
+    );
+  }
+
+  return { maxParallel: rawMaxParallel, maxIssuesPerRepo: rawMaxIssuesPerRepo, skipPermissions: rawSkipPermissions };
 }
 
 // ---------- Helpers ----------
