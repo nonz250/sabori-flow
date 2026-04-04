@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import YAML from "yaml";
 
 import type {
@@ -122,6 +122,15 @@ function parseRepositories(raw: unknown): readonly RepositoryConfig[] {
       );
     }
 
+    let resolvedLocalPath: string;
+    try {
+      resolvedLocalPath = realpathSync(localPath);
+    } catch {
+      throw new ConfigValidationError(
+        `${prefix}.local_path: path does not exist: '${localPath}'`,
+      );
+    }
+
     // labels
     if (!("labels" in record)) {
       throw new ConfigValidationError(`${prefix}: 'labels' is required`);
@@ -192,7 +201,7 @@ function parseRepositories(raw: unknown): readonly RepositoryConfig[] {
     configs.push({
       owner,
       repo,
-      localPath,
+      localPath: resolvedLocalPath,
       labels,
       priorityLabels: priorityRaw as string[],
     });

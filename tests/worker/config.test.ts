@@ -3,18 +3,21 @@ import { homedir } from "node:os";
 
 vi.mock("node:fs");
 
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import {
   loadConfig,
   ConfigValidationError,
 } from "../../src/worker/config.js";
 
 const mockedReadFileSync = vi.mocked(readFileSync);
+const mockedRealpathSync = vi.mocked(realpathSync);
 
 // ---------- Helper ----------
 
 function mockYaml(content: string): void {
   mockedReadFileSync.mockReturnValue(content);
+  // realpathSync はデフォルトで受け取ったパスをそのまま返す
+  mockedRealpathSync.mockImplementation((p) => p as string);
 }
 
 function mockFileNotFound(): void {
@@ -467,6 +470,29 @@ describe("loadConfig - local_path validation", () => {
     expect(() => loadConfig("/path/to/config.yml")).toThrow(
       /local_path: must be an absolute path/,
     );
+  });
+
+  it("local_path が存在しないパスの場合にエラーになる", () => {
+    mockYaml(VALID_YAML);
+    mockedRealpathSync.mockImplementation(() => {
+      throw new Error("ENOENT: no such file or directory");
+    });
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /local_path: path does not exist/,
+    );
+  });
+
+  it("local_path のシンボリックリンクが解決される", () => {
+    mockYaml(VALID_YAML);
+    mockedRealpathSync.mockReturnValue("/resolved/real/path");
+
+    const result = loadConfig("/path/to/config.yml");
+
+    expect(result.repositories[0].localPath).toBe("/resolved/real/path");
   });
 });
 
