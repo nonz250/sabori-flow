@@ -162,6 +162,23 @@ execution:
 | `repositories[].priority_labels` | 優先度ラベル。リストの上位ほど先に処理される |
 | `execution.max_parallel` | 並列実行数。デフォルトは `1`（逐次実行） |
 
+## セキュリティ
+
+このツールは Claude Code CLI を `--dangerously-skip-permissions` で実行するため、マシン上でほぼ任意の操作が可能です。launchd により定期的にユーザー操作なしで実行されます。
+
+デフォルトの `npx` 方式では、実行時に npm レジストリからパッケージを取得します。万が一 npm パッケージが侵害された場合、悪意あるコードがスケジューラにより自動実行される可能性があります。
+
+このリスクを軽減するには、`--local` フラグを使用して、監査済みのローカルビルドから実行してください:
+
+```bash
+git clone https://github.com/nonz250/sabori-flow.git
+cd sabori-flow
+npm install
+npm run build
+npx sabori-flow init
+npx sabori-flow install --local
+```
+
 ## ライセンス
 
 [MIT](LICENSE)
