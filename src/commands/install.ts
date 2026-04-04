@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import YAML from "yaml";
 import {
+  PACKAGE_ROOT,
   PLIST_TEMPLATE_PATH,
   PLIST_DEST_DIR,
   PLIST_DEST_PATH,
@@ -44,7 +45,20 @@ function buildMinimalPath(): string {
   return [...dirs].join(":");
 }
 
-export async function installCommand(): Promise<void> {
+function resolveCommandPath(command: string, label: string): string | null {
+  const resolved = exec("which", [command]);
+  if (!resolved || !resolved.startsWith("/")) {
+    console.error(
+      `Error: ${label} のパスを正しく解決できませんでした。`,
+    );
+    return null;
+  }
+  return resolved;
+}
+
+export async function installCommand(
+  options: { local?: boolean } = {},
+): Promise<void> {
   // 1. config.yml チェック
   if (!fs.existsSync(getConfigPath())) {
     console.error("Error: config.yml が見つかりません。");
@@ -54,12 +68,29 @@ export async function installCommand(): Promise<void> {
     return;
   }
 
-  // 2. npx チェック
-  if (!commandExists("npx")) {
-    console.error(
-      "Error: npx が見つかりません。Node.js をインストールしてください。",
-    );
-    return;
+  // 2. コマンド存在チェックと programArguments の構築
+  let programArguments: readonly string[];
+
+  if (options.local) {
+    if (!commandExists("node")) {
+      console.error(
+        "Error: node が見つかりません。Node.js をインストールしてください。",
+      );
+      return;
+    }
+    const nodePath = resolveCommandPath("node", "node");
+    if (!nodePath) return;
+    programArguments = [nodePath, path.join(PACKAGE_ROOT, "dist", "worker.js")];
+  } else {
+    if (!commandExists("npx")) {
+      console.error(
+        "Error: npx が見つかりません。Node.js をインストールしてください。",
+      );
+      return;
+    }
+    const npxPath = resolveCommandPath("npx", "npx");
+    if (!npxPath) return;
+    programArguments = [npxPath, "sabori-flow", "worker"];
   }
 
   try {
@@ -71,13 +102,8 @@ export async function installCommand(): Promise<void> {
     console.log("plist を生成中...");
     fs.mkdirSync(getDataDir(), { recursive: true, mode: 0o700 });
     const template = fs.readFileSync(PLIST_TEMPLATE_PATH, "utf-8");
-    const npxPath = exec("which", ["npx"]);
-    if (!npxPath || !npxPath.startsWith("/")) {
-      console.error("Error: npx のパスを正しく解決できませんでした。");
-      return;
-    }
     const plist = renderPlist(template, {
-      npxPath,
+      programArguments,
       path: buildMinimalPath(),
       logDir,
     });
@@ -90,9 +116,15 @@ export async function installCommand(): Promise<void> {
     fs.chmodSync(PLIST_DEST_PATH, 0o600);
     exec("launchctl", ["load", PLIST_DEST_PATH]);
 
-    console.log(
-      "\nインストールが完了しました。1時間ごとにワーカーが実行されます。",
-    );
+    if (options.local) {
+      console.log(
+        "\nローカルビルドのワーカーを登録しました。1時間ごとにワーカーが実行されます。",
+      );
+    } else {
+      console.log(
+        "\nインストールが完了しました。1時間ごとにワーカーが実行されます。",
+      );
+    }
   } catch (error) {
     if (error instanceof ShellError) {
       console.error(`Error: ${error.message}`);

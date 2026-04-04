@@ -29,7 +29,8 @@ program
 program
   .command("install")
   .description("plist 生成 + launchd 登録を行います")
-  .action(installCommand);
+  .option("--local", "ローカルビルドのワーカーを登録します")
+  .action((options) => installCommand(options));
 
 program
   .command("uninstall")
