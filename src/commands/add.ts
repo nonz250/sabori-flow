@@ -12,7 +12,7 @@ export async function addCommand(): Promise<void> {
   // 1. config.yml 存在チェック
   if (!existsSync(getConfigPath())) {
     console.error("Error: config.yml が見つかりません。");
-    console.error("先に `npx sabori-flow init` を実行してください。");
+    console.error("先に `sabori-flow init` を実行してください。");
     return;
   }
 
