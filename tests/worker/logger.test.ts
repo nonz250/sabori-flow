@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("node:fs", () => ({
   appendFileSync: vi.fn(),
+  lstatSync: vi.fn(() => ({ isSymbolicLink: () => false })),
   mkdirSync: vi.fn(),
   readdirSync: vi.fn(() => []),
   unlinkSync: vi.fn(),
@@ -9,6 +10,7 @@ vi.mock("node:fs", () => ({
 
 import {
   appendFileSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
   unlinkSync,
@@ -199,6 +201,37 @@ describe("logger", () => {
 
       expect(readdirSync).not.toHaveBeenCalled();
       expect(unlinkSync).not.toHaveBeenCalled();
+    });
+
+    it("シンボリックリンクの場合は削除をスキップする", () => {
+      configureLogger({
+        logDir: "/tmp/test-logs",
+        retentionDays: 7,
+      });
+
+      const oldDate = new Date();
+      oldDate.setDate(oldDate.getDate() - 10);
+      const oldFileName = `worker.log.${oldDate.toISOString().slice(0, 10)}`;
+
+      vi.mocked(readdirSync).mockReturnValue(
+        [oldFileName] as unknown as ReturnType<typeof readdirSync>,
+      );
+
+      vi.mocked(lstatSync).mockReturnValue({
+        isSymbolicLink: () => true,
+      } as unknown as ReturnType<typeof lstatSync>);
+
+      const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      rotateOldLogs();
+
+      expect(lstatSync).toHaveBeenCalledWith(`/tmp/test-logs/${oldFileName}`);
+      expect(unlinkSync).not.toHaveBeenCalled();
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        `[logger] WARNING: Skipping symbolic link: ${oldFileName}`,
+      );
+
+      consoleWarnSpy.mockRestore();
     });
   });
 });

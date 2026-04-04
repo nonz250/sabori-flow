@@ -1,5 +1,6 @@
 import {
   appendFileSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
   unlinkSync,
@@ -111,7 +112,13 @@ export function rotateOldLogs(): void {
       const fileDate = new Date(match[1]);
       if (fileDate < cutoff) {
         try {
-          unlinkSync(join(globalConfig.logDir, entry));
+          const filePath = join(globalConfig.logDir, entry);
+          const stat = lstatSync(filePath);
+          if (stat.isSymbolicLink()) {
+            console.warn(`[logger] WARNING: Skipping symbolic link: ${entry}`);
+            continue;
+          }
+          unlinkSync(filePath);
         } catch {
           // Ignore delete errors
         }
