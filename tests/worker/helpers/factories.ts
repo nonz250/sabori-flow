@@ -57,6 +57,7 @@ export function makeIssue(overrides?: Partial<Issue>): Issue {
     body: "Issue body",
     labels: [triggerLabel],
     url: `https://github.com/testowner/testrepo/issues/${number}`,
+    authorAssociation: "OWNER",
     phase,
     priority: Priority.HIGH,
     ...overrides,
@@ -83,7 +84,6 @@ export function makeAppConfig(
   const defaultExecution: ExecutionConfig = {
     maxParallel: 1,
     maxIssuesPerRepo: 10,
-    logDir: "/tmp/test-logs",
   };
 
   return {

@@ -16,6 +16,7 @@ vi.mock("../../src/worker/process.js", async (importOriginal) => {
 import {
   postSuccessComment,
   postFailureComment,
+  sanitizeOutput,
   CommentError,
   MAX_COMMENT_LENGTH,
   SUCCESS_HEADER,
@@ -283,5 +284,126 @@ describe("postFailureComment truncation", () => {
     const postedBody = options!.input!;
     expect(postedBody.length).toBe(MAX_COMMENT_LENGTH);
     expect(postedBody).not.toContain(FAILURE_TRUNCATED_SUFFIX);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// sanitizeOutput
+// ---------------------------------------------------------------------------
+
+describe("sanitizeOutput", () => {
+  it("通常のテキストはマスキングされない", () => {
+    const text = "Implementation completed successfully.\nAll tests passed.";
+    expect(sanitizeOutput(text)).toBe(text);
+  });
+
+  it("AWS アクセスキーがマスキングされる", () => {
+    const text = "Found key: AKIAIOSFODNN7EXAMPLE in config";
+    expect(sanitizeOutput(text)).toBe("Found key: [REDACTED] in config");
+  });
+
+  it("AWS シークレットキーがマスキングされる", () => {
+    const text = "aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
+    expect(sanitizeOutput(text)).toBe("aws_secret_access_key = [REDACTED]");
+  });
+
+  it("GitHub Personal Access Token (ghp_) がマスキングされる", () => {
+    const text = "TOKEN=ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijkl";
+    expect(sanitizeOutput(text)).toBe("TOKEN=[REDACTED]");
+  });
+
+  it("GitHub Server Token (ghs_) がマスキングされる", () => {
+    const text = "Using token ghs_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijkl";
+    expect(sanitizeOutput(text)).toBe("Using token [REDACTED]");
+  });
+
+  it("GitHub fine-grained PAT (github_pat_) がマスキングされる", () => {
+    const text = "github_pat_11ABCDEFGH0123456789_abcdefghijklmnopqrstuvwxyz0123456789ABCDEF";
+    expect(sanitizeOutput(text)).toBe("[REDACTED]");
+  });
+
+  it("SSH 秘密鍵ブロックがマスキングされる", () => {
+    const text = [
+      "Found SSH key:",
+      "-----BEGIN RSA PRIVATE KEY-----",
+      "MIIEpAIBAAKCAQEA0Z3VS5JJcds3xfn/ygWep4PAtGoLFt0b",
+      "-----END RSA PRIVATE KEY-----",
+      "End of output",
+    ].join("\n");
+    const result = sanitizeOutput(text);
+    expect(result).not.toContain("BEGIN RSA PRIVATE KEY");
+    expect(result).not.toContain("MIIEpAIBAAKCAQEA0Z3VS5JJcds3xfn");
+    expect(result).toContain("[REDACTED]");
+    expect(result).toContain("Found SSH key:");
+    expect(result).toContain("End of output");
+  });
+
+  it("ED25519 SSH 秘密鍵ブロックもマスキングされる", () => {
+    const text = [
+      "-----BEGIN OPENSSH PRIVATE KEY-----",
+      "b3BlbnNzaC1rZXktdjEAAAAABG5vbmU",
+      "-----END OPENSSH PRIVATE KEY-----",
+    ].join("\n");
+    const result = sanitizeOutput(text);
+    expect(result).toBe("[REDACTED]");
+  });
+
+  it("Bearer トークンがマスキングされる", () => {
+    const text = "Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.payload.sig";
+    expect(sanitizeOutput(text)).toContain("[REDACTED]");
+    expect(sanitizeOutput(text)).not.toContain("eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9");
+  });
+
+  it("API_KEY=xxx 形式の行がマスキングされる", () => {
+    const text = "Line before\nAPI_KEY=sk-1234567890abcdef\nLine after";
+    const result = sanitizeOutput(text);
+    expect(result).toContain("[REDACTED]");
+    expect(result).not.toContain("sk-1234567890abcdef");
+    expect(result).toContain("Line before");
+    expect(result).toContain("Line after");
+  });
+
+  it("api-secret: xxx 形式の行がマスキングされる", () => {
+    const text = 'api-secret: "my-super-secret-value"';
+    expect(sanitizeOutput(text)).toBe("[REDACTED]");
+  });
+
+  it("access_token=xxx 形式の行がマスキングされる", () => {
+    const text = "access_token=ya29.a0AfH6SMBXXXXXXXXXXXXXXXXXXXXXX";
+    expect(sanitizeOutput(text)).toBe("[REDACTED]");
+  });
+
+  it("secret_key: xxx 形式の行がマスキングされる", () => {
+    const text = "secret_key: abcdef123456";
+    expect(sanitizeOutput(text)).toBe("[REDACTED]");
+  });
+
+  it("複数のシークレットが同時にマスキングされる", () => {
+    const text = [
+      "Config found:",
+      "AKIAIOSFODNN7EXAMPLE",
+      "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijkl",
+      "API_KEY=some-secret-value",
+    ].join("\n");
+    const result = sanitizeOutput(text);
+    expect(result).toContain("Config found:");
+    expect(result).not.toContain("AKIAIOSFODNN7EXAMPLE");
+    expect(result).not.toContain("ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+    expect(result).not.toContain("some-secret-value");
+  });
+
+  it("連続して呼び出しても正しくマスキングされる (RegExp の lastIndex がリセットされる)", () => {
+    const text1 = "Token: ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijkl";
+    const text2 = "Token: ghp_ZYXWVUTSRQPONMLKJIHGFEDCBAzyxwvutsrqponm";
+
+    const result1 = sanitizeOutput(text1);
+    const result2 = sanitizeOutput(text2);
+
+    expect(result1).toBe("Token: [REDACTED]");
+    expect(result2).toBe("Token: [REDACTED]");
+  });
+
+  it("空文字列を渡しても正常に動作する", () => {
+    expect(sanitizeOutput("")).toBe("");
   });
 });

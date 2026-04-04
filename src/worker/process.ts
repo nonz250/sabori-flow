@@ -66,14 +66,22 @@ export async function runCommand(
         const pgid = -child.pid;
         try {
           process.kill(pgid, "SIGTERM");
-        } catch {
-          // Process may have already exited
+        } catch (error: unknown) {
+          const detail =
+            error instanceof Error ? error.message : String(error);
+          console.warn(
+            `[process] WARNING: Failed to send SIGTERM to process group ${pgid}: ${detail}`,
+          );
         }
         killTimer = setTimeout(() => {
           try {
             process.kill(pgid, "SIGKILL");
-          } catch {
-            // Process may have already exited
+          } catch (error: unknown) {
+            const detail =
+              error instanceof Error ? error.message : String(error);
+            console.warn(
+              `[process] WARNING: Failed to send SIGKILL to process group ${pgid}: ${detail}`,
+            );
           }
         }, SIGKILL_DELAY_MS);
       }

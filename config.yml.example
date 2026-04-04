@@ -21,4 +21,4 @@ repositories:
 # 実行設定
 execution:
   max_parallel: 1
-  # log_dir: /path/to/logs  # 省略時はプロジェクトルート/logs
+  # max_issues_per_repo: 1  # リポジトリあたりの Issue 処理上限（省略時は 1）

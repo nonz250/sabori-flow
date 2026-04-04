@@ -1,5 +1,5 @@
 import fs from "fs";
-import { PLIST_DEST_PATH, PLIST_GENERATED_PATH } from "../utils/paths.js";
+import { PLIST_DEST_PATH, getPlistGeneratedPath } from "../utils/paths.js";
 import { exec } from "../utils/shell.js";
 
 export async function uninstallCommand(): Promise<void> {
@@ -17,8 +17,8 @@ export async function uninstallCommand(): Promise<void> {
   }
 
   // 2. 生成済み plist 削除
-  if (fs.existsSync(PLIST_GENERATED_PATH)) {
-    fs.unlinkSync(PLIST_GENERATED_PATH);
+  if (fs.existsSync(getPlistGeneratedPath())) {
+    fs.unlinkSync(getPlistGeneratedPath());
   }
 
   console.log("\nアンインストールが完了しました。");
