@@ -120,6 +120,7 @@ describe("loadConfig - normal", () => {
     expect(repo.priorityLabels).toEqual(["priority:high", "priority:low"]);
     expect(result.execution.maxParallel).toBe(4);
     expect(result.language).toBe("ja");
+    expect(result.execution.skipPermissions).toBe(true);
   });
 
   it("execution default (max_parallel=1 when execution is omitted)", () => {
@@ -127,6 +128,7 @@ describe("loadConfig - normal", () => {
     const result = loadConfig("/path/to/config.yml");
 
     expect(result.execution.maxParallel).toBe(1);
+    expect(result.execution.skipPermissions).toBe(true);
   });
 
   it("empty priority_labels", () => {
@@ -485,6 +487,70 @@ describe("loadConfig - execution validation", () => {
 
     const result = loadConfig("/path/to/config.yml");
     expect(result.execution.maxIssuesPerRepo).toBe(20);
+  });
+
+  it("skip_permissions: true が正しくパースされる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  skip_permissions: true",
+    );
+    mockYaml(yaml);
+
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.skipPermissions).toBe(true);
+  });
+
+  it("skip_permissions: false が正しくパースされる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  skip_permissions: false",
+    );
+    mockYaml(yaml);
+
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.skipPermissions).toBe(false);
+  });
+
+  it("skip_permissions デフォルト値 (execution あり、skip_permissions 省略)", () => {
+    mockYaml(VALID_YAML);
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.skipPermissions).toBe(true);
+  });
+
+  it("skip_permissions デフォルト値 (execution 省略)", () => {
+    mockYaml(VALID_YAML_NO_EXECUTION);
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.skipPermissions).toBe(true);
+  });
+
+  it("skip_permissions に文字列を指定するとエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      'max_parallel: 4\n  skip_permissions: "yes"',
+    );
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /skip_permissions: must be a boolean/,
+    );
+  });
+
+  it("skip_permissions に数値を指定するとエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  skip_permissions: 1",
+    );
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /skip_permissions: must be a boolean/,
+    );
   });
 });
 

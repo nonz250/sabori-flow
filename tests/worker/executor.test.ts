@@ -186,4 +186,46 @@ describe("runClaude", () => {
       expect(callOptions?.cwd).toBe("/work/dir");
     });
   });
+
+  describe("skipPermissions オプション", () => {
+    it("skipPermissions 未指定時は --dangerously-skip-permissions が含まれる", async () => {
+      mockedRunCommand.mockResolvedValue({
+        success: true,
+        stdout: "",
+        stderr: "",
+      });
+
+      await runClaude("prompt text");
+
+      const args = mockedRunCommand.mock.calls[0][1];
+      expect(args).toContain("--dangerously-skip-permissions");
+    });
+
+    it("skipPermissions が true の場合 --dangerously-skip-permissions が含まれる", async () => {
+      mockedRunCommand.mockResolvedValue({
+        success: true,
+        stdout: "",
+        stderr: "",
+      });
+
+      await runClaude("prompt text", { skipPermissions: true });
+
+      const args = mockedRunCommand.mock.calls[0][1];
+      expect(args).toContain("--dangerously-skip-permissions");
+    });
+
+    it("skipPermissions が false の場合 --dangerously-skip-permissions が含まれない", async () => {
+      mockedRunCommand.mockResolvedValue({
+        success: true,
+        stdout: "",
+        stderr: "",
+      });
+
+      await runClaude("prompt text", { skipPermissions: false });
+
+      const args = mockedRunCommand.mock.calls[0][1];
+      expect(args).toEqual(["-p"]);
+      expect(args).not.toContain("--dangerously-skip-permissions");
+    });
+  });
 });

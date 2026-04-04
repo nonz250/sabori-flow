@@ -126,6 +126,7 @@ describe("型の構造テスト", () => {
     const executionConfig: ExecutionConfig = {
       maxParallel: 4,
       maxIssuesPerRepo: 5,
+      skipPermissions: true,
     };
 
     const appConfig: AppConfig = {
