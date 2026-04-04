@@ -64,14 +64,18 @@ export async function addCommand(): Promise<void> {
   }
 
   // 6. 新エントリ構築 + 追加
-  repositories.push({
+  const newEntry: Record<string, unknown> = {
     owner: repoInput.owner,
     repo: repoInput.repo,
     local_path: repoInput.local_path,
-    labels: getDefaultLabels(),
-    priority_labels: getDefaultPriorityLabels(),
     auto_impl_after_plan: repoInput.auto_impl_after_plan,
-  });
+  };
+  if (repoInput.prompts_dir !== null) {
+    newEntry.prompts_dir = repoInput.prompts_dir;
+  }
+  newEntry.labels = getDefaultLabels();
+  newEntry.priority_labels = getDefaultPriorityLabels();
+  repositories.push(newEntry);
 
   // 7. 書き戻し
   try {

@@ -35,6 +35,7 @@ function makeRepoInput(overrides?: Partial<RepositoryInput>): RepositoryInput {
     owner: "test-owner",
     repo: "test-repo",
     local_path: "/tmp/test-owner/test-repo",
+    prompts_dir: null,
     ...overrides,
   };
 }
@@ -378,6 +379,34 @@ describe("addCommand - 重複: 上書き Yes", () => {
     // デフォルト labels が新しいエントリに付与されている
     const labels = repos[0].labels as Record<string, Record<string, string>>;
     expect(labels.plan.trigger).toBe("claude/plan");
+  });
+});
+
+describe("addCommand - prompts_dir の扱い", () => {
+  it("prompts_dir が null の場合、YAML に prompts_dir キーが含まれない", async () => {
+    const repoInput = makeRepoInput({ prompts_dir: null });
+    mockedExistsSync.mockReturnValue(true);
+    mockedReadFileSync.mockReturnValue(makeValidConfig([]));
+    mockedPromptRepository.mockResolvedValue(repoInput);
+
+    await runAddCommand();
+
+    const written = parseWrittenYaml() as Record<string, unknown>;
+    const repos = written.repositories as Array<Record<string, unknown>>;
+    expect(repos[0]).not.toHaveProperty("prompts_dir");
+  });
+
+  it("prompts_dir が指定された場合、YAML に prompts_dir が含まれる", async () => {
+    const repoInput = makeRepoInput({ prompts_dir: "/custom/prompts" });
+    mockedExistsSync.mockReturnValue(true);
+    mockedReadFileSync.mockReturnValue(makeValidConfig([]));
+    mockedPromptRepository.mockResolvedValue(repoInput);
+
+    await runAddCommand();
+
+    const written = parseWrittenYaml() as Record<string, unknown>;
+    const repos = written.repositories as Array<Record<string, unknown>>;
+    expect(repos[0].prompts_dir).toBe("/custom/prompts");
   });
 });
 
