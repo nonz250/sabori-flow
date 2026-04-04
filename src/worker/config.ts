@@ -301,6 +301,12 @@ function parseExecution(raw: unknown): ExecutionConfig {
     );
   }
 
+  if (rawMaxParallel > 10) {
+    throw new ConfigValidationError(
+      `execution.max_parallel: must be <= 10, got ${rawMaxParallel}`,
+    );
+  }
+
   // max_issues_per_repo
   const rawMaxIssuesPerRepo =
     "max_issues_per_repo" in record ? record["max_issues_per_repo"] : 1;
@@ -314,6 +320,12 @@ function parseExecution(raw: unknown): ExecutionConfig {
   if (rawMaxIssuesPerRepo < 1) {
     throw new ConfigValidationError(
       `execution.max_issues_per_repo: must be >= 1, got ${rawMaxIssuesPerRepo}`,
+    );
+  }
+
+  if (rawMaxIssuesPerRepo > 20) {
+    throw new ConfigValidationError(
+      `execution.max_issues_per_repo: must be <= 20, got ${rawMaxIssuesPerRepo}`,
     );
   }
 
