@@ -4,7 +4,7 @@ import { basename, resolve } from "node:path";
 
 import type { Issue, RepositoryConfig } from "./models.js";
 import { Phase, repoFullName } from "./models.js";
-import { getUserPromptsDir, getDefaultPromptsDir } from "../utils/paths.js";
+import { getDefaultPromptsDir } from "../utils/paths.js";
 
 /** テンプレート関連のエラー */
 export class PromptTemplateError extends Error {
@@ -40,10 +40,9 @@ const USER_INPUT_KEYS: ReadonlySet<string> = new Set([
 export function buildPrompt(
   issue: Issue,
   repoConfig: RepositoryConfig,
-  userPromptsDir: string = getUserPromptsDir(),
-  defaultPromptsDir: string = getDefaultPromptsDir(),
+  promptsDir: string = getDefaultPromptsDir(),
 ): string {
-  const template = loadTemplate(issue.phase, userPromptsDir, defaultPromptsDir);
+  const template = loadTemplate(issue.phase, promptsDir);
   const variables = buildVariables(issue, repoConfig);
   return render(template, variables);
 }
@@ -51,29 +50,23 @@ export function buildPrompt(
 /**
  * テンプレートファイルを読み込む。
  *
- * ユーザーカスタムディレクトリにテンプレートが存在すればそちらを優先し、
- * 存在しなければデフォルトディレクトリにフォールバックする。
+ * パッケージ同梱のプロンプトディレクトリからのみ読み込む。
+ * ユーザーカスタムプロンプトは将来的にセキュアな設計で提供予定（Issue #22）。
  *
- * @throws {PromptTemplateError} フェーズが未定義または両方のディレクトリにファイルが存在しない場合
+ * @throws {PromptTemplateError} フェーズが未定義またはテンプレートが存在しない場合
  */
 function loadTemplate(
   phase: Phase,
-  userPromptsDir: string,
-  defaultPromptsDir: string,
+  promptsDir: string,
 ): string {
   const filename = TEMPLATE_FILES[phase];
   if (filename === undefined) {
     throw new PromptTemplateError(`Unknown phase: ${phase}`);
   }
 
-  const userTemplatePath = resolve(userPromptsDir, filename);
-  if (existsSync(userTemplatePath)) {
-    return readTemplateFile(userTemplatePath);
-  }
-
-  const defaultTemplatePath = resolve(defaultPromptsDir, filename);
-  if (existsSync(defaultTemplatePath)) {
-    return readTemplateFile(defaultTemplatePath);
+  const templatePath = resolve(promptsDir, filename);
+  if (existsSync(templatePath)) {
+    return readTemplateFile(templatePath);
   }
 
   throw new PromptTemplateError(

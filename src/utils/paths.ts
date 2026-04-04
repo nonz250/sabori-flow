@@ -67,12 +67,7 @@ export function getConfigExamplePath(): string {
   return CONFIG_EXAMPLE_PATH;
 }
 
-/** getConfigDir()/prompts — ユーザーカスタムプロンプト置き場 */
-export function getUserPromptsDir(): string {
-  return path.join(getConfigDir(), "prompts");
-}
-
-/** パッケージ同梱のデフォルトプロンプトディレクトリ（DEFAULT_PROMPTS_DIR と同値） */
+/** パッケージ同梱のプロンプトディレクトリ（DEFAULT_PROMPTS_DIR と同値） */
 export function getDefaultPromptsDir(): string {
   return DEFAULT_PROMPTS_DIR;
 }
