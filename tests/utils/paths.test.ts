@@ -63,20 +63,6 @@ describe("getConfigPath", () => {
   });
 });
 
-describe("getUserPromptsDir", () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
-  it("getConfigDir()/prompts を返す", async () => {
-    vi.stubEnv("XDG_CONFIG_HOME", "");
-    const { getUserPromptsDir } = await import("../../src/utils/paths.js");
-    expect(getUserPromptsDir()).toBe(
-      path.join("/mock/home", ".config", "sabori-flow", "prompts"),
-    );
-  });
-});
-
 describe("getDataDir", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
