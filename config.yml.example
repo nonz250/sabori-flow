@@ -22,4 +22,3 @@ repositories:
 execution:
   max_parallel: 1
   # max_issues_per_repo: 1  # リポジトリあたりの Issue 処理上限（省略時は 1）
-  # log_dir: /path/to/logs  # 省略時は ~/.sabori-flow/logs

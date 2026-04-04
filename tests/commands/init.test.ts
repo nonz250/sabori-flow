@@ -12,7 +12,6 @@ vi.mock("fs", () => ({
 }));
 
 vi.mock("@inquirer/prompts", () => ({
-  input: vi.fn(),
   confirm: vi.fn(),
 }));
 
@@ -26,25 +25,20 @@ vi.mock("../../src/utils/paths.js", async (importOriginal) => {
     ...original,
     getConfigDir: vi.fn().mockReturnValue("/mock/config/dir"),
     getConfigPath: vi.fn().mockReturnValue("/mock/config/dir/config.yml"),
-    getLogsDir: vi.fn().mockReturnValue("/mock/data/logs"),
-    expandTilde: vi.fn((v: string) => v),
   };
 });
 
 import fs from "fs";
-import { input, confirm } from "@inquirer/prompts";
+import { confirm } from "@inquirer/prompts";
 import { promptRepository } from "../../src/commands/helpers/repository-prompt.js";
 import type { RepositoryInput } from "../../src/commands/helpers/repository-prompt.js";
-import { getConfigDir, getConfigPath, getLogsDir, expandTilde } from "../../src/utils/paths.js";
+import { getConfigDir, getConfigPath } from "../../src/utils/paths.js";
 
 const mockedFs = vi.mocked(fs);
-const mockedInput = vi.mocked(input);
 const mockedConfirm = vi.mocked(confirm);
 const mockedPromptRepository = vi.mocked(promptRepository);
 const mockedGetConfigDir = vi.mocked(getConfigDir);
 const mockedGetConfigPath = vi.mocked(getConfigPath);
-const mockedGetLogsDir = vi.mocked(getLogsDir);
-const mockedExpandTilde = vi.mocked(expandTilde);
 
 // ---------- Helpers ----------
 
@@ -72,8 +66,6 @@ beforeEach(() => {
   // paths のモック関数は restoreAllMocks でリセットされるため毎回再設定
   mockedGetConfigDir.mockReturnValue("/mock/config/dir");
   mockedGetConfigPath.mockReturnValue("/mock/config/dir/config.yml");
-  mockedGetLogsDir.mockReturnValue("/mock/data/logs");
-  mockedExpandTilde.mockImplementation((v: string) => v);
 
   consoleSpy = {
     log: vi.spyOn(console, "log").mockImplementation(() => {}),
@@ -111,8 +103,6 @@ describe("initCommand - config.yml が既に存在し、上書きを許可した
     mockedPromptRepository.mockResolvedValueOnce(repoInput);
     // 別リポジトリ追加: No
     mockedConfirm.mockResolvedValueOnce(false);
-    // ログ出力先入力
-    mockedInput.mockResolvedValueOnce("/mock/data/logs");
 
     await runInitCommand();
 
@@ -133,8 +123,6 @@ describe("initCommand - config.yml が存在しない場合", () => {
     mockedPromptRepository.mockResolvedValueOnce(repoInput);
     // 別リポジトリ追加: No
     mockedConfirm.mockResolvedValueOnce(false);
-    // ログ出力先入力
-    mockedInput.mockResolvedValueOnce("/mock/data/logs");
 
     await runInitCommand();
 
@@ -160,7 +148,6 @@ describe("initCommand - 正常完了時のメッセージ", () => {
     mockedFs.existsSync.mockReturnValue(false);
     mockedPromptRepository.mockResolvedValueOnce(repoInput);
     mockedConfirm.mockResolvedValueOnce(false);
-    mockedInput.mockResolvedValueOnce("/mock/data/logs");
 
     await runInitCommand();
 
@@ -180,7 +167,6 @@ describe("initCommand - 書き込まれる YAML の内容", () => {
     mockedFs.existsSync.mockReturnValue(false);
     mockedPromptRepository.mockResolvedValueOnce(repoInput);
     mockedConfirm.mockResolvedValueOnce(false);
-    mockedInput.mockResolvedValueOnce("/mock/data/logs");
 
     await runInitCommand();
 
@@ -209,19 +195,18 @@ describe("initCommand - 書き込まれる YAML の内容", () => {
     expect(priorityLabels).toEqual(["priority:high", "priority:low"]);
   });
 
-  it("execution セクションに log_dir と max_parallel, max_issues_per_repo が含まれる", async () => {
+  it("execution セクションに max_parallel, max_issues_per_repo が含まれ log_dir は含まれない", async () => {
     const repoInput = makeRepoInput();
 
     mockedFs.existsSync.mockReturnValue(false);
     mockedPromptRepository.mockResolvedValueOnce(repoInput);
     mockedConfirm.mockResolvedValueOnce(false);
-    mockedInput.mockResolvedValueOnce("/custom/log/dir");
 
     await runInitCommand();
 
     const written = parseWrittenYaml();
     const execution = written.execution as Record<string, unknown>;
-    expect(execution.log_dir).toBe("/custom/log/dir");
+    expect(execution).not.toHaveProperty("log_dir");
     expect(execution.max_parallel).toBe(1);
     expect(execution.max_issues_per_repo).toBe(1);
   });

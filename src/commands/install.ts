@@ -1,6 +1,5 @@
 import fs from "fs";
 import path from "path";
-import YAML from "yaml";
 import {
   PACKAGE_ROOT,
   PLIST_TEMPLATE_PATH,
@@ -13,19 +12,6 @@ import {
 } from "../utils/paths.js";
 import { exec, commandExists, ShellError } from "../utils/shell.js";
 import { renderPlist } from "../utils/plist.js";
-
-function getLogDir(): string {
-  try {
-    const raw = YAML.parse(fs.readFileSync(getConfigPath(), "utf-8"));
-    const logDir = raw?.execution?.log_dir;
-    if (typeof logDir === "string" && logDir !== "") {
-      return logDir;
-    }
-  } catch {
-    // config パース失敗時はデフォルト
-  }
-  return getLogsDir();
-}
 
 const STANDARD_PATHS = ["/usr/local/bin", "/usr/bin", "/bin"];
 const REQUIRED_COMMANDS = ["node", "git", "gh", "claude"];
@@ -95,7 +81,7 @@ export async function installCommand(
 
   try {
     // 3. logs ディレクトリ作成
-    const logDir = getLogDir();
+    const logDir = getLogsDir();
     fs.mkdirSync(logDir, { recursive: true, mode: 0o700 });
 
     // 4. plist 生成

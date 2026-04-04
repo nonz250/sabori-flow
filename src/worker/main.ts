@@ -5,7 +5,7 @@ import { loadConfig } from "./config.js";
 import { fetchIssues } from "./fetcher.js";
 import { processIssue } from "./pipeline.js";
 import { configureLogger, createLogger, rotateOldLogs } from "./logger.js";
-import { getConfigPath } from "../utils/paths.js";
+import { getConfigPath, getLogsDir } from "../utils/paths.js";
 
 const logger = createLogger("main");
 
@@ -178,7 +178,7 @@ export async function workerMain(
   }
 
   // ログ設定
-  configureLogger({ logDir: appConfig.execution.logDir });
+  configureLogger({ logDir: getLogsDir() });
   rotateOldLogs();
 
   logger.info(

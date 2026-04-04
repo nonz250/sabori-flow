@@ -1,8 +1,7 @@
-import { input, confirm } from "@inquirer/prompts";
+import { confirm } from "@inquirer/prompts";
 import { stringify } from "yaml";
 import fs from "fs";
-import path from "path";
-import { getConfigDir, getConfigPath, getLogsDir, expandTilde } from "../utils/paths.js";
+import { getConfigDir, getConfigPath } from "../utils/paths.js";
 import {
   getDefaultLabels,
   getDefaultPriorityLabels,
@@ -13,7 +12,7 @@ import {
   promptRepository,
 } from "./helpers/repository-prompt.js";
 
-function buildConfigData(repos: RepositoryInput[], logDir: string) {
+function buildConfigData(repos: RepositoryInput[]) {
   return {
     repositories: repos.map((r) => ({
       owner: r.owner,
@@ -22,7 +21,7 @@ function buildConfigData(repos: RepositoryInput[], logDir: string) {
       labels: getDefaultLabels(),
       priority_labels: getDefaultPriorityLabels(),
     })),
-    execution: { ...getDefaultExecution(), log_dir: logDir },
+    execution: getDefaultExecution(),
   };
 }
 
@@ -53,19 +52,8 @@ export async function initCommand(): Promise<void> {
     })
   );
 
-  // ログ出力先
-  const rawLogDir = await input({
-    message: `ログ出力先のパスを入力してください (~/ 可):`,
-    default: getLogsDir(),
-    validate: (v) => {
-      const expanded = expandTilde(v);
-      return path.isAbsolute(expanded) || "絶対パスを入力してください (~/... も可)";
-    },
-  });
-  const logDir = expandTilde(rawLogDir);
-
   // YAML 生成・書き込み
-  const config = buildConfigData(repos, logDir);
+  const config = buildConfigData(repos);
   const yamlStr = stringify(config);
   fs.writeFileSync(getConfigPath(), yamlStr, { encoding: "utf-8", mode: 0o600 });
 
