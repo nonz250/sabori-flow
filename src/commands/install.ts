@@ -1,4 +1,5 @@
 import fs from "fs";
+import path from "path";
 import YAML from "yaml";
 import {
   PACKAGE_ROOT,
@@ -24,6 +25,24 @@ function getLogDir(): string {
     // config パース失敗時はデフォルト
   }
   return getLogsDir();
+}
+
+const STANDARD_PATHS = ["/usr/local/bin", "/usr/bin", "/bin"];
+const REQUIRED_COMMANDS = ["node", "git", "gh", "claude"];
+
+function buildMinimalPath(): string {
+  const dirs = new Set<string>(STANDARD_PATHS);
+  for (const cmd of REQUIRED_COMMANDS) {
+    try {
+      const cmdPath = exec("which", [cmd]);
+      if (cmdPath && cmdPath.startsWith("/")) {
+        dirs.add(path.dirname(cmdPath));
+      }
+    } catch {
+      // コマンドが見つからない場合はスキップ
+    }
+  }
+  return [...dirs].join(":");
 }
 
 export async function installCommand(): Promise<void> {
@@ -68,7 +87,7 @@ export async function installCommand(): Promise<void> {
     const plist = renderPlist(template, {
       nodePath,
       projectRoot: PACKAGE_ROOT,
-      path: process.env.PATH || "",
+      path: buildMinimalPath(),
       logDir,
     });
     fs.writeFileSync(getPlistGeneratedPath(), plist, { encoding: "utf-8", mode: 0o600 });
