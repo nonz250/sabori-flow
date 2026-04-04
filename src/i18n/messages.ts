@@ -43,9 +43,9 @@ const jaMessages: MessageKeys = {
   "install.generatingPlist": "plist を生成中...",
   "install.registeringLaunchd": "launchd に登録中...",
   "install.localComplete":
-    "\nローカルビルドのワーカーを登録しました。1時間ごとにワーカーが実行されます。",
+    "\nローカルビルドのワーカーを登録しました。{minutes}分ごとにワーカーが実行されます。",
   "install.complete":
-    "\nインストールが完了しました。1時間ごとにワーカーが実行されます。",
+    "\nインストールが完了しました。{minutes}分ごとにワーカーが実行されます。",
   "install.unexpectedError": "予期しないエラーが発生しました:",
 
   // uninstall command
@@ -114,9 +114,9 @@ const enMessages: MessageKeys = {
   "install.generatingPlist": "Generating plist...",
   "install.registeringLaunchd": "Registering with launchd...",
   "install.localComplete":
-    "\nLocal build worker registered. The worker will run every hour.",
+    "\nLocal build worker registered. The worker will run every {minutes} minutes.",
   "install.complete":
-    "\nInstallation complete. The worker will run every hour.",
+    "\nInstallation complete. The worker will run every {minutes} minutes.",
   "install.unexpectedError": "Unexpected error:",
 
   // uninstall command

@@ -317,7 +317,7 @@ function parsePhaseLabels(raw: unknown, phaseName: string): PhaseLabels {
 
 function parseExecution(raw: unknown): Omit<ExecutionConfig, "language"> {
   if (raw === undefined || raw === null) {
-    return { maxParallel: 1, maxIssuesPerRepo: 1, autonomy: Autonomy.INTERACTIVE };
+    return { maxParallel: 1, maxIssuesPerRepo: 1, autonomy: Autonomy.INTERACTIVE, intervalMinutes: 60 };
   }
 
   if (typeof raw !== "object" || Array.isArray(raw)) {
@@ -387,10 +387,33 @@ function parseExecution(raw: unknown): Omit<ExecutionConfig, "language"> {
     );
   }
 
+  // interval_minutes
+  const rawIntervalMinutes =
+    "interval_minutes" in record ? record["interval_minutes"] : 60;
+
+  if (typeof rawIntervalMinutes !== "number" || !Number.isInteger(rawIntervalMinutes)) {
+    throw new ConfigValidationError(
+      `execution.interval_minutes: must be an integer, got ${typeof rawIntervalMinutes}`,
+    );
+  }
+
+  if (rawIntervalMinutes < 10) {
+    throw new ConfigValidationError(
+      `execution.interval_minutes: must be >= 10, got ${rawIntervalMinutes}`,
+    );
+  }
+
+  if (rawIntervalMinutes > 1440) {
+    throw new ConfigValidationError(
+      `execution.interval_minutes: must be <= 1440, got ${rawIntervalMinutes}`,
+    );
+  }
+
   return {
     maxParallel: rawMaxParallel,
     maxIssuesPerRepo: rawMaxIssuesPerRepo,
     autonomy: rawAutonomy as Autonomy,
+    intervalMinutes: rawIntervalMinutes,
   };
 }
 

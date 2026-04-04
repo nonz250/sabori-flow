@@ -10,7 +10,7 @@
 __PROGRAM_ARGUMENTS__
 
     <key>StartInterval</key>
-    <integer>3600</integer>
+    <integer>__START_INTERVAL__</integer>
 
     <key>StandardOutPath</key>
     <string>__LOG_DIR__/launchd_stdout.log</string>
