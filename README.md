@@ -91,7 +91,7 @@ flowchart LR
 
 When processing fails, a `failed` label is applied and a failure comment is posted to the Issue.
 
-1. Check `logs/worker.log` for details
+1. Check `~/.sabori-flow/logs/worker.log` for details
 2. Fix the Issue content as needed
 3. Remove the `failed` label and re-apply `claude/plan` or `claude/impl`
 
@@ -118,14 +118,14 @@ launchctl start com.github.nonz250.sabori-flow
 **Log locations:**
 
 ```
-logs/worker.log              # Worker log (daily rotation, 7-day retention)
-logs/launchd_stdout.log      # stdout via launchd
-logs/launchd_stderr.log      # stderr via launchd
+~/.sabori-flow/logs/worker.log              # Worker log (daily rotation, 7-day retention)
+~/.sabori-flow/logs/launchd_stdout.log      # stdout via launchd
+~/.sabori-flow/logs/launchd_stderr.log      # stderr via launchd
 ```
 
 ## Configuration
 
-Create `config.yml` based on `config.yml.example`, or generate it interactively with `npx sabori-flow init`.
+The configuration file is stored at `~/.config/sabori-flow/config.yml`. Create it based on `config.yml.example`, or generate it interactively with `npx sabori-flow init`.
 
 ```yaml
 repositories:
@@ -149,6 +149,7 @@ repositories:
 
 execution:
   max_parallel: 1
+  max_issues_per_repo: 1
 ```
 
 | Key | Description |
@@ -161,12 +162,19 @@ execution:
 | `repositories[].labels.impl` | Labels for the impl phase: `trigger`, `in_progress`, `done`, `failed` |
 | `repositories[].priority_labels` | Priority labels. Issues with labels higher in the list are processed first |
 | `execution.max_parallel` | Number of parallel executions. Default is `1` (sequential) |
+| `execution.max_issues_per_repo` | Maximum number of issues to process per repository. Default is `1` |
 
 ## Security
 
 This tool runs Claude Code CLI with `--dangerously-skip-permissions`, which allows nearly arbitrary operations on your machine. It is executed periodically by launchd without user interaction.
 
 By default, the `npx` installation fetches packages from the npm registry at runtime. If the npm package were compromised, malicious code could be executed automatically by the scheduler.
+
+Additionally, the following defenses are built in:
+
+- **Author permission check** -- Only issues created by users with OWNER, MEMBER, or COLLABORATOR association are processed; others are automatically skipped.
+- **Secret masking** -- Before posting a success comment, output is scanned and secrets are automatically masked.
+- **Random boundary tokens** -- Prompts use randomized boundary tokens to mitigate prompt injection.
 
 To mitigate this risk, use the `--local` flag to run from a locally built copy you can audit:
 
