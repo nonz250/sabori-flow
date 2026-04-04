@@ -18,6 +18,7 @@ import {
   transitionToInProgress,
   transitionToDone,
   transitionToFailed,
+  addImplTriggerLabel,
   LabelError,
 } from "../../src/worker/label.js";
 import { runCommand } from "../../src/worker/process.js";
@@ -415,5 +416,87 @@ describe("ラベル自動作成", () => {
       transitionToInProgress("nonz250/example-app", 42, phaseLabels),
     ).rejects.toThrow(LabelError);
     expect(mockedRunCommand).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("addImplTriggerLabel", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("impl trigger ラベルを追加する gh issue edit が呼ばれる", async () => {
+    mockedRunCommand.mockResolvedValue({
+      success: true,
+      stdout: "",
+      stderr: "",
+    });
+
+    await addImplTriggerLabel("nonz250/example-app", 42, "claude/impl");
+
+    expect(mockedRunCommand).toHaveBeenCalledOnce();
+    expect(mockedRunCommand).toHaveBeenCalledWith(
+      "gh",
+      [
+        "issue",
+        "edit",
+        "--repo",
+        "nonz250/example-app",
+        "42",
+        "--add-label",
+        "claude/impl",
+      ],
+      { timeoutMs: 120_000 },
+    );
+  });
+
+  it("gh コマンドが非0終了コードを返した場合 LabelError が throw される", async () => {
+    mockedRunCommand.mockResolvedValue({
+      success: false,
+      stdout: "",
+      stderr: "permission denied",
+    });
+
+    await expect(
+      addImplTriggerLabel("nonz250/example-app", 42, "claude/impl"),
+    ).rejects.toThrow(LabelError);
+  });
+
+  it("ラベルが存在しない場合、label create → issue edit 再試行が行われる", async () => {
+    mockedRunCommand.mockResolvedValueOnce({
+      success: false,
+      stdout: "",
+      stderr: "'claude/impl' not found",
+    });
+    mockedRunCommand.mockResolvedValueOnce({
+      success: true,
+      stdout: "",
+      stderr: "",
+    });
+    mockedRunCommand.mockResolvedValueOnce({
+      success: true,
+      stdout: "",
+      stderr: "",
+    });
+
+    await addImplTriggerLabel("nonz250/example-app", 42, "claude/impl");
+
+    expect(mockedRunCommand).toHaveBeenCalledTimes(3);
+    expect(mockedRunCommand).toHaveBeenNthCalledWith(
+      2,
+      "gh",
+      ["label", "create", "claude/impl", "--repo", "nonz250/example-app"],
+      { timeoutMs: 120_000 },
+    );
+  });
+
+  it("タイムアウト時に LabelError が throw される", async () => {
+    mockedRunCommand.mockRejectedValue(new ProcessTimeoutError(120_000));
+
+    await expect(
+      addImplTriggerLabel("nonz250/example-app", 42, "claude/impl"),
+    ).rejects.toThrow(LabelError);
+    await expect(
+      addImplTriggerLabel("nonz250/example-app", 42, "claude/impl"),
+    ).rejects.toThrow("gh issue edit timed out after 120 seconds");
   });
 });
