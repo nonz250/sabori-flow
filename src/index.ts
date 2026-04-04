@@ -36,4 +36,13 @@ program
   .description("launchd の登録を解除します")
   .action(uninstallCommand);
 
+program
+  .command("worker")
+  .description("ワーカーを実行します（通常は launchd から自動的に呼び出されます）")
+  .action(async () => {
+    const { workerMain } = await import("./worker/main.js");
+    const exitCode = await workerMain();
+    process.exit(exitCode);
+  });
+
 program.parse();
