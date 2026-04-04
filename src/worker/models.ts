@@ -1,3 +1,5 @@
+import type { Language } from "../i18n/types.js";
+
 // ---------- Enums (as const) ----------
 
 /** 処理フェーズ */
@@ -60,6 +62,7 @@ export interface ExecutionConfig {
 
 /** アプリケーション全体の設定 */
 export interface AppConfig {
+  readonly language: Language;
   readonly repositories: readonly RepositoryConfig[];
   readonly execution: ExecutionConfig;
 }

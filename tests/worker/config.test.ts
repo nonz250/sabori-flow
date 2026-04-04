@@ -119,6 +119,7 @@ describe("loadConfig - normal", () => {
     expect(repo.labels.impl.failed).toBe("impl:failed");
     expect(repo.priorityLabels).toEqual(["priority:high", "priority:low"]);
     expect(result.execution.maxParallel).toBe(4);
+    expect(result.language).toBe("ja");
   });
 
   it("execution default (max_parallel=1 when execution is omitted)", () => {
@@ -556,4 +557,67 @@ describe("loadConfig - tilde expansion", () => {
     expect(result.repositories[0].localPath).toBe(expected);
   });
 
+});
+
+describe("loadConfig - language validation", () => {
+  function makeYamlWithLanguage(language: unknown): string {
+    if (typeof language === "string") {
+      return `${VALID_YAML}\nlanguage: "${language}"\n`;
+    }
+    return `${VALID_YAML}\nlanguage: ${language}\n`;
+  }
+
+  it("language: 'ja' parses correctly", () => {
+    mockYaml(makeYamlWithLanguage("ja"));
+    const result = loadConfig("/path/to/config.yml");
+
+    expect(result.language).toBe("ja");
+  });
+
+  it("language: 'en' parses correctly", () => {
+    mockYaml(makeYamlWithLanguage("en"));
+    const result = loadConfig("/path/to/config.yml");
+
+    expect(result.language).toBe("en");
+  });
+
+  it("language omitted defaults to DEFAULT_LANGUAGE ('ja')", () => {
+    mockYaml(VALID_YAML);
+    const result = loadConfig("/path/to/config.yml");
+
+    expect(result.language).toBe("ja");
+  });
+
+  it("language: 'fr' throws ConfigValidationError", () => {
+    mockYaml(makeYamlWithLanguage("fr"));
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /must be one of: ja, en/,
+    );
+  });
+
+  it("language: 123 throws ConfigValidationError", () => {
+    mockYaml(makeYamlWithLanguage(123));
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /must be a string/,
+    );
+  });
+
+  it("language: '' (empty string) throws ConfigValidationError", () => {
+    mockYaml(makeYamlWithLanguage(""));
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /must be one of: ja, en/,
+    );
+  });
 });
