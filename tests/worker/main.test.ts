@@ -372,4 +372,145 @@ describe("workerMain", () => {
       expect(result).toBe(0);
     });
   });
+
+  // -----------------------------------------------------------------------
+  // maxIssuesPerRepo 上限制御
+  // -----------------------------------------------------------------------
+
+  describe("maxIssuesPerRepo 上限制御", () => {
+    it("Issue 数が上限を超える場合、上限件数のみ processIssue が呼ばれる", async () => {
+      vi.mocked(deps.loadConfig).mockReturnValue(
+        makeAppConfig({ execution: { maxIssuesPerRepo: 2 } }),
+      );
+      vi.mocked(deps.fetchIssues)
+        .mockResolvedValueOnce([
+          makeIssue({ number: 1, phase: Phase.PLAN }),
+          makeIssue({ number: 2, phase: Phase.PLAN }),
+          makeIssue({ number: 3, phase: Phase.PLAN }),
+          makeIssue({ number: 4, phase: Phase.PLAN }),
+          makeIssue({ number: 5, phase: Phase.PLAN }),
+        ])
+        .mockResolvedValueOnce([]);
+      vi.mocked(deps.processIssue).mockResolvedValue(true);
+
+      const result = await workerMain("/path/to/config.yml", deps);
+
+      expect(result).toBe(0);
+      expect(deps.processIssue).toHaveBeenCalledTimes(2);
+    });
+
+    it("Issue 数がちょうど上限と等しい場合、全件処理される", async () => {
+      vi.mocked(deps.loadConfig).mockReturnValue(
+        makeAppConfig({ execution: { maxIssuesPerRepo: 3 } }),
+      );
+      vi.mocked(deps.fetchIssues)
+        .mockResolvedValueOnce([
+          makeIssue({ number: 1, phase: Phase.PLAN }),
+          makeIssue({ number: 2, phase: Phase.PLAN }),
+          makeIssue({ number: 3, phase: Phase.PLAN }),
+        ])
+        .mockResolvedValueOnce([]);
+      vi.mocked(deps.processIssue).mockResolvedValue(true);
+
+      const result = await workerMain("/path/to/config.yml", deps);
+
+      expect(result).toBe(0);
+      expect(deps.processIssue).toHaveBeenCalledTimes(3);
+    });
+
+    it("Issue 数が上限未満の場合、全件処理される", async () => {
+      vi.mocked(deps.loadConfig).mockReturnValue(
+        makeAppConfig({ execution: { maxIssuesPerRepo: 5 } }),
+      );
+      vi.mocked(deps.fetchIssues)
+        .mockResolvedValueOnce([
+          makeIssue({ number: 1, phase: Phase.PLAN }),
+          makeIssue({ number: 2, phase: Phase.PLAN }),
+        ])
+        .mockResolvedValueOnce([]);
+      vi.mocked(deps.processIssue).mockResolvedValue(true);
+
+      const result = await workerMain("/path/to/config.yml", deps);
+
+      expect(result).toBe(0);
+      expect(deps.processIssue).toHaveBeenCalledTimes(2);
+    });
+
+    it("plan で上限に達すると impl フェーズの fetchIssues が呼ばれない", async () => {
+      vi.mocked(deps.loadConfig).mockReturnValue(
+        makeAppConfig({ execution: { maxIssuesPerRepo: 1 } }),
+      );
+      vi.mocked(deps.fetchIssues)
+        .mockResolvedValueOnce([
+          makeIssue({ number: 1, phase: Phase.PLAN }),
+        ]);
+      vi.mocked(deps.processIssue).mockResolvedValue(true);
+
+      await workerMain("/path/to/config.yml", deps);
+
+      // plan の fetchIssues のみ呼ばれ、impl の fetchIssues は呼ばれない
+      expect(deps.fetchIssues).toHaveBeenCalledTimes(1);
+      expect(deps.processIssue).toHaveBeenCalledTimes(1);
+    });
+
+    it("plan で一部消費し impl で残りを消費する", async () => {
+      vi.mocked(deps.loadConfig).mockReturnValue(
+        makeAppConfig({ execution: { maxIssuesPerRepo: 3 } }),
+      );
+      vi.mocked(deps.fetchIssues)
+        .mockResolvedValueOnce([
+          makeIssue({ number: 1, phase: Phase.PLAN }),
+          makeIssue({ number: 2, phase: Phase.PLAN }),
+        ])
+        .mockResolvedValueOnce([
+          makeIssue({ number: 10, phase: Phase.IMPL }),
+          makeIssue({ number: 11, phase: Phase.IMPL }),
+          makeIssue({ number: 12, phase: Phase.IMPL }),
+        ]);
+      vi.mocked(deps.processIssue).mockResolvedValue(true);
+
+      const result = await workerMain("/path/to/config.yml", deps);
+
+      expect(result).toBe(0);
+      // plan 2件 + impl 1件 = 合計3件（上限）
+      expect(deps.processIssue).toHaveBeenCalledTimes(3);
+    });
+
+    it("plan の fetchIssues が失敗しても quota は消費されず impl に全 quota が残る", async () => {
+      vi.mocked(deps.loadConfig).mockReturnValue(
+        makeAppConfig({ execution: { maxIssuesPerRepo: 2 } }),
+      );
+      vi.mocked(deps.fetchIssues)
+        .mockRejectedValueOnce(new Error("plan fetch failed"))
+        .mockResolvedValueOnce([
+          makeIssue({ number: 10, phase: Phase.IMPL }),
+          makeIssue({ number: 11, phase: Phase.IMPL }),
+          makeIssue({ number: 12, phase: Phase.IMPL }),
+        ]);
+      vi.mocked(deps.processIssue).mockResolvedValue(true);
+
+      const result = await workerMain("/path/to/config.yml", deps);
+
+      expect(result).toBe(0);
+      // plan は失敗（quota 消費なし）、impl で上限 2 件のみ処理
+      expect(deps.processIssue).toHaveBeenCalledTimes(2);
+    });
+
+    it("上限が 1 の最小値で正しく動作する", async () => {
+      vi.mocked(deps.loadConfig).mockReturnValue(
+        makeAppConfig({ execution: { maxIssuesPerRepo: 1 } }),
+      );
+      vi.mocked(deps.fetchIssues)
+        .mockResolvedValueOnce([
+          makeIssue({ number: 1, phase: Phase.PLAN }),
+          makeIssue({ number: 2, phase: Phase.PLAN }),
+        ]);
+      vi.mocked(deps.processIssue).mockResolvedValue(true);
+
+      const result = await workerMain("/path/to/config.yml", deps);
+
+      expect(result).toBe(0);
+      expect(deps.processIssue).toHaveBeenCalledTimes(1);
+    });
+  });
 });

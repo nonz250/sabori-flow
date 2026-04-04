@@ -39,13 +39,15 @@ export const defaultWorkerDeps: WorkerDeps = {
 /**
  * 指定リポジトリ・フェーズの Issue を取得し、パイプラインを実行する。
  *
- * @returns 1 件以上の Issue を正常に処理できた場合 true
+ * @returns anySuccess: 1 件以上の Issue を正常に処理できた場合 true,
+ *          processedCount: 処理対象とした Issue 件数
  */
 async function processPhase(
   repoConfig: RepositoryConfig,
   phase: Phase,
   deps: WorkerDeps,
-): Promise<boolean> {
+  remainingQuota: number,
+): Promise<{ anySuccess: boolean; processedCount: number }> {
   const fullName = repoFullName(repoConfig);
 
   logger.info("[%s] %s フェーズの Issue を取得中...", fullName, phase);
@@ -60,7 +62,7 @@ async function processPhase(
       phase,
       error,
     );
-    return false;
+    return { anySuccess: false, processedCount: 0 };
   }
 
   logger.info(
@@ -71,11 +73,22 @@ async function processPhase(
   );
 
   if (issues.length === 0) {
-    return true; // 0 件は成功扱い
+    return { anySuccess: true, processedCount: 0 }; // 0 件は成功扱い
+  }
+
+  const targetIssues = issues.slice(0, remainingQuota);
+  if (targetIssues.length < issues.length) {
+    logger.info(
+      "[%s] %s フェーズ: 上限により %s/%s 件を処理",
+      fullName,
+      phase,
+      targetIssues.length,
+      issues.length,
+    );
   }
 
   let anySuccess = false;
-  for (const issue of issues) {
+  for (const issue of targetIssues) {
     logger.info(
       "  #%s [%s] %s の処理を開始",
       issue.number,
@@ -88,7 +101,7 @@ async function processPhase(
     }
   }
 
-  return anySuccess;
+  return { anySuccess, processedCount: targetIssues.length };
 }
 
 /**
@@ -98,12 +111,21 @@ async function processPhase(
  */
 async function processRepository(
   repoConfig: RepositoryConfig,
+  maxIssuesPerRepo: number,
   deps: WorkerDeps,
 ): Promise<boolean> {
+  const fullName = repoFullName(repoConfig);
   let anySuccess = false;
+  let remaining = maxIssuesPerRepo;
+
   for (const phase of [PhaseEnum.PLAN, PhaseEnum.IMPL]) {
-    const success = await processPhase(repoConfig, phase, deps);
-    if (success) {
+    if (remaining <= 0) {
+      logger.info("[%s] リポジトリ上限に達したため %s フェーズをスキップ", fullName, phase);
+      break;
+    }
+    const result = await processPhase(repoConfig, phase, deps, remaining);
+    remaining -= result.processedCount;
+    if (result.anySuccess) {
       anySuccess = true;
     }
   }
@@ -176,7 +198,7 @@ export async function workerMain(
     appConfig.repositories.map(async (repoConfig) => {
       await semaphore.acquire();
       try {
-        return await processRepository(repoConfig, deps);
+        return await processRepository(repoConfig, appConfig.execution.maxIssuesPerRepo, deps);
       } finally {
         semaphore.release();
       }
