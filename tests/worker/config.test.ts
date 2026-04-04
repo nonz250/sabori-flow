@@ -542,38 +542,6 @@ describe("loadConfig - local_path validation", () => {
   });
 });
 
-describe("loadConfig - log_dir validation", () => {
-  it("log_dir is empty string", () => {
-    const yaml = VALID_YAML.replace(
-      "max_parallel: 4",
-      'max_parallel: 4\n  log_dir: ""',
-    );
-    mockYaml(yaml);
-
-    expect(() => loadConfig("/path/to/config.yml")).toThrow(
-      ConfigValidationError,
-    );
-    expect(() => loadConfig("/path/to/config.yml")).toThrow(
-      /log_dir: must be a non-empty string/,
-    );
-  });
-
-  it("log_dir is a relative path", () => {
-    const yaml = VALID_YAML.replace(
-      "max_parallel: 4",
-      "max_parallel: 4\n  log_dir: relative/logs",
-    );
-    mockYaml(yaml);
-
-    expect(() => loadConfig("/path/to/config.yml")).toThrow(
-      ConfigValidationError,
-    );
-    expect(() => loadConfig("/path/to/config.yml")).toThrow(
-      /log_dir: must be an absolute path/,
-    );
-  });
-});
-
 describe("loadConfig - tilde expansion", () => {
   it("local_path with tilde is expanded", () => {
     const yaml = VALID_YAML.replace(
@@ -588,16 +556,4 @@ describe("loadConfig - tilde expansion", () => {
     expect(result.repositories[0].localPath).toBe(expected);
   });
 
-  it("log_dir with tilde is expanded", () => {
-    const yaml = VALID_YAML.replace(
-      "max_parallel: 4",
-      "max_parallel: 4\n  log_dir: ~/logs",
-    );
-    mockYaml(yaml);
-
-    const result = loadConfig("/path/to/config.yml");
-    const expected = `${homedir()}/logs`;
-
-    expect(result.execution.logDir).toBe(expected);
-  });
 });

@@ -8,7 +8,7 @@ import type {
   LabelsConfig,
   PhaseLabels,
 } from "./models.js";
-import { expandTilde, getLogsDir } from "../utils/paths.js";
+import { expandTilde } from "../utils/paths.js";
 
 // ---------- Custom error ----------
 
@@ -276,7 +276,7 @@ function parsePhaseLabels(raw: unknown, phaseName: string): PhaseLabels {
 
 function parseExecution(raw: unknown): ExecutionConfig {
   if (raw === undefined || raw === null) {
-    return { maxParallel: 1, maxIssuesPerRepo: 1, logDir: getLogsDir() };
+    return { maxParallel: 1, maxIssuesPerRepo: 1 };
   }
 
   if (typeof raw !== "object" || Array.isArray(raw)) {
@@ -329,24 +329,7 @@ function parseExecution(raw: unknown): ExecutionConfig {
     );
   }
 
-  // log_dir
-  const rawLogDir = "log_dir" in record ? record["log_dir"] : getLogsDir();
-
-  if (typeof rawLogDir !== "string" || rawLogDir === "") {
-    throw new ConfigValidationError(
-      "execution.log_dir: must be a non-empty string",
-    );
-  }
-
-  const logDir = expandTilde(rawLogDir);
-
-  if (!isAbsolutePath(logDir)) {
-    throw new ConfigValidationError(
-      `execution.log_dir: must be an absolute path, got '${logDir}'`,
-    );
-  }
-
-  return { maxParallel: rawMaxParallel, maxIssuesPerRepo: rawMaxIssuesPerRepo, logDir };
+  return { maxParallel: rawMaxParallel, maxIssuesPerRepo: rawMaxIssuesPerRepo };
 }
 
 // ---------- Helpers ----------

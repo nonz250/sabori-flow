@@ -588,76 +588,13 @@ describe("installCommand - 予期しないエラー発生時", () => {
   });
 });
 
-describe("installCommand - getLogDir: config.yml に log_dir が指定されている場合", () => {
-  it("config.yml の log_dir が使用される", async () => {
-    const configWithLogDir = YAML.stringify({
-      repositories: [],
-      execution: { log_dir: "/custom/log/dir" },
-    });
-    setupNormalFlow({ configYaml: configWithLogDir });
-
-    await runInstallCommand();
-
-    // ログディレクトリが config の log_dir で作成される
-    expect(mockedFs.mkdirSync).toHaveBeenCalledWith(
-      "/custom/log/dir",
-      { recursive: true, mode: 0o700 },
-    );
-    // renderPlist にも config の log_dir が渡される
-    expect(mockedRenderPlist.mock.calls[0][1].logDir).toBe("/custom/log/dir");
-  });
-});
-
-describe("installCommand - getLogDir: config.yml に log_dir がない場合", () => {
-  it("getLogsDir() のデフォルト値が使用される", async () => {
-    const configWithoutLogDir = YAML.stringify({
-      repositories: [],
-      execution: { max_parallel: 1 },
-    });
-    setupNormalFlow({ configYaml: configWithoutLogDir });
+describe("installCommand - ログディレクトリは getLogsDir() 固定で決まる", () => {
+  it("getLogsDir() の値がログディレクトリとして使用される", async () => {
+    setupNormalFlow();
 
     await runInstallCommand();
 
     // getLogsDir() のモック値が使用される
-    expect(mockedFs.mkdirSync).toHaveBeenCalledWith(
-      "/mock/data/logs",
-      { recursive: true, mode: 0o700 },
-    );
-    expect(mockedRenderPlist.mock.calls[0][1].logDir).toBe("/mock/data/logs");
-  });
-});
-
-describe("installCommand - getLogDir: config.yml のパースに失敗した場合", () => {
-  it("getLogsDir() のデフォルト値にフォールバックする", async () => {
-    setupNormalFlow();
-    // config.yml の readFileSync が不正な YAML を返す
-    mockedFs.readFileSync.mockImplementation((filePath: unknown) => {
-      if (filePath === "/mock/config/dir/config.yml") return ":\n  :\n  - [invalid\n";
-      if (filePath === "/mock/package-root/launchd/template.plist") return "<plist>template</plist>";
-      return "";
-    });
-
-    await runInstallCommand();
-
-    // getLogsDir() のデフォルト値にフォールバック
-    expect(mockedFs.mkdirSync).toHaveBeenCalledWith(
-      "/mock/data/logs",
-      { recursive: true, mode: 0o700 },
-    );
-    expect(mockedRenderPlist.mock.calls[0][1].logDir).toBe("/mock/data/logs");
-  });
-});
-
-describe("installCommand - getLogDir: log_dir が空文字列の場合", () => {
-  it("getLogsDir() のデフォルト値が使用される", async () => {
-    const configWithEmptyLogDir = YAML.stringify({
-      repositories: [],
-      execution: { log_dir: "" },
-    });
-    setupNormalFlow({ configYaml: configWithEmptyLogDir });
-
-    await runInstallCommand();
-
     expect(mockedFs.mkdirSync).toHaveBeenCalledWith(
       "/mock/data/logs",
       { recursive: true, mode: 0o700 },
