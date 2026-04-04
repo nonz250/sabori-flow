@@ -162,6 +162,23 @@ execution:
 | `repositories[].priority_labels` | Priority labels. Issues with labels higher in the list are processed first |
 | `execution.max_parallel` | Number of parallel executions. Default is `1` (sequential) |
 
+## Security
+
+This tool runs Claude Code CLI with `--dangerously-skip-permissions`, which allows nearly arbitrary operations on your machine. It is executed periodically by launchd without user interaction.
+
+By default, the `npx` installation fetches packages from the npm registry at runtime. If the npm package were compromised, malicious code could be executed automatically by the scheduler.
+
+To mitigate this risk, use the `--local` flag to run from a locally built copy you can audit:
+
+```bash
+git clone https://github.com/nonz250/sabori-flow.git
+cd sabori-flow
+npm install
+npm run build
+npx sabori-flow init
+npx sabori-flow install --local
+```
+
 ## License
 
 [MIT](LICENSE)
