@@ -58,6 +58,7 @@ export interface RepositoryConfig {
   readonly owner: string;
   readonly repo: string;
   readonly localPath: string;
+  readonly promptsDir: string | null;
   readonly labels: LabelsConfig;
   readonly priorityLabels: readonly string[];
   readonly autoImplAfterPlan: boolean;
