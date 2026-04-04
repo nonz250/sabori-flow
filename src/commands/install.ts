@@ -33,7 +33,7 @@ export async function installCommand(): Promise<void> {
     console.error(
       "先に `npx sabori-flow init` を実行してください。",
     );
-    process.exit(1);
+    return;
   }
 
   // 2. node チェック
@@ -41,7 +41,7 @@ export async function installCommand(): Promise<void> {
     console.error(
       "Error: node が見つかりません。Node.js をインストールしてください。",
     );
-    process.exit(1);
+    return;
   }
 
   try {
@@ -85,6 +85,6 @@ export async function installCommand(): Promise<void> {
     } else {
       console.error("予期しないエラーが発生しました:", error);
     }
-    process.exit(1);
+    return;
   }
 }
