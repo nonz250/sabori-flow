@@ -21,6 +21,7 @@ export function exec(
       cwd: options?.cwd ?? process.cwd(),
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
+      timeout: 30_000,
     }).trim();
   } catch (error: unknown) {
     const e = error as { stderr?: string; message?: string };
