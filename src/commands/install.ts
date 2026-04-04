@@ -96,6 +96,7 @@ export async function installCommand(): Promise<void> {
     console.log("launchd に登録中...");
     fs.mkdirSync(PLIST_DEST_DIR, { recursive: true });
     fs.copyFileSync(getPlistGeneratedPath(), PLIST_DEST_PATH);
+    fs.chmodSync(PLIST_DEST_PATH, 0o600);
     exec("launchctl", ["load", PLIST_DEST_PATH]);
 
     console.log(
