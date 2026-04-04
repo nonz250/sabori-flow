@@ -54,6 +54,7 @@ export interface RepositoryConfig {
 /** 実行設定 */
 export interface ExecutionConfig {
   readonly maxParallel: number;
+  readonly maxIssuesPerRepo: number;
   readonly logDir: string;
 }
 
