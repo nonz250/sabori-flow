@@ -8,6 +8,7 @@ export interface RepositoryInput {
   repo: string;
   local_path: string;
   auto_impl_after_plan: boolean;
+  prompts_dir: string | null;
 }
 
 export async function promptRepository(): Promise<RepositoryInput> {
@@ -33,5 +34,18 @@ export async function promptRepository(): Promise<RepositoryInput> {
     message: "Plan 完了後に自動で impl ラベルを付与しますか?",
     default: false,
   });
-  return { owner, repo, local_path, auto_impl_after_plan };
+  const rawPromptsDir = await input({
+    message:
+      "カスタムプロンプトのディレクトリを指定しますか? (空欄でスキップ):",
+    validate: (v) => {
+      if (v === "") return true;
+      const expanded = expandTilde(v);
+      return (
+        path.isAbsolute(expanded) || "絶対パスを入力してください (~/... も可)"
+      );
+    },
+  });
+  const prompts_dir =
+    rawPromptsDir === "" ? null : expandTilde(rawPromptsDir);
+  return { owner, repo, local_path, auto_impl_after_plan, prompts_dir };
 }
