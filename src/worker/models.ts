@@ -52,6 +52,7 @@ export interface RepositoryConfig {
   readonly localPath: string;
   readonly labels: LabelsConfig;
   readonly priorityLabels: readonly string[];
+  readonly autoImplAfterPlan: boolean;
 }
 
 /** 実行設定 */
