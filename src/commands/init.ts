@@ -71,6 +71,6 @@ export async function initCommand(): Promise<void> {
 
   console.log(`\nconfig.yml を作成しました: ${getConfigPath()}`);
   console.log(
-    "次は `npx sabori-flow install` を実行してください。",
+    "次は `sabori-flow install` を実行してください。",
   );
 }
