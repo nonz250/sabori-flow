@@ -24,6 +24,7 @@ export interface Issue {
   readonly body: string | null;
   readonly labels: readonly string[];
   readonly url: string;
+  readonly authorAssociation: string;
   readonly phase: Phase;
   readonly priority: Priority;
 }

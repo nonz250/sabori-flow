@@ -57,6 +57,7 @@ export function makeIssue(overrides?: Partial<Issue>): Issue {
     body: "Issue body",
     labels: [triggerLabel],
     url: `https://github.com/testowner/testrepo/issues/${number}`,
+    authorAssociation: "OWNER",
     phase,
     priority: Priority.HIGH,
     ...overrides,

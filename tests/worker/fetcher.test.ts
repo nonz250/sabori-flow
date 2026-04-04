@@ -90,7 +90,7 @@ describe("fetchIssues", () => {
         "--state",
         "open",
         "--json",
-        "number,title,body,labels,url",
+        "number,title,body,labels,url,authorAssociation",
         "--limit",
         "100",
       ],
@@ -126,6 +126,7 @@ describe("fetchIssues", () => {
         body: "body",
         labels: [{ name: "claude/plan" }, { name: "priority:low" }],
         url: "https://github.com/nonz250/example-app/issues/5",
+        authorAssociation: "OWNER",
       },
       {
         number: 3,
@@ -133,6 +134,7 @@ describe("fetchIssues", () => {
         body: "body",
         labels: [{ name: "claude/plan" }, { name: "priority:high" }],
         url: "https://github.com/nonz250/example-app/issues/3",
+        authorAssociation: "COLLABORATOR",
       },
     ]);
     mockGhSuccess(rawJson);
@@ -203,6 +205,7 @@ describe("fetchIssues - JSON パース", () => {
         body: "Body text",
         labels: [{ name: "claude/plan" }, { name: "priority:high" }],
         url: "https://github.com/nonz250/example-app/issues/1",
+        authorAssociation: "OWNER",
       },
     ]);
     mockGhSuccess(rawJson);
@@ -218,6 +221,7 @@ describe("fetchIssues - JSON パース", () => {
     expect(issue.url).toBe(
       "https://github.com/nonz250/example-app/issues/1",
     );
+    expect(issue.authorAssociation).toBe("OWNER");
     expect(issue.phase).toBe(Phase.PLAN);
     expect(issue.priority).toBe(Priority.HIGH);
   });
@@ -234,6 +238,7 @@ describe("fetchIssues - JSON パース", () => {
           { name: "priority:low" },
         ],
         url: "https://github.com/nonz250/example-app/issues/2",
+        authorAssociation: "MEMBER",
       },
     ]);
     mockGhSuccess(rawJson);
@@ -251,6 +256,7 @@ describe("fetchIssues - JSON パース", () => {
         body: null,
         labels: [],
         url: "https://github.com/nonz250/example-app/issues/3",
+        authorAssociation: "OWNER",
       },
     ]);
     mockGhSuccess(rawJson);
@@ -354,6 +360,7 @@ describe("fetchIssues - 優先度判定", () => {
         body: "body",
         labels: [{ name: "bug" }, { name: "priority:high" }],
         url: "https://github.com/nonz250/example-app/issues/1",
+        authorAssociation: "OWNER",
       },
     ]);
     mockGhSuccess(rawJson);
@@ -371,6 +378,7 @@ describe("fetchIssues - 優先度判定", () => {
         body: "body",
         labels: [{ name: "bug" }, { name: "priority:low" }],
         url: "https://github.com/nonz250/example-app/issues/1",
+        authorAssociation: "OWNER",
       },
     ]);
     mockGhSuccess(rawJson);
@@ -388,6 +396,7 @@ describe("fetchIssues - 優先度判定", () => {
         body: "body",
         labels: [{ name: "bug" }, { name: "enhancement" }],
         url: "https://github.com/nonz250/example-app/issues/1",
+        authorAssociation: "OWNER",
       },
     ]);
     mockGhSuccess(rawJson);
@@ -405,6 +414,7 @@ describe("fetchIssues - 優先度判定", () => {
         body: "body",
         labels: [{ name: "priority:high" }, { name: "priority:low" }],
         url: "https://github.com/nonz250/example-app/issues/1",
+        authorAssociation: "OWNER",
       },
     ]);
     mockGhSuccess(rawJson);
@@ -432,6 +442,7 @@ describe("fetchIssues - ソート", () => {
         body: null,
         labels: [],
         url: "https://github.com/nonz250/example-app/issues/10",
+        authorAssociation: "OWNER",
       },
       {
         number: 1,
@@ -439,6 +450,7 @@ describe("fetchIssues - ソート", () => {
         body: null,
         labels: [{ name: "priority:low" }],
         url: "https://github.com/nonz250/example-app/issues/1",
+        authorAssociation: "MEMBER",
       },
       {
         number: 5,
@@ -446,6 +458,7 @@ describe("fetchIssues - ソート", () => {
         body: null,
         labels: [{ name: "priority:high" }],
         url: "https://github.com/nonz250/example-app/issues/5",
+        authorAssociation: "COLLABORATOR",
       },
     ]);
     mockGhSuccess(rawJson);
@@ -468,6 +481,7 @@ describe("fetchIssues - ソート", () => {
         body: null,
         labels: [{ name: "priority:low" }],
         url: "https://github.com/nonz250/example-app/issues/30",
+        authorAssociation: "OWNER",
       },
       {
         number: 10,
@@ -475,6 +489,7 @@ describe("fetchIssues - ソート", () => {
         body: null,
         labels: [{ name: "priority:low" }],
         url: "https://github.com/nonz250/example-app/issues/10",
+        authorAssociation: "OWNER",
       },
       {
         number: 20,
@@ -482,6 +497,7 @@ describe("fetchIssues - ソート", () => {
         body: null,
         labels: [{ name: "priority:low" }],
         url: "https://github.com/nonz250/example-app/issues/20",
+        authorAssociation: "OWNER",
       },
     ]);
     mockGhSuccess(rawJson);
@@ -489,5 +505,168 @@ describe("fetchIssues - ソート", () => {
     const result = await fetchIssues(makeRepoConfig(), Phase.PLAN);
 
     expect(result.map((i) => i.number)).toEqual([10, 20, 30]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// authorAssociation フィルタリングテスト（fetchIssues 経由で検証）
+// ---------------------------------------------------------------------------
+
+describe("fetchIssues - authorAssociation フィルタリング", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("OWNER の Issue は処理対象に含まれる", async () => {
+    const rawJson = makeGhJson([
+      {
+        number: 1,
+        title: "Owner issue",
+        body: "body",
+        labels: [{ name: "claude/plan" }],
+        url: "https://github.com/nonz250/example-app/issues/1",
+        authorAssociation: "OWNER",
+      },
+    ]);
+    mockGhSuccess(rawJson);
+
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN);
+
+    expect(issues).toHaveLength(1);
+    expect(issues[0].number).toBe(1);
+  });
+
+  it("MEMBER の Issue は処理対象に含まれる", async () => {
+    const rawJson = makeGhJson([
+      {
+        number: 2,
+        title: "Member issue",
+        body: "body",
+        labels: [{ name: "claude/plan" }],
+        url: "https://github.com/nonz250/example-app/issues/2",
+        authorAssociation: "MEMBER",
+      },
+    ]);
+    mockGhSuccess(rawJson);
+
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN);
+
+    expect(issues).toHaveLength(1);
+    expect(issues[0].number).toBe(2);
+  });
+
+  it("COLLABORATOR の Issue は処理対象に含まれる", async () => {
+    const rawJson = makeGhJson([
+      {
+        number: 3,
+        title: "Collaborator issue",
+        body: "body",
+        labels: [{ name: "claude/plan" }],
+        url: "https://github.com/nonz250/example-app/issues/3",
+        authorAssociation: "COLLABORATOR",
+      },
+    ]);
+    mockGhSuccess(rawJson);
+
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN);
+
+    expect(issues).toHaveLength(1);
+    expect(issues[0].number).toBe(3);
+  });
+
+  it("NONE の Issue はフィルタリングされる", async () => {
+    const rawJson = makeGhJson([
+      {
+        number: 10,
+        title: "External issue",
+        body: "body",
+        labels: [{ name: "claude/plan" }],
+        url: "https://github.com/nonz250/example-app/issues/10",
+        authorAssociation: "NONE",
+      },
+    ]);
+    mockGhSuccess(rawJson);
+
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN);
+
+    expect(issues).toHaveLength(0);
+  });
+
+  it("FIRST_TIME_CONTRIBUTOR の Issue はフィルタリングされる", async () => {
+    const rawJson = makeGhJson([
+      {
+        number: 11,
+        title: "First timer issue",
+        body: "body",
+        labels: [{ name: "claude/plan" }],
+        url: "https://github.com/nonz250/example-app/issues/11",
+        authorAssociation: "FIRST_TIME_CONTRIBUTOR",
+      },
+    ]);
+    mockGhSuccess(rawJson);
+
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN);
+
+    expect(issues).toHaveLength(0);
+  });
+
+  it("許可された Issue と許可されない Issue が混在する場合、許可された Issue のみ返される", async () => {
+    const rawJson = makeGhJson([
+      {
+        number: 1,
+        title: "Owner issue",
+        body: "body",
+        labels: [{ name: "claude/plan" }],
+        url: "https://github.com/nonz250/example-app/issues/1",
+        authorAssociation: "OWNER",
+      },
+      {
+        number: 2,
+        title: "External issue",
+        body: "body",
+        labels: [{ name: "claude/plan" }],
+        url: "https://github.com/nonz250/example-app/issues/2",
+        authorAssociation: "NONE",
+      },
+      {
+        number: 3,
+        title: "Member issue",
+        body: "body",
+        labels: [{ name: "claude/plan" }],
+        url: "https://github.com/nonz250/example-app/issues/3",
+        authorAssociation: "MEMBER",
+      },
+      {
+        number: 4,
+        title: "Contributor issue",
+        body: "body",
+        labels: [{ name: "claude/plan" }],
+        url: "https://github.com/nonz250/example-app/issues/4",
+        authorAssociation: "CONTRIBUTOR",
+      },
+    ]);
+    mockGhSuccess(rawJson);
+
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN);
+
+    expect(issues).toHaveLength(2);
+    expect(issues.map((i) => i.number)).toEqual([1, 3]);
+  });
+
+  it("authorAssociation が未定義の場合フィルタリングされる", async () => {
+    const rawJson = makeGhJson([
+      {
+        number: 20,
+        title: "No association",
+        body: "body",
+        labels: [{ name: "claude/plan" }],
+        url: "https://github.com/nonz250/example-app/issues/20",
+      },
+    ]);
+    mockGhSuccess(rawJson);
+
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN);
+
+    expect(issues).toHaveLength(0);
   });
 });
