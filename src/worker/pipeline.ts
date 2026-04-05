@@ -1,3 +1,4 @@
+import type { Language } from "../i18n/types.js";
 import type { Issue, PhaseLabels, RepositoryConfig, ExecutionConfig } from "./models.js";
 import { Autonomy, Phase, repoFullName } from "./models.js";
 import type { ProcessResult } from "./process.js";
@@ -22,7 +23,7 @@ const logger = createLogger("pipeline");
 // ---------- Dependency Injection ----------
 
 export interface PipelineDeps {
-  buildPrompt: (issue: Issue, repoConfig: RepositoryConfig) => string;
+  buildPrompt: (issue: Issue, repoConfig: RepositoryConfig, language: Language) => string;
   runClaude: (
     prompt: string,
     options: { cwd: string; autonomy?: Autonomy },
@@ -135,7 +136,7 @@ export async function processIssue(
         // 3-1. プロンプト生成（レベル 2）
         let prompt: string;
         try {
-          prompt = deps.buildPrompt(issue, repoConfig);
+          prompt = deps.buildPrompt(issue, repoConfig, executionConfig.language);
         } catch (error: unknown) {
           logger.error(
             "Issue #%s: プロンプト生成に失敗しました [repo=%s]: %s",

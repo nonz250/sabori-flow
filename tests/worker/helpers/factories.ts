@@ -89,6 +89,7 @@ export function makeAppConfig(
     maxParallel: 1,
     maxIssuesPerRepo: 10,
     autonomy: "interactive",
+    language: overrides?.language ?? "ja",
   };
 
   return {

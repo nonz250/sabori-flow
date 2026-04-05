@@ -70,13 +70,15 @@ export function loadConfig(configPath: string): AppConfig {
   }
 
   const repositories = parseRepositories(record["repositories"]);
-  const execution = parseExecution(
+  const parsedExecution = parseExecution(
     "execution" in record ? record["execution"] : undefined,
   );
 
   const language = parseLanguage(
     "language" in record ? record["language"] : undefined,
   );
+
+  const execution: ExecutionConfig = { ...parsedExecution, language };
 
   return { language, repositories, execution };
 }
@@ -356,7 +358,7 @@ function parsePhaseLabels(raw: unknown, phaseName: string): PhaseLabels {
   };
 }
 
-function parseExecution(raw: unknown): ExecutionConfig {
+function parseExecution(raw: unknown): Omit<ExecutionConfig, "language"> {
   if (raw === undefined || raw === null) {
     return { maxParallel: 1, maxIssuesPerRepo: 1, autonomy: Autonomy.INTERACTIVE };
   }
