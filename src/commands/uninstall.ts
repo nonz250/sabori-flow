@@ -1,8 +1,11 @@
 import fs from "fs";
-import { PLIST_DEST_PATH, getPlistGeneratedPath } from "../utils/paths.js";
+import { PLIST_DEST_PATH, getConfigPath, getPlistGeneratedPath } from "../utils/paths.js";
 import { exec } from "../utils/shell.js";
+import { setLanguage, t, loadLanguageFromConfig } from "../i18n/index.js";
 
 export async function uninstallCommand(): Promise<void> {
+  setLanguage(loadLanguageFromConfig(getConfigPath()));
+
   // 1. launchd 解除
   if (fs.existsSync(PLIST_DEST_PATH)) {
     try {
@@ -11,9 +14,9 @@ export async function uninstallCommand(): Promise<void> {
       // unload 失敗は無視
     }
     fs.unlinkSync(PLIST_DEST_PATH);
-    console.log(`削除しました: ${PLIST_DEST_PATH}`);
+    console.log(t("uninstall.deleted", { path: PLIST_DEST_PATH }));
   } else {
-    console.log("LaunchAgent は登録されていません。");
+    console.log(t("uninstall.notRegistered"));
   }
 
   // 2. 生成済み plist 削除
@@ -21,5 +24,5 @@ export async function uninstallCommand(): Promise<void> {
     fs.unlinkSync(getPlistGeneratedPath());
   }
 
-  console.log("\nアンインストールが完了しました。");
+  console.log(t("uninstall.complete"));
 }

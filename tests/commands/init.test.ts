@@ -13,6 +13,7 @@ vi.mock("fs", () => ({
 
 vi.mock("@inquirer/prompts", () => ({
   confirm: vi.fn(),
+  select: vi.fn(),
 }));
 
 vi.mock("../../src/commands/helpers/repository-prompt.js", () => ({
@@ -29,13 +30,14 @@ vi.mock("../../src/utils/paths.js", async (importOriginal) => {
 });
 
 import fs from "fs";
-import { confirm } from "@inquirer/prompts";
+import { confirm, select } from "@inquirer/prompts";
 import { promptRepository } from "../../src/commands/helpers/repository-prompt.js";
 import type { RepositoryInput } from "../../src/commands/helpers/repository-prompt.js";
 import { getConfigDir, getConfigPath } from "../../src/utils/paths.js";
 
 const mockedFs = vi.mocked(fs);
 const mockedConfirm = vi.mocked(confirm);
+const mockedSelect = vi.mocked(select);
 const mockedPromptRepository = vi.mocked(promptRepository);
 const mockedGetConfigDir = vi.mocked(getConfigDir);
 const mockedGetConfigPath = vi.mocked(getConfigPath);
@@ -66,6 +68,8 @@ beforeEach(() => {
   // paths のモック関数は restoreAllMocks でリセットされるため毎回再設定
   mockedGetConfigDir.mockReturnValue("/mock/config/dir");
   mockedGetConfigPath.mockReturnValue("/mock/config/dir/config.yml");
+
+  mockedSelect.mockResolvedValue("ja");
 
   consoleSpy = {
     log: vi.spyOn(console, "log").mockImplementation(() => {}),
@@ -171,6 +175,10 @@ describe("initCommand - 書き込まれる YAML の内容", () => {
     await runInitCommand();
 
     const written = parseWrittenYaml();
+
+    // language フィールドが書き込まれている
+    expect(written.language).toBe("ja");
+
     const repos = written.repositories as Array<Record<string, unknown>>;
     expect(repos).toHaveLength(1);
 

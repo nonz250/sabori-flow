@@ -1,3 +1,5 @@
+import { DEFAULT_LANGUAGE } from "../i18n/types.js";
+
 export function getDefaultLabels() {
   return {
     plan: {
@@ -21,4 +23,8 @@ export function getDefaultPriorityLabels(): string[] {
 
 export function getDefaultExecution() {
   return { max_parallel: 1, max_issues_per_repo: 1 };
+}
+
+export function getDefaultLanguage(): string {
+  return DEFAULT_LANGUAGE;
 }
