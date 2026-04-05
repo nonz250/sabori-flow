@@ -137,28 +137,28 @@ Add a label to an Issue. The worker automatically detects it every hour and proc
 
 ```mermaid
 flowchart TD
-    A["User adds claude/plan label"] --> B["Worker runs Plan Phase"]
-    B --> C{Plan succeeded&#63;}
+    A["Add claude/plan label"] --> B["Worker runs Plan Phase"]
+    B --> C{"Succeeded #quest;"}
     C -- Yes --> D["Plan comment posted"]
-    C -- No --> E["claude/plan&#58;failed label applied"]
+    C -- No --> E["claude/plan#colon;failed label applied"]
     D --> F["User reviews plan, adds claude/impl label"]
     F --> G["Worker runs Impl Phase"]
-    G --> H{Impl succeeded&#63;}
+    G --> H{"Succeeded #quest;"}
     H -- Yes --> I["Pull Request created"]
-    H -- No --> J["claude/impl&#58;failed label applied"]
+    H -- No --> J["claude/impl#colon;failed label applied"]
 ```
 
 ### Label Transitions
 
 ```mermaid
 flowchart LR
-    A["claude/plan"] --> B["claude/plan&#58;in-progress"]
-    B --> C["claude/plan&#58;done"]
-    B --> D["claude/plan&#58;failed"]
+    A["claude/plan"] --> B["claude/plan#colon;in-progress"]
+    B --> C["claude/plan#colon;done"]
+    B --> D["claude/plan#colon;failed"]
 
-    E["claude/impl"] --> F["claude/impl&#58;in-progress"]
-    F --> G["claude/impl&#58;done"]
-    F --> H["claude/impl&#58;failed"]
+    E["claude/impl"] --> F["claude/impl#colon;in-progress"]
+    F --> G["claude/impl#colon;done"]
+    F --> H["claude/impl#colon;failed"]
 ```
 
 ### Handling Failures
