@@ -55,13 +55,6 @@ export function getBaseDir(): string {
 
 // ---------- 派生パス ----------
 
-/**
- * @deprecated Use getBaseDir() directly. Will be removed in a future version.
- */
-export function getConfigDir(): string {
-  return getBaseDir();
-}
-
 /** ~/.sabori-flow/config.yml */
 export function getConfigPath(): string {
   return path.join(getBaseDir(), "config.yml");
@@ -80,13 +73,6 @@ export function getDefaultPromptsDir(): string {
 /** ~/.sabori-flow/prompts — ユーザーカスタムプロンプトディレクトリ */
 export function getUserPromptsDir(): string {
   return path.join(getBaseDir(), "prompts");
-}
-
-/**
- * @deprecated Use getBaseDir() directly. Will be removed in a future version.
- */
-export function getDataDir(): string {
-  return getBaseDir();
 }
 
 /** ~/.sabori-flow/logs */

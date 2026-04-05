@@ -24,7 +24,7 @@ vi.mock("../../src/utils/paths.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../../src/utils/paths.js")>();
   return {
     ...original,
-    getConfigDir: vi.fn().mockReturnValue("/mock/config/dir"),
+    getBaseDir: vi.fn().mockReturnValue("/mock/config/dir"),
     getConfigPath: vi.fn().mockReturnValue("/mock/config/dir/config.yml"),
   };
 });
@@ -33,13 +33,13 @@ import fs from "fs";
 import { confirm, select } from "@inquirer/prompts";
 import { promptRepository } from "../../src/commands/helpers/repository-prompt.js";
 import type { RepositoryInput } from "../../src/commands/helpers/repository-prompt.js";
-import { getConfigDir, getConfigPath } from "../../src/utils/paths.js";
+import { getBaseDir, getConfigPath } from "../../src/utils/paths.js";
 
 const mockedFs = vi.mocked(fs);
 const mockedConfirm = vi.mocked(confirm);
 const mockedSelect = vi.mocked(select);
 const mockedPromptRepository = vi.mocked(promptRepository);
-const mockedGetConfigDir = vi.mocked(getConfigDir);
+const mockedGetBaseDir = vi.mocked(getBaseDir);
 const mockedGetConfigPath = vi.mocked(getConfigPath);
 
 // ---------- Helpers ----------
@@ -68,7 +68,7 @@ beforeEach(() => {
   vi.restoreAllMocks();
 
   // paths のモック関数は restoreAllMocks でリセットされるため毎回再設定
-  mockedGetConfigDir.mockReturnValue("/mock/config/dir");
+  mockedGetBaseDir.mockReturnValue("/mock/config/dir");
   mockedGetConfigPath.mockReturnValue("/mock/config/dir/config.yml");
 
   mockedSelect.mockResolvedValue("ja");

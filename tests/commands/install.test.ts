@@ -42,7 +42,7 @@ vi.mock("../../src/utils/paths.js", async (importOriginal) => {
     PLIST_DEST_PATH: "/mock/home/Library/LaunchAgents/com.github.nonz250.sabori-flow.plist",
     getConfigPath: vi.fn().mockReturnValue("/mock/config/dir/config.yml"),
     getLogsDir: vi.fn().mockReturnValue("/mock/data/logs"),
-    getDataDir: vi.fn().mockReturnValue("/mock/data"),
+    getBaseDir: vi.fn().mockReturnValue("/mock/data"),
     getPlistGeneratedPath: vi.fn().mockReturnValue("/mock/data/com.github.nonz250.sabori-flow.plist"),
   };
 });
@@ -53,7 +53,7 @@ import { renderPlist } from "../../src/utils/plist.js";
 import {
   getConfigPath,
   getLogsDir,
-  getDataDir,
+  getBaseDir,
   getPlistGeneratedPath,
 } from "../../src/utils/paths.js";
 
@@ -63,7 +63,7 @@ const mockedCommandExists = vi.mocked(commandExists);
 const mockedRenderPlist = vi.mocked(renderPlist);
 const mockedGetConfigPath = vi.mocked(getConfigPath);
 const mockedGetLogsDir = vi.mocked(getLogsDir);
-const mockedGetDataDir = vi.mocked(getDataDir);
+const mockedGetBaseDir = vi.mocked(getBaseDir);
 const mockedGetPlistGeneratedPath = vi.mocked(getPlistGeneratedPath);
 
 // ---------- Setup ----------
@@ -76,7 +76,7 @@ beforeEach(() => {
   // paths のモック関数は restoreAllMocks でリセットされるため毎回再設定
   mockedGetConfigPath.mockReturnValue("/mock/config/dir/config.yml");
   mockedGetLogsDir.mockReturnValue("/mock/data/logs");
-  mockedGetDataDir.mockReturnValue("/mock/data");
+  mockedGetBaseDir.mockReturnValue("/mock/data");
   mockedGetPlistGeneratedPath.mockReturnValue("/mock/data/com.github.nonz250.sabori-flow.plist");
 
   consoleSpy = {
@@ -336,7 +336,7 @@ describe("installCommand - デフォルト（npx モード）", () => {
       );
     });
 
-    it("生成した plist を getDataDir 配下に mode 0o600 で書き込む", async () => {
+    it("生成した plist を getBaseDir 配下に mode 0o600 で書き込む", async () => {
       setupNormalFlow({ renderedPlist: "<plist>final-output</plist>" });
 
       await runInstallCommand();

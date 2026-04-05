@@ -22,20 +22,6 @@ describe("getBaseDir", () => {
   });
 });
 
-describe("getConfigDir (deprecated)", () => {
-  it("getBaseDir() と同じ値を返す", async () => {
-    const { getConfigDir, getBaseDir } = await import(
-      "../../src/utils/paths.js"
-    );
-    expect(getConfigDir()).toBe(getBaseDir());
-  });
-
-  it("~/.sabori-flow を返す", async () => {
-    const { getConfigDir } = await import("../../src/utils/paths.js");
-    expect(getConfigDir()).toBe(path.join("/mock/home", ".sabori-flow"));
-  });
-});
-
 describe("getConfigPath", () => {
   it("~/.sabori-flow/config.yml を返す", async () => {
     const { getConfigPath } = await import("../../src/utils/paths.js");
@@ -51,20 +37,6 @@ describe("getUserPromptsDir", () => {
     expect(getUserPromptsDir()).toBe(
       path.join("/mock/home", ".sabori-flow", "prompts"),
     );
-  });
-});
-
-describe("getDataDir (deprecated)", () => {
-  it("getBaseDir() と同じ値を返す", async () => {
-    const { getDataDir, getBaseDir } = await import(
-      "../../src/utils/paths.js"
-    );
-    expect(getDataDir()).toBe(getBaseDir());
-  });
-
-  it("~/.sabori-flow を返す", async () => {
-    const { getDataDir } = await import("../../src/utils/paths.js");
-    expect(getDataDir()).toBe(path.join("/mock/home", ".sabori-flow"));
   });
 });
 

@@ -1,7 +1,7 @@
 import { select, confirm } from "@inquirer/prompts";
 import { stringify } from "yaml";
 import fs from "fs";
-import { getConfigDir, getConfigPath } from "../utils/paths.js";
+import { getBaseDir, getConfigPath } from "../utils/paths.js";
 import {
   getDefaultLabels,
   getDefaultPriorityLabels,
@@ -38,7 +38,7 @@ function buildConfigData(repos: RepositoryInput[], language: string) {
 export async function initCommand(): Promise<void> {
   // config.yml 存在チェック
   // XDG 準拠: config ディレクトリを事前作成
-  fs.mkdirSync(getConfigDir(), { recursive: true, mode: 0o700 });
+  fs.mkdirSync(getBaseDir(), { recursive: true, mode: 0o700 });
 
   const language = await select<Language>({
     message: "Select language / 言語を選択してください:",
