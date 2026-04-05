@@ -70,6 +70,7 @@ const jaMessages: MessageKeys = {
     "Plan 完了後に自動で impl ラベルを付与しますか?",
   "prompt.intervalMinutes": "スケジュール実行間隔（分）を入力してください（10-1440）:",
   "prompt.intervalMinutesValidation": "10 以上 1440 以下の整数を入力してください",
+  "prompt.selectEngine": "実行エンジンを選択してください:",
 
   // cli descriptions
   "cli.descriptionAdd": "既存の config.yml にリポジトリを追加します",
@@ -143,6 +144,7 @@ const enMessages: MessageKeys = {
     "Automatically add impl label after Plan completion?",
   "prompt.intervalMinutes": "Enter the scheduled execution interval in minutes (10-1440):",
   "prompt.intervalMinutesValidation": "Must be an integer between 10 and 1440",
+  "prompt.selectEngine": "Select execution engine:",
 
   // cli descriptions
   "cli.descriptionAdd": "Add a repository to existing config.yml",
