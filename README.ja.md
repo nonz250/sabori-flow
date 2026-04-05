@@ -206,6 +206,7 @@ repositories:
   - owner: nonz250
     repo: example-app
     local_path: /path/to/repo
+    # prompts_dir: /path/to/custom/prompts  # 任意: カスタムプロンプトテンプレートのディレクトリ
     labels:
       plan:
         trigger: claude/plan
@@ -234,6 +235,7 @@ language: ja
 | `repositories[].owner` | リポジトリオーナー |
 | `repositories[].repo` | リポジトリ名 |
 | `repositories[].local_path` | ローカルのクローン先パス |
+| `repositories[].prompts_dir` | （任意）カスタムプロンプトテンプレートのディレクトリ。絶対パスで指定。このディレクトリのテンプレートを優先し、存在しなければデフォルトにフォールバック |
 | `repositories[].labels` | 各フェーズのラベル名（カスタマイズ可能） |
 | `repositories[].labels.plan` | plan フェーズのラベル: `trigger`, `in_progress`, `done`, `failed` |
 | `repositories[].labels.impl` | impl フェーズのラベル: `trigger`, `in_progress`, `done`, `failed` |
@@ -254,6 +256,7 @@ language: ja
 - **Issue 作成者の権限チェック** -- OWNER、MEMBER、COLLABORATOR 以外のユーザーが作成した Issue は自動的にスキップされます。
 - **シークレットマスキング** -- 成功コメント投稿前に出力をスキャンし、シークレットを自動的にマスクします。
 - **ランダムバウンダリトークン** -- プロンプトにランダムなバウンダリトークンを使用し、プロンプトインジェクションを緩和します。
+- **カスタムテンプレートの検証** -- カスタムプロンプトテンプレートにはバウンダリプレースホルダの存在が必須で、パストラバーサルとサイズ上限（100KB）のチェックも行われます。
 
 このリスクを軽減したい場合、`--local` フラグを使用して、あなたがたチーム全体でローカルコードを監査し、監査済み��ローカルビルドとしてら実行してください。
 
