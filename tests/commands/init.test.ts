@@ -29,6 +29,16 @@ vi.mock("../../src/worker/prompt.js", () => ({
   },
 }));
 
+vi.mock("../../src/utils/migration.js", () => ({
+  detectLegacyPaths: vi.fn(() => ({
+    hasLegacyConfig: false,
+    hasLegacyData: false,
+    legacyConfigPath: "/mock/home/.config/sabori-flow/config.yml",
+    legacyDataDir: "/mock/home/.local/share/sabori-flow",
+  })),
+  formatMigrationMessage: vi.fn(() => null),
+}));
+
 vi.mock("../../src/utils/paths.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../../src/utils/paths.js")>();
   return {
