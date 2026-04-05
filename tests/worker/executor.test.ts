@@ -9,7 +9,20 @@ vi.mock("../../src/worker/process.js", async (importOriginal) => {
   };
 });
 
-import { runClaude, ExecutorError } from "../../src/worker/executor.js";
+const { mockLoggerInstance } = vi.hoisted(() => ({
+  mockLoggerInstance: {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  },
+}));
+
+vi.mock("../../src/worker/logger.js", () => ({
+  createLogger: vi.fn(() => mockLoggerInstance),
+}));
+
+import { runClaude, ExecutorError, resolveClaudeAutonomyFlags } from "../../src/worker/executor.js";
 import {
   runCommand,
   ProcessTimeoutError,
@@ -242,5 +255,49 @@ describe("runClaude", () => {
       expect(args).toEqual(["-p"]);
       expect(args).not.toContain("--dangerously-skip-permissions");
     });
+
+    it("autonomy が sandboxed の場合 WARN ログが出力される", async () => {
+      mockedRunCommand.mockResolvedValue({
+        success: true,
+        stdout: "",
+        stderr: "",
+      });
+
+      mockLoggerInstance.warn.mockClear();
+
+      await runClaude("prompt text", { autonomy: "sandboxed" });
+
+      expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
+        "Claude Code does not support 'sandboxed' autonomy; falling back to 'interactive'",
+      );
+    });
+
+    it("autonomy が full の場合 sandboxed WARN ログが出力されない", async () => {
+      mockedRunCommand.mockResolvedValue({
+        success: true,
+        stdout: "",
+        stderr: "",
+      });
+
+      mockLoggerInstance.warn.mockClear();
+
+      await runClaude("prompt text", { autonomy: "full" });
+
+      expect(mockLoggerInstance.warn).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe("resolveClaudeAutonomyFlags", () => {
+  it("full の場合 --dangerously-skip-permissions を返す", () => {
+    expect(resolveClaudeAutonomyFlags("full")).toEqual(["--dangerously-skip-permissions"]);
+  });
+
+  it("sandboxed の場合 空配列を返す", () => {
+    expect(resolveClaudeAutonomyFlags("sandboxed")).toEqual([]);
+  });
+
+  it("interactive の場合 空配列を返す", () => {
+    expect(resolveClaudeAutonomyFlags("interactive")).toEqual([]);
   });
 });

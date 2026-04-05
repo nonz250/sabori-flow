@@ -1,5 +1,5 @@
 import type { AppConfig, ExecutionConfig, Issue, Phase, RepositoryConfig } from "./models.js";
-import { repoFullName } from "./models.js";
+import { Autonomy, repoFullName } from "./models.js";
 import { Phase as PhaseEnum } from "./models.js";
 import { loadConfig } from "./config.js";
 import { fetchIssues } from "./fetcher.js";
@@ -187,6 +187,12 @@ export async function workerMain(
     "config.yml を読み込みました (リポジトリ数: %s)",
     appConfig.repositories.length,
   );
+
+  if (appConfig.execution.autonomy === Autonomy.FULL) {
+    logger.warn(
+      "autonomy is set to 'full'. Claude Code CLI will run with --dangerously-skip-permissions.",
+    );
+  }
 
   // リポジトリ並列処理 (Promise.allSettled + セマフォ制御)
   const semaphore = new Semaphore(appConfig.execution.maxParallel);

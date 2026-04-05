@@ -5,6 +5,9 @@ import {
 } from "./process.js";
 import type { ProcessResult } from "./process.js";
 import { Autonomy } from "./models.js";
+import { createLogger } from "./logger.js";
+
+const logger = createLogger("executor");
 
 export class ExecutorError extends Error {
   constructor(message: string) {
@@ -37,11 +40,14 @@ export async function runClaude(
 ): Promise<ProcessResult> {
   const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
-  const args = ["-p"];
   const autonomy = options?.autonomy ?? Autonomy.INTERACTIVE;
-  if (autonomy === Autonomy.FULL) {
-    args.push("--dangerously-skip-permissions");
+  const autonomyFlags = resolveClaudeAutonomyFlags(autonomy);
+  if (autonomy === Autonomy.SANDBOXED) {
+    logger.warn(
+      "Claude Code does not support 'sandboxed' autonomy; falling back to 'interactive'",
+    );
   }
+  const args = ["-p", ...autonomyFlags];
 
   try {
     return await runCommand(
@@ -63,5 +69,26 @@ export async function runClaude(
       throw new ExecutorError(error.message);
     }
     throw error;
+  }
+}
+
+/**
+ * Autonomy レベルから Claude Code CLI のフラグを解決する。
+ *
+ * Claude Code は full と interactive のみ対応。
+ * sandboxed は未対応のため interactive と同じフラグ（空配列）を返す。
+ */
+export function resolveClaudeAutonomyFlags(autonomy: Autonomy): readonly string[] {
+  switch (autonomy) {
+    case Autonomy.FULL:
+      return ["--dangerously-skip-permissions"];
+    case Autonomy.SANDBOXED:
+      return [];
+    case Autonomy.INTERACTIVE:
+      return [];
+    default: {
+      const _exhaustive: never = autonomy;
+      throw new Error(`Unknown autonomy level: ${_exhaustive}`);
+    }
   }
 }
