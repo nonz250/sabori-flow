@@ -52,6 +52,9 @@ const jaMessages: MessageKeys = {
   "uninstall.deleted": "削除しました: {path}",
   "uninstall.notRegistered": "LaunchAgent は登録されていません。",
   "uninstall.complete": "\nアンインストールが完了しました。",
+  "uninstall.confirmDeleteAll":
+    "{dir} を完全に削除しますか? (config.yml, プロンプト, ログを含む)",
+  "uninstall.deletedAll": "削除しました: {dir}",
 
   // repository-prompt (shared helper)
   "prompt.enterOwner": "リポジトリの owner を入力してください:",
@@ -71,6 +74,8 @@ const jaMessages: MessageKeys = {
   "cli.descriptionInstall": "plist 生成 + launchd 登録を行います",
   "cli.optionLocal": "ローカルビルドのワーカーを登録します",
   "cli.descriptionUninstall": "launchd の登録を解除します",
+  "cli.optionUninstallAll":
+    "設定・プロンプト・ログを含む全データを削除します",
   "cli.descriptionWorker":
     "ワーカーを実行します（通常は launchd から自動的に呼び出されます）",
 };
@@ -120,6 +125,9 @@ const enMessages: MessageKeys = {
   "uninstall.deleted": "Deleted: {path}",
   "uninstall.notRegistered": "LaunchAgent is not registered.",
   "uninstall.complete": "\nUninstall complete.",
+  "uninstall.confirmDeleteAll":
+    "Delete {dir} completely? (includes config.yml, prompts, and logs)",
+  "uninstall.deletedAll": "Deleted: {dir}",
 
   // repository-prompt (shared helper)
   "prompt.enterOwner": "Enter repository owner:",
@@ -138,6 +146,8 @@ const enMessages: MessageKeys = {
   "cli.descriptionInstall": "Generate plist and register with launchd",
   "cli.optionLocal": "Register local build worker",
   "cli.descriptionUninstall": "Unregister from launchd",
+  "cli.optionUninstallAll":
+    "Delete all data including config, prompts, and logs",
   "cli.descriptionWorker":
     "Run the worker (normally called automatically by launchd)",
 };

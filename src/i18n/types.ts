@@ -42,6 +42,8 @@ export interface MessageKeys {
   "uninstall.deleted": string;
   "uninstall.notRegistered": string;
   "uninstall.complete": string;
+  "uninstall.confirmDeleteAll": string;
+  "uninstall.deletedAll": string;
 
   // repository-prompt (shared helper)
   "prompt.enterOwner": string;
@@ -57,5 +59,6 @@ export interface MessageKeys {
   "cli.descriptionInstall": string;
   "cli.optionLocal": string;
   "cli.descriptionUninstall": string;
+  "cli.optionUninstallAll": string;
   "cli.descriptionWorker": string;
 }
