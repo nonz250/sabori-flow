@@ -39,11 +39,11 @@ vi.mock("../../src/utils/paths.js", async (importOriginal) => {
     PACKAGE_ROOT: "/mock/package-root",
     PLIST_TEMPLATE_PATH: "/mock/package-root/launchd/template.plist",
     PLIST_DEST_DIR: "/mock/home/Library/LaunchAgents",
-    PLIST_DEST_PATH: "/mock/home/Library/LaunchAgents/com.github.nonz250.sabori-flow.plist",
+    PLIST_DEST_PATH: "/mock/home/Library/LaunchAgents/com.github.sabori-flow.plist",
     getConfigPath: vi.fn().mockReturnValue("/mock/config/dir/config.yml"),
     getLogsDir: vi.fn().mockReturnValue("/mock/data/logs"),
     getBaseDir: vi.fn().mockReturnValue("/mock/data"),
-    getPlistGeneratedPath: vi.fn().mockReturnValue("/mock/data/com.github.nonz250.sabori-flow.plist"),
+    getPlistGeneratedPath: vi.fn().mockReturnValue("/mock/data/com.github.sabori-flow.plist"),
   };
 });
 
@@ -77,7 +77,7 @@ beforeEach(() => {
   mockedGetConfigPath.mockReturnValue("/mock/config/dir/config.yml");
   mockedGetLogsDir.mockReturnValue("/mock/data/logs");
   mockedGetBaseDir.mockReturnValue("/mock/data");
-  mockedGetPlistGeneratedPath.mockReturnValue("/mock/data/com.github.nonz250.sabori-flow.plist");
+  mockedGetPlistGeneratedPath.mockReturnValue("/mock/data/com.github.sabori-flow.plist");
 
   consoleSpy = {
     log: vi.spyOn(console, "log").mockImplementation(() => {}),
@@ -311,7 +311,7 @@ describe("installCommand - デフォルト（npx モード）", () => {
       await runInstallCommand();
 
       expect(mockedFs.chmodSync).toHaveBeenCalledWith(
-        "/mock/home/Library/LaunchAgents/com.github.nonz250.sabori-flow.plist",
+        "/mock/home/Library/LaunchAgents/com.github.sabori-flow.plist",
         0o600,
       );
     });
@@ -342,7 +342,7 @@ describe("installCommand - デフォルト（npx モード）", () => {
       await runInstallCommand();
 
       expect(mockedFs.writeFileSync).toHaveBeenCalledWith(
-        "/mock/data/com.github.nonz250.sabori-flow.plist",
+        "/mock/data/com.github.sabori-flow.plist",
         "<plist>final-output</plist>",
         { encoding: "utf-8", mode: 0o600 },
       );
@@ -355,7 +355,7 @@ describe("installCommand - デフォルト（npx モード）", () => {
 
       expect(mockedExec).toHaveBeenCalledWith("launchctl", [
         "load",
-        "/mock/home/Library/LaunchAgents/com.github.nonz250.sabori-flow.plist",
+        "/mock/home/Library/LaunchAgents/com.github.sabori-flow.plist",
       ]);
     });
   });
@@ -449,7 +449,7 @@ describe("installCommand - --local モード", () => {
 
       expect(mockedExec).toHaveBeenCalledWith("launchctl", [
         "load",
-        "/mock/home/Library/LaunchAgents/com.github.nonz250.sabori-flow.plist",
+        "/mock/home/Library/LaunchAgents/com.github.sabori-flow.plist",
       ]);
     });
   });

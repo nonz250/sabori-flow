@@ -4,7 +4,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.github.nonz250.sabori-flow</string>
+    <string>com.github.sabori-flow</string>
 
     <key>ProgramArguments</key>
 __PROGRAM_ARGUMENTS__
