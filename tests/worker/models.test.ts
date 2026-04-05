@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   Phase,
   Priority,
+  Engine,
   Autonomy,
   repoFullName,
 } from "../../src/worker/models.js";
@@ -35,6 +36,16 @@ describe("Priority", () => {
 
   it("NONE の値が 2 である", () => {
     expect(Priority.NONE).toBe(2);
+  });
+});
+
+describe("Engine", () => {
+  it("CLAUDE の値が 'claude' である", () => {
+    expect(Engine.CLAUDE).toBe("claude");
+  });
+
+  it("CODEX の値が 'codex' である", () => {
+    expect(Engine.CODEX).toBe("codex");
   });
 });
 
@@ -73,6 +84,7 @@ describe("repoFullName", () => {
         },
       },
       priorityLabels: ["priority/high"],
+      autoImplAfterPlan: false,
     };
 
     expect(repoFullName(config)).toBe("nonz250/sabori-flow");
@@ -136,15 +148,20 @@ describe("型の構造テスト", () => {
       localPath: "/tmp/repo",
       labels: labelsConfig,
       priorityLabels: ["priority/high", "priority/low"],
+      autoImplAfterPlan: false,
     };
 
     const executionConfig: ExecutionConfig = {
       maxParallel: 4,
       maxIssuesPerRepo: 5,
+      engine: Engine.CLAUDE,
       autonomy: Autonomy.FULL,
+      intervalMinutes: 60,
+      language: "ja",
     };
 
     const appConfig: AppConfig = {
+      language: "ja",
       repositories: [repoConfig],
       execution: executionConfig,
     };
