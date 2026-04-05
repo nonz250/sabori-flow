@@ -224,6 +224,7 @@ repositories:
 execution:
   max_parallel: 1
   max_issues_per_repo: 1
+  skip_permissions: true
 ```
 
 | キー | 説明 |
@@ -237,10 +238,11 @@ execution:
 | `repositories[].priority_labels` | 優先度ラベル。リストの上位ほど先に処理される |
 | `execution.max_parallel` | 並列実行数。デフォルトは `1`（逐次実行） |
 | `execution.max_issues_per_repo` | リポジトリあたりの Issue 処理上限。デフォルトは `1` |
+| `execution.skip_permissions` | Claude Code CLI に `--dangerously-skip-permissions` を付与するか。デフォルトは `true` |
 
 ## セキュリティ
 
-このツールは Claude Code CLI を `--dangerously-skip-permissions` で実行するため、マシン上でほぼ任意の操作が可能です。launchd により定期的にユーザー操作なしで実行されます。
+このツールはデフォルトで Claude Code CLI を `--dangerously-skip-permissions` で実行するため、マシン上でほぼ任意の操作が可能です。`config.yml` で `execution.skip_permissions: false` に設定することで無効化できます。launchd により定期的にユーザー操作なしで実行されます。
 
 デフォルトの `npx` 方式では、実行時に npm レジストリからパッケージを取得します。万が一 npm パッケージが侵害された場合、悪意あるコードがスケジューラにより自動実行される可能性があります。
 

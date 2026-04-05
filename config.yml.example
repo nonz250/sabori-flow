@@ -22,3 +22,4 @@ repositories:
 execution:
   max_parallel: 1
   # max_issues_per_repo: 1  # リポジトリあたりの Issue 処理上限（省略時は 1）
+  # skip_permissions: true   # --dangerously-skip-permissions の付与（省略時は true）
