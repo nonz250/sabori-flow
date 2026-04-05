@@ -1,11 +1,7 @@
-config.yml
-.env
-.claude/settings.local.json
-.claude/CLAUDE.md
-*.log
-logs/
-launchd/*.plist
-.sabori-flow-worktrees/
 node_modules/
 dist/
 coverage/
+.env
+.claude/settings.local.json
+.claude/CLAUDE.md
+.sabori-flow-worktrees/
