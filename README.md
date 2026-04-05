@@ -206,6 +206,7 @@ repositories:
   - owner: nonz250
     repo: example-app
     local_path: /path/to/repo
+    # prompts_dir: /path/to/custom/prompts  # Optional: custom prompt template directory
     labels:
       plan:
         trigger: claude/plan
@@ -234,6 +235,7 @@ language: ja
 | `repositories[].owner` | Repository owner |
 | `repositories[].repo` | Repository name |
 | `repositories[].local_path` | Local path to the cloned repository |
+| `repositories[].prompts_dir` | (Optional) Custom prompt template directory. Absolute path. Templates in this directory take precedence; falls back to built-in defaults if not found |
 | `repositories[].labels` | Label names for each phase (customizable) |
 | `repositories[].labels.plan` | Labels for the plan phase: `trigger`, `in_progress`, `done`, `failed` |
 | `repositories[].labels.impl` | Labels for the impl phase: `trigger`, `in_progress`, `done`, `failed` |
@@ -254,6 +256,7 @@ Additionally, the following defenses are built in.
 - **Author permission check** -- Only issues created by users with OWNER, MEMBER, or COLLABORATOR association are processed; others are automatically skipped.
 - **Secret masking** -- Before posting a success comment, output is scanned and secrets are automatically masked.
 - **Random boundary tokens** -- Prompts use randomized boundary tokens to mitigate prompt injection.
+- **Custom template validation** -- Custom prompt templates must include boundary placeholders and are checked for path traversal and size limits (100KB).
 
 To mitigate this risk, use the `--local` flag to run from a locally built copy you can audit.
 

@@ -95,6 +95,9 @@ src/
 - ユーザー入力由来の変数（issue_body, issue_title）を最後に展開（二重展開防止）
 - UUID ベースのランダムバウンダリでデータ境界を明示（予測不能なトークンによるプロンプトインジェクション対策）
 - Issue 作成者の権限チェック（OWNER / MEMBER / COLLABORATOR のみ処理対象）
+- カスタムテンプレートのパストラバーサル防止（`realpathSync` + ディレクトリ配下検証）
+- カスタムテンプレートのバウンダリプレースホルダ必須チェック（`{boundary_open}` / `{boundary_close}` 欠落時はエラー）
+- テンプレートファイルのサイズ上限（100KB）
 
 #### 出力保護
 - `sanitizeOutput` による成功コメントのシークレットマスキング（AWS キー、GitHub トークン、SSH 秘密鍵、Bearer トークン等）
@@ -147,6 +150,7 @@ XDG Base Directory 準拠でパスを解決する。
 ### config.yml の設定項目
 
 - `repositories`: 対象リポジトリ一覧（必須、1 件以上）
+- `repositories[].prompts_dir`: カスタムプロンプトテンプレートのディレクトリパス（任意、絶対パス）。指定時はこのディレクトリのテンプレートを優先し、存在しなければデフォルトにフォールバック
 - `execution.max_parallel`: 並列実行数（整数、1-10、デフォルト: 1）
 - `execution.max_issues_per_repo`: リポジトリあたりの最大処理 Issue 数（整数、1-20、デフォルト: 1）
 - `execution.autonomy`: CLI の自律実行レベル（`full` / `sandboxed` / `interactive`、デフォルト: `interactive`）
