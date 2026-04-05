@@ -53,7 +53,7 @@ If someone has to sit there clicking "Allow" over and over, that defeats the pur
 
 ### LLM-agnostic architecture
 
-The AI agent is a single CLI call in the pipeline. It currently uses Claude Code CLI, but any CLI-based AI agent (OpenAI Codex, GitHub Copilot CLI, etc.) can be swapped in without changing the workflow. *(Multi-engine support is planned but not yet implemented.)*
+The AI agent is a single CLI call in the pipeline. It supports **Claude Code CLI** and **GitHub Copilot CLI** as execution engines, selectable via `execution.engine` in `config.yml`. Any CLI-based AI agent that accepts `-p` for non-interactive prompting can be added as an engine.
 
 The workflow design matters more than which LLM you plug into it.
 
@@ -96,7 +96,7 @@ Claude offers [Scheduled Tasks](https://code.claude.com/docs/en/scheduled-tasks)
 
 - macOS
 - Node.js v20+
-- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (`claude`)
+- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (`claude`) or [GitHub Copilot CLI](https://docs.github.com/en/copilot/reference/cli-command-reference) (`copilot`)
 - [GitHub CLI](https://cli.github.com/) (`gh`) -- must be authenticated
 
 ## Setup
@@ -222,6 +222,7 @@ repositories:
       - priority:low
 
 execution:
+  engine: claude
   max_parallel: 1
   max_issues_per_repo: 1
   autonomy: interactive
@@ -239,6 +240,7 @@ language: ja
 | `repositories[].labels.plan` | Labels for the plan phase: `trigger`, `in_progress`, `done`, `failed` |
 | `repositories[].labels.impl` | Labels for the impl phase: `trigger`, `in_progress`, `done`, `failed` |
 | `repositories[].priority_labels` | Priority labels. Issues with labels higher in the list are processed first |
+| `execution.engine` | Execution engine: `claude` (Claude Code CLI) or `copilot` (GitHub Copilot CLI). Default is `claude` |
 | `execution.max_parallel` | Number of parallel executions. Default is `1` (sequential) |
 | `execution.max_issues_per_repo` | Maximum number of issues to process per repository. Default is `1` |
 | `execution.autonomy` | CLI autonomy level: `full` (unrestricted), `sandboxed` (sandboxed execution, CLI support required), `interactive` (requires user approval). Default is `interactive` |
@@ -249,7 +251,7 @@ language: ja
 
 ## Security
 
-By default, this tool runs Claude Code CLI in `interactive` mode, which requires user approval for each action. To enable fully autonomous execution, set `execution.autonomy: full` in `config.yml` — this passes `--dangerously-skip-permissions` to Claude Code CLI, allowing nearly arbitrary operations on your machine. It is executed periodically by launchd without user interaction.
+By default, this tool runs the selected CLI engine in `interactive` mode, which requires user approval for each action. To enable fully autonomous execution, set `execution.autonomy: full` in `config.yml` — this passes `--dangerously-skip-permissions` (Claude Code) or `--yolo` (Copilot) to the CLI, allowing nearly arbitrary operations on your machine. It is executed periodically by launchd without user interaction.
 
 By default, the `npx` installation fetches packages from the npm registry at runtime. If the npm package were compromised, malicious code could be executed automatically by the scheduler.
 
