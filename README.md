@@ -30,7 +30,8 @@ sabori-flow is a **workflow product**, not an AI product. The pipeline design (I
 
 ### Script orchestrates, AI solves
 
-sabori-flow separates orchestration (TypeScript) from problem-solving (AI). The AI focuses on understanding the Issue and writing code. Everything else is handled by TypeScript scripts.
+sabori-flow separates orchestration (TypeScript) from problem-solving (AI).
+**The AI focuses on understanding the Issue and writing code.** Everything else is handled by TypeScript scripts.
 
 | TypeScript script (deterministic) | AI agent (intelligent) |
 |---|---|
@@ -44,9 +45,7 @@ Issue operations and label management are mechanical. A deterministic script han
 
 ### Truly automated via CLI
 
-AI chat apps and desktop tools ask for permission confirmations on every file edit, command execution, and git operation. If someone has to sit there clicking "Allow" over and over, that is not really automation.
-
-sabori-flow invokes the AI via CLI (`claude -p --dangerously-skip-permissions`), so no human interaction is needed from the moment you add a label to the moment a PR is opened.
+AI chat apps and desktop tools ask for permission confirmations on every file edit, command execution, and git operation. If someone has to sit there clicking "Allow" over and over, that defeats the purpose of automation.
 
 ### LLM-agnostic architecture
 
@@ -58,7 +57,7 @@ The workflow design matters more than which LLM you plug into it.
 
 Multi-agent orchestration and tool-use loops are exciting technologies, but for many teams the more immediate win is simpler: **integrate AI into the workflow you already have.**
 
-You already write GitHub Issues, review PRs, and use labels. sabori-flow just automates the middle part:
+You already write GitHub Issues, review PRs, and use labels. sabori-flow just automates the middle part.
 
 ```
 [Write Issue] → [Add label] → [sabori-flow] → [Review PR] → [Merge]
@@ -68,7 +67,7 @@ No new paradigm to adopt. It works as an extension of what your team is already 
 
 ## Comparison with Claude Scheduled Tasks
 
-Claude offers [Scheduled Tasks](https://code.claude.com/docs/en/scheduled-tasks) -- cron-based prompt automation (Cloud and Desktop). Here is how it compares:
+Claude offers [Scheduled Tasks](https://code.claude.com/docs/en/scheduled-tasks) -- cron-based prompt automation (Cloud and Desktop).
 
 | | sabori-flow | Claude Scheduled Tasks |
 |---|---|---|
