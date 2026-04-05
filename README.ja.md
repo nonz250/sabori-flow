@@ -135,25 +135,30 @@ launchd からの登録解除と関連ファイルの削除が行われます。
 
 Issue にラベルを付けるだけです。ワーカーが 1 時間ごとに自動検出して処理します。
 
-```
-1. Issue に claude/plan ラベルを付ける
-2. ワーカーが Plan フェーズを実行
-   -> 成功: Issue に plan コメントを投稿
-   -> 失敗: claude/plan:failed ラベルを付与
-3. ユーザーが plan をレビューし、claude/impl ラベルを付ける
-4. ワーカーが Impl フェーズを実行
-   -> 成功: Pull Request を作成
-   -> 失敗: claude/impl:failed ラベルを付与
+```mermaid
+flowchart TD
+    A["Issue に claude/plan ラベルを付ける"] --> B["ワーカーが Plan フェーズを実行"]
+    B --> C{成功&#63;}
+    C -- Yes --> D["Issue に plan コメントを投稿"]
+    C -- No --> E["claude/plan&#58;failed ラベルを付与"]
+    D --> F["ユーザーが plan をレビューし claude/impl ラベルを付ける"]
+    F --> G["ワーカーが Impl フェーズを実行"]
+    G --> H{成功&#63;}
+    H -- Yes --> I["Pull Request を作成"]
+    H -- No --> J["claude/impl&#58;failed ラベルを付与"]
 ```
 
 ### ラベル遷移
 
-```
-claude/plan  -->  claude/plan:in-progress  -->  claude/plan:done
-                                           -->  claude/plan:failed
+```mermaid
+flowchart LR
+    A["claude/plan"] --> B["claude/plan&#58;in-progress"]
+    B --> C["claude/plan&#58;done"]
+    B --> D["claude/plan&#58;failed"]
 
-claude/impl  -->  claude/impl:in-progress  -->  claude/impl:done
-                                           -->  claude/impl:failed
+    E["claude/impl"] --> F["claude/impl&#58;in-progress"]
+    F --> G["claude/impl&#58;done"]
+    F --> H["claude/impl&#58;failed"]
 ```
 
 ### 失敗した場合
