@@ -20,39 +20,74 @@ Add a label to an Issue -- sabori-flow handles the rest: planning, implementatio
 
 ## What is sabori?
 
-The name "sabori" comes from the Japanese word "サボり" (sabori), meaning to slack off or skip work. But there is a twist -- sabori-flow lets you slack off **responsibly** by delegating tedious, well-defined tasks to AI so you can focus on the work that actually needs a human brain.
+The name "sabori" comes from the Japanese word "サボり" (sabori), meaning to slack off or skip work. sabori-flow lets you slack off **responsibly** by delegating tedious, well-defined tasks to AI so you can focus on the work that actually needs a human brain.
 
-Just add a label to a GitHub Issue, and sabori-flow takes care of the rest: it reads the issue, creates a plan, implements the code, and opens a pull request -- all running quietly in the background on your machine. It is a **set-and-forget** workflow for the boring stuff.
+Add a label to a GitHub Issue, and sabori-flow handles the rest: reading the Issue, planning, implementing, and opening a pull request. **Label it and forget it.**
 
-## sabori-flow vs Claude Scheduled Tasks
+sabori-flow is a **workflow product**, not an AI product. The core value is the pipeline design -- Issue detection, label-driven state transitions, isolated execution, and structured output. Which LLM solves the Issue is an implementation detail.
 
-Claude now offers [Scheduled Tasks](https://code.claude.com/docs/en/scheduled-tasks) -- cron-based automation that runs prompts on a schedule (Cloud or Desktop). sabori-flow takes a fundamentally different approach: **Issue-driven**, not prompt-driven.
+## Design Philosophy
 
-| | sabori-flow | Claude Scheduled Tasks (Cloud) | Claude Scheduled Tasks (Desktop) |
-|---|---|---|---|
-| **Trigger** | GitHub Issue label | Cron schedule + fixed prompt | Cron schedule + fixed prompt |
-| **Workflow** | Automatic state machine (label transitions: plan → in-progress → done/failed) | Stateless -- each run starts fresh | Stateless -- each run starts fresh |
-| **Code access** | Local repository via git worktree (fast, no clone overhead) | Fresh clone every run | Local checkout or worktree |
-| **Multi-repo** | Built-in (`config.yml` manages multiple repos with parallel execution) | One task per repo | One task per repo |
-| **Output** | Pull request + Issue comment with status tracking | Session log, manual PR creation | Session log, manual PR creation |
-| **Security** | Secret masking on output, Issue author permission check, shell-free execution | Anthropic sandbox | Desktop permission settings |
-| **Customization** | Full TypeScript pipeline, Markdown prompt templates | Prompt only | Prompt only |
-| **Dependency** | Claude Code CLI + `gh` CLI (no app required) | claude.ai account + paid plan | Desktop app must be running |
-| **Runs while PC is off** | No | Yes | No |
+### Script orchestrates, AI solves
 
-### Why sabori-flow?
+sabori-flow separates **deterministic orchestration** from **intelligent problem-solving**. The AI focuses purely on understanding the problem and writing code. Everything else is handled by TypeScript scripts -- predictable, testable, and free from hallucination risk.
 
-- **Issue = task.** No need to write cron prompts that describe what to do -- just write a GitHub Issue and add a label. The Issue itself is the specification.
-- **Stateful pipeline.** Label transitions (`claude/plan` → `claude/plan:in-progress` → `claude/plan:done`) give you visibility into what is happening and what has been processed. Claude Scheduled Tasks are stateless -- they have no built-in concept of "which issues have been handled."
-- **Safe parallel execution.** git worktree isolates each Issue into its own working copy without touching your current branch. No interference with your ongoing work.
-- **Output you can trust.** Secrets are automatically masked before posting comments to Issues. Error handling has three levels to ensure no Issue gets stuck in a broken state.
-- **Fully hackable.** The entire pipeline is TypeScript -- swap out the prompt templates, adjust the label scheme, add custom post-processing. Claude Scheduled Tasks only let you change the prompt.
+| TypeScript script (deterministic) | AI agent (intelligent) |
+|---|---|
+| Fetch Issues, filter by label, sort by priority | Read the Issue, understand the requirement |
+| Transition labels (plan → in-progress → done) | Plan the approach, write code |
+| Create / clean up git worktrees | Create commits, push branches |
+| Post comments, mask secrets in output | -- |
+| Error handling and recovery | -- |
+
+Issue operations and label management are mechanical tasks. They should be handled by a deterministic system, not by intelligence that costs tokens and can hallucinate.
+
+### Truly automated via CLI
+
+AI chat apps and desktop tools require frequent permission confirmations for file edits, terminal commands, and git operations. This makes full automation impractical -- a human must sit and click "Allow" repeatedly.
+
+sabori-flow invokes the AI via CLI (`claude -p --dangerously-skip-permissions`), enabling **zero-intervention execution** from label to pull request. No dialogs, no approvals, no babysitting.
+
+### LLM-agnostic architecture
+
+The AI agent is a single CLI call in the pipeline. Today it is Claude Code CLI. But the architecture does not depend on any specific provider -- any CLI-based AI agent (OpenAI Codex, GitHub Copilot CLI, etc.) can be swapped in without changing the workflow. *(Multi-engine support is planned but not yet implemented.)*
+
+What matters is the workflow design, not which LLM you plug into it.
+
+### Realistic flow for real teams
+
+AI agent orchestration -- multi-agent routing, chain-of-thought pipelines, tool-use loops -- is cutting-edge technology with exciting potential. But for most teams today, the bigger and more immediate win is simpler: **plug AI into the structured workflow you already have.**
+
+Your team already writes GitHub Issues, reviews PRs, and uses labels. sabori-flow does not ask you to learn a new paradigm. It automates the middle part of what you already do:
+
+```
+[Write Issue] → [Add label] → [sabori-flow] → [Review PR] → [Merge]
+```
+
+This is not a futuristic vision -- it is a practical tool for the way teams actually work right now.
+
+## Comparison with Claude Scheduled Tasks
+
+Claude offers [Scheduled Tasks](https://code.claude.com/docs/en/scheduled-tasks) -- cron-based prompt automation (Cloud and Desktop). Here is how it compares:
+
+| | sabori-flow | Claude Scheduled Tasks |
+|---|---|---|
+| **Approach** | Workflow-driven (Issue label triggers pipeline) | Prompt-driven (cron runs a fixed prompt) |
+| **State management** | Built-in (label transitions track progress) | Stateless (each run starts from scratch) |
+| **Automation level** | Fully automated via CLI (no permission dialogs) | Semi-automated (App requires confirmations) |
+| **AI dependency** | LLM-agnostic (CLI interface, swappable engine) | Claude only |
+| **Code access** | Local repo via git worktree (fast, no clone) | Cloud: fresh clone / Desktop: local checkout |
+| **Multi-repo** | Built-in parallel execution via `config.yml` | One task per repo |
+| **Output** | PR + Issue comment with status tracking | Session log |
+| **Security** | Secret masking, author permission check | Anthropic sandbox / Desktop permissions |
+| **Customization** | Full TypeScript pipeline + prompt templates | Prompt text only |
+| **Runs while PC is off** | No | Cloud: Yes |
 
 ### When to use Claude Scheduled Tasks instead
 
-- You need tasks to run **even when your machine is off** (Cloud tasks).
-- Your automation is **not Issue-driven** -- e.g., daily code review summaries, periodic dependency checks, Slack notifications.
-- You prefer a **zero-code setup** where a single prompt is enough.
+- You need tasks to run **when your machine is off** (Cloud tasks).
+- Your automation is **not Issue-driven** (e.g., daily summaries, Slack notifications).
+- You prefer a **zero-code setup** where a prompt is enough.
 
 ## Prerequisites
 
