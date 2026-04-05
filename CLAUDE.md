@@ -149,7 +149,7 @@ XDG Base Directory 準拠でパスを解決する。
 - `repositories`: 対象リポジトリ一覧（必須、1 件以上）
 - `execution.max_parallel`: 並列実行数（整数、1-10、デフォルト: 1）
 - `execution.max_issues_per_repo`: リポジトリあたりの最大処理 Issue 数（整数、1-20、デフォルト: 1）
-- `execution.skip_permissions`: `--dangerously-skip-permissions` フラグの付与を制御（真偽値、デフォルト: true）
+- `execution.autonomy`: CLI の自律実行レベル（`full` / `sandboxed` / `interactive`、デフォルト: `interactive`）
 - `language`: CLI メッセージの表示言語（`ja` / `en`、デフォルト: `ja`）
 
 ## コーディング規約
