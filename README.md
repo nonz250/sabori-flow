@@ -135,25 +135,30 @@ This unregisters from launchd and removes related files.
 
 Add a label to an Issue. The worker automatically detects it every hour and processes it.
 
-```
-1. User adds claude/plan label to Issue
-2. Worker runs Plan Phase
-   -> Success: Plan comment posted to Issue
-   -> Failure: claude/plan:failed label applied
-3. User reviews plan and adds claude/impl label
-4. Worker runs Impl Phase
-   -> Success: Pull Request created
-   -> Failure: claude/impl:failed label applied
+```mermaid
+flowchart TD
+    A["User adds claude/plan label"] --> B["Worker runs Plan Phase"]
+    B --> C{Plan succeeded&#63;}
+    C -- Yes --> D["Plan comment posted"]
+    C -- No --> E["claude/plan&#58;failed label applied"]
+    D --> F["User reviews plan, adds claude/impl label"]
+    F --> G["Worker runs Impl Phase"]
+    G --> H{Impl succeeded&#63;}
+    H -- Yes --> I["Pull Request created"]
+    H -- No --> J["claude/impl&#58;failed label applied"]
 ```
 
 ### Label Transitions
 
-```
-claude/plan  -->  claude/plan:in-progress  -->  claude/plan:done
-                                           -->  claude/plan:failed
+```mermaid
+flowchart LR
+    A["claude/plan"] --> B["claude/plan&#58;in-progress"]
+    B --> C["claude/plan&#58;done"]
+    B --> D["claude/plan&#58;failed"]
 
-claude/impl  -->  claude/impl:in-progress  -->  claude/impl:done
-                                           -->  claude/impl:failed
+    E["claude/impl"] --> F["claude/impl&#58;in-progress"]
+    F --> G["claude/impl&#58;done"]
+    F --> H["claude/impl&#58;failed"]
 ```
 
 ### Handling Failures
