@@ -17,6 +17,14 @@ export const Priority = {
 } as const;
 export type Priority = (typeof Priority)[keyof typeof Priority];
 
+/** Claude Code CLI の自律性レベル */
+export const Autonomy = {
+  FULL: "full",
+  SANDBOXED: "sandboxed",
+  INTERACTIVE: "interactive",
+} as const;
+export type Autonomy = (typeof Autonomy)[keyof typeof Autonomy];
+
 // ---------- Data structures ----------
 
 /** GitHub Issue */
@@ -59,6 +67,7 @@ export interface RepositoryConfig {
 export interface ExecutionConfig {
   readonly maxParallel: number;
   readonly maxIssuesPerRepo: number;
+  readonly autonomy: Autonomy;
 }
 
 /** アプリケーション全体の設定 */
