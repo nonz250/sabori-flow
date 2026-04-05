@@ -55,6 +55,7 @@ function makeRepoConfig(
       },
     },
     priorityLabels: ["priority:high", "priority:low"],
+    autoImplAfterPlan: false,
   };
 }
 
@@ -65,6 +66,7 @@ function makeIssue(overrides?: Partial<Issue>): Issue {
     body: "This is the issue body.",
     labels: ["claude/plan"],
     url: "https://github.com/testowner/testrepo/issues/42",
+    authorAssociation: "OWNER",
     phase: Phase.PLAN,
     priority: Priority.NONE,
     ...overrides,
@@ -111,7 +113,7 @@ const BOUNDARY_CLOSE_PATTERN = new RegExp(
 /** デフォルトディレクトリから読み込む場合の共通セットアップ */
 function setupDefaultDirMocks(): void {
   mockedExistsSync.mockReturnValue(true);
-  mockedStatSync.mockReturnValue({ size: 1024 } as ReturnType<typeof statSync>);
+  mockedStatSync.mockReturnValue({ size: 1024, isFile: () => true } as unknown as ReturnType<typeof statSync>);
 }
 
 describe("buildPrompt - 正常系", () => {
@@ -256,7 +258,8 @@ describe("buildPrompt - 異常系", () => {
     mockedExistsSync.mockReturnValue(true);
     mockedStatSync.mockReturnValue({
       size: 200 * 1024,
-    } as ReturnType<typeof statSync>);
+      isFile: () => true,
+    } as unknown as ReturnType<typeof statSync>);
 
     expect(() => buildPrompt(makeIssue(), makeRepoConfig())).toThrow(
       PromptTemplateError,
@@ -474,7 +477,7 @@ describe("buildPrompt - カスタムプロンプトディレクトリ", () => {
       if (path.startsWith(CUSTOM_DIR)) return customExists;
       return true; // default dir always exists
     });
-    mockedStatSync.mockReturnValue({ size: 1024 } as ReturnType<typeof statSync>);
+    mockedStatSync.mockReturnValue({ size: 1024, isFile: () => true } as unknown as ReturnType<typeof statSync>);
     mockedRealpathSync.mockImplementation((p) => String(p));
   }
 
@@ -562,7 +565,7 @@ describe("buildPrompt - カスタムプロンプトディレクトリ", () => {
 
   it("テンプレートファイルのパスがカスタムディレクトリ外に逸脱した場合、PromptTemplateError が発生する", () => {
     mockedExistsSync.mockReturnValue(true);
-    mockedStatSync.mockReturnValue({ size: 1024 } as ReturnType<typeof statSync>);
+    mockedStatSync.mockReturnValue({ size: 1024, isFile: () => true } as unknown as ReturnType<typeof statSync>);
     // realpathSync がディレクトリ外のパスを返すことでパス逸脱を再現
     mockedRealpathSync.mockImplementation((p) => {
       const path = String(p);

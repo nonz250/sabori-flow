@@ -35,6 +35,7 @@ function makeRepoInput(overrides?: Partial<RepositoryInput>): RepositoryInput {
     owner: "test-owner",
     repo: "test-repo",
     local_path: "/tmp/test-owner/test-repo",
+    auto_impl_after_plan: false,
     prompts_dir: null,
     ...overrides,
   };
