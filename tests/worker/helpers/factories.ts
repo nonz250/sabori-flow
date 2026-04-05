@@ -42,6 +42,7 @@ export function makeRepoConfig(
     localPath: "/tmp/testowner/testrepo",
     labels: DEFAULT_LABELS_CONFIG,
     priorityLabels: ["priority:high", "priority:low"],
+    autoImplAfterPlan: false,
     ...overrides,
   };
 }

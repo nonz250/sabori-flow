@@ -621,3 +621,43 @@ describe("loadConfig - language validation", () => {
     );
   });
 });
+
+describe("loadConfig - auto_impl_after_plan", () => {
+  it("auto_impl_after_plan: true is parsed correctly", () => {
+    const yaml = VALID_YAML.replace(
+      "priority_labels:",
+      "auto_impl_after_plan: true\n    priority_labels:",
+    );
+    mockYaml(yaml);
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.repositories[0].autoImplAfterPlan).toBe(true);
+  });
+
+  it("auto_impl_after_plan: false is parsed correctly", () => {
+    const yaml = VALID_YAML.replace(
+      "priority_labels:",
+      "auto_impl_after_plan: false\n    priority_labels:",
+    );
+    mockYaml(yaml);
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.repositories[0].autoImplAfterPlan).toBe(false);
+  });
+
+  it("auto_impl_after_plan defaults to false when omitted", () => {
+    mockYaml(VALID_YAML);
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.repositories[0].autoImplAfterPlan).toBe(false);
+  });
+
+  it("auto_impl_after_plan with non-boolean value throws ConfigValidationError", () => {
+    const yaml = VALID_YAML.replace(
+      "priority_labels:",
+      'auto_impl_after_plan: "yes"\n    priority_labels:',
+    );
+    mockYaml(yaml);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(ConfigValidationError);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /auto_impl_after_plan: must be a boolean/,
+    );
+  });
+});
