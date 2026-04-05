@@ -1,5 +1,5 @@
 import type { AppConfig, ExecutionConfig, Issue, LabelsConfig, Phase, RepositoryConfig, StepResult } from "./models.js";
-import { repoFullName } from "./models.js";
+import { Autonomy, Engine, repoFullName } from "./models.js";
 import { Phase as PhaseEnum } from "./models.js";
 import { loadConfig } from "./config.js";
 import { fetchIssues } from "./fetcher.js";
@@ -318,9 +318,16 @@ export async function workerMain(
 
   deps.migrateFlatPromptTemplates(appConfig.language);
 
-  const autonomyLog = resolveAutonomyLogMessage(appConfig.execution.autonomy);
-  if (autonomyLog !== null) {
-    logger[autonomyLog.level](autonomyLog.message);
+  if (appConfig.execution.autonomy === Autonomy.FULL) {
+    const engineLabel = appConfig.execution.engine === Engine.CODEX
+      ? "Codex CLI will run with --dangerously-bypass-approvals-and-sandbox"
+      : "Claude Code CLI will run with --dangerously-skip-permissions";
+    logger.warn("autonomy is set to 'full'. %s.", engineLabel);
+  } else {
+    const autonomyLog = resolveAutonomyLogMessage(appConfig.execution.autonomy);
+    if (autonomyLog !== null) {
+      logger[autonomyLog.level](autonomyLog.message);
+    }
   }
 
   const authToken = deps.readAuthToken();
