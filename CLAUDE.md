@@ -150,6 +150,7 @@ XDG Base Directory 準拠でパスを解決する。
 - `execution.max_parallel`: 並列実行数（整数、1-10、デフォルト: 1）
 - `execution.max_issues_per_repo`: リポジトリあたりの最大処理 Issue 数（整数、1-20、デフォルト: 1）
 - `execution.skip_permissions`: `--dangerously-skip-permissions` フラグの付与を制御（真偽値、デフォルト: true）
+- `language`: CLI メッセージの表示言語（`ja` / `en`、デフォルト: `ja`）
 
 ## コーディング規約
 

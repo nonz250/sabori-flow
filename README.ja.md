@@ -225,6 +225,8 @@ execution:
   max_parallel: 1
   max_issues_per_repo: 1
   skip_permissions: true
+
+language: ja
 ```
 
 | キー | 説明 |
@@ -239,6 +241,7 @@ execution:
 | `execution.max_parallel` | 並列実行数。デフォルトは `1`（逐次実行） |
 | `execution.max_issues_per_repo` | リポジトリあたりの Issue 処理上限。デフォルトは `1` |
 | `execution.skip_permissions` | Claude Code CLI に `--dangerously-skip-permissions` を付与するか。デフォルトは `true` |
+| `language` | CLI メッセージの表示言語（`ja` / `en`）。デフォルトは `ja` |
 
 ## セキュリティ
 
