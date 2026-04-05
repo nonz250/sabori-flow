@@ -54,7 +54,6 @@ src/
     process.ts       # child_process ラッパー
   utils/             # 共有ユーティリティ
     paths.ts         # ~/.sabori-flow/ ベースのパス解決 + expandTilde（チルダ展開）
-    migration.ts     # 旧 XDG パスの検出・移行ガイダンス
     plist.ts, shell.ts, config-defaults.ts
 ```
 
