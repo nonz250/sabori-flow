@@ -67,7 +67,7 @@ async function copyPromptTemplates(language: Language): Promise<void> {
 
 export async function initCommand(): Promise<void> {
   // config.yml 存在チェック
-  // XDG 準拠: config ディレクトリを事前作成
+  // ベースディレクトリを事前作成
   fs.mkdirSync(getBaseDir(), { recursive: true, mode: 0o700 });
 
   const legacy = detectLegacyPaths();

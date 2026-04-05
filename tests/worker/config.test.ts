@@ -126,6 +126,7 @@ describe("loadConfig - normal", () => {
     expect(repo.priorityLabels).toEqual(["priority:high", "priority:low"]);
     expect(result.execution.maxParallel).toBe(4);
     expect(result.language).toBe("ja");
+    expect(result.execution.language).toBe("ja");
     expect(result.execution.autonomy).toBe("interactive");
   });
 

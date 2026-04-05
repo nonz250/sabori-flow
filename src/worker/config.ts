@@ -78,6 +78,8 @@ export function loadConfig(configPath: string): AppConfig {
     "language" in record ? record["language"] : undefined,
   );
 
+  // language is copied from AppConfig top-level into ExecutionConfig
+  // so that processIssue can access it without needing the full AppConfig
   const execution: ExecutionConfig = { ...parsedExecution, language };
 
   return { language, repositories, execution };
