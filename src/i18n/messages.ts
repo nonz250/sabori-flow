@@ -58,6 +58,19 @@ const jaMessages: MessageKeys = {
     "英数字, '.', '_', '-' のみ使用できます",
   "prompt.validationAbsolutePath":
     "絶対パスを入力してください (~/... も可)",
+  "prompt.autoImplConfirm":
+    "Plan 完了後に自動で impl ラベルを付与しますか?",
+  "prompt.enterPromptsDir":
+    "カスタムプロンプトのディレクトリを指定しますか? (空欄でスキップ):",
+
+  // cli descriptions
+  "cli.descriptionAdd": "既存の config.yml にリポジトリを追加します",
+  "cli.descriptionInit": "対話的に config.yml を作成します",
+  "cli.descriptionInstall": "plist 生成 + launchd 登録を行います",
+  "cli.optionLocal": "ローカルビルドのワーカーを登録します",
+  "cli.descriptionUninstall": "launchd の登録を解除します",
+  "cli.descriptionWorker":
+    "ワーカーを実行します（通常は launchd から自動的に呼び出されます）",
 };
 
 const enMessages: MessageKeys = {
@@ -111,6 +124,19 @@ const enMessages: MessageKeys = {
     "Only alphanumeric characters, '.', '_', '-' are allowed",
   "prompt.validationAbsolutePath":
     "Enter an absolute path (~/... also accepted)",
+  "prompt.autoImplConfirm":
+    "Automatically add impl label after Plan completion?",
+  "prompt.enterPromptsDir":
+    "Specify custom prompts directory? (Leave blank to skip):",
+
+  // cli descriptions
+  "cli.descriptionAdd": "Add a repository to existing config.yml",
+  "cli.descriptionInit": "Create config.yml interactively",
+  "cli.descriptionInstall": "Generate plist and register with launchd",
+  "cli.optionLocal": "Register local build worker",
+  "cli.descriptionUninstall": "Unregister from launchd",
+  "cli.descriptionWorker":
+    "Run the worker (normally called automatically by launchd)",
 };
 
 export const messages: Record<Language, MessageKeys> = {

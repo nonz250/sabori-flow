@@ -31,17 +31,17 @@ export async function promptRepository(): Promise<RepositoryInput> {
   });
   const local_path = expandTilde(rawPath);
   const auto_impl_after_plan = await confirm({
-    message: "Plan 完了後に自動で impl ラベルを付与しますか?",
+    message: t("prompt.autoImplConfirm"),
     default: false,
   });
   const rawPromptsDir = await input({
     message:
-      "カスタムプロンプトのディレクトリを指定しますか? (空欄でスキップ):",
+      t("prompt.enterPromptsDir"),
     validate: (v) => {
       if (v === "") return true;
       const expanded = expandTilde(v);
       return (
-        path.isAbsolute(expanded) || "絶対パスを入力してください (~/... も可)"
+        path.isAbsolute(expanded) || t("prompt.validationAbsolutePath")
       );
     },
   });

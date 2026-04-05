@@ -46,4 +46,14 @@ export interface MessageKeys {
   "prompt.enterLocalPath": string;
   "prompt.validationAlphanumeric": string;
   "prompt.validationAbsolutePath": string;
+  "prompt.autoImplConfirm": string;
+  "prompt.enterPromptsDir": string;
+
+  // cli descriptions
+  "cli.descriptionAdd": string;
+  "cli.descriptionInit": string;
+  "cli.descriptionInstall": string;
+  "cli.optionLocal": string;
+  "cli.descriptionUninstall": string;
+  "cli.descriptionWorker": string;
 }
