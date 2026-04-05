@@ -254,7 +254,7 @@ Additionally, the following defenses are built in.
 - **Author permission check** -- Only issues created by users with OWNER, MEMBER, or COLLABORATOR association are processed; others are automatically skipped.
 - **Secret masking** -- Before posting a success comment, output is scanned and secrets are automatically masked.
 - **Random boundary tokens** -- Prompts use randomized boundary tokens to mitigate prompt injection.
-- **Custom template validation** -- Custom and user-edited prompt templates must include boundary placeholders and are checked for path traversal and size limits (100KB). Package-bundled templates are trusted.
+- **Template file validation** -- Template files are checked for regular file type and size limits (100KB).
 
 To mitigate this risk, use the `--local` flag to run from a locally built copy you can audit.
 
