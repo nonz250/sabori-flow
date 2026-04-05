@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/logo.svg" alt="sabori-flow" width="480">
+<img src="assets/logo.png" alt="sabori-flow" width="240">
 
 <p><strong>Automated GitHub Issue resolver powered by Claude Code CLI.</strong><br>
 Add a label to an Issue -- sabori-flow handles the rest: planning, implementation, and pull request creation.</p>
