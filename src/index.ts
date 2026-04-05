@@ -39,8 +39,7 @@ program
 program
   .command("uninstall")
   .description(t("cli.descriptionUninstall"))
-  .option("--all", t("cli.optionUninstallAll"))
-  .action((options) => uninstallCommand(options));
+  .action(uninstallCommand);
 
 program
   .command("worker")

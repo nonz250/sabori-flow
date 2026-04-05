@@ -59,6 +59,5 @@ export interface MessageKeys {
   "cli.descriptionInstall": string;
   "cli.optionLocal": string;
   "cli.descriptionUninstall": string;
-  "cli.optionUninstallAll": string;
   "cli.descriptionWorker": string;
 }
