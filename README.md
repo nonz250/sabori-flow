@@ -20,17 +20,17 @@ Add a label to an Issue -- sabori-flow handles the rest: planning, implementatio
 
 ## What is sabori?
 
-The name "sabori" comes from the Japanese word "サボり" (sabori), meaning to slack off or skip work. sabori-flow lets you slack off **responsibly** by delegating tedious, well-defined tasks to AI so you can focus on the work that actually needs a human brain.
+The name "sabori" comes from the Japanese word "サボり" (sabori), meaning to slack off or skip work. sabori-flow is a tool for **slacking off responsibly**: let AI handle the tedious, well-defined tasks so you can focus on the work that actually needs your brain.
 
 Add a label to a GitHub Issue, and sabori-flow handles the rest: reading the Issue, planning, implementing, and opening a pull request. **Label it and forget it.**
 
-sabori-flow is a **workflow product**, not an AI product. The core value is the pipeline design -- Issue detection, label-driven state transitions, isolated execution, and structured output. Which LLM solves the Issue is an implementation detail.
+sabori-flow is a **workflow product**, not an AI product. The pipeline design (Issue detection, label-driven state transitions, isolated execution, structured output) is the core value. Which LLM solves the Issue is an implementation detail.
 
 ## Design Philosophy
 
 ### Script orchestrates, AI solves
 
-sabori-flow separates **deterministic orchestration** from **intelligent problem-solving**. The AI focuses purely on understanding the problem and writing code. Everything else is handled by TypeScript scripts -- predictable, testable, and free from hallucination risk.
+sabori-flow separates orchestration (TypeScript) from problem-solving (AI). The AI focuses on understanding the Issue and writing code. Everything else is handled by TypeScript scripts.
 
 | TypeScript script (deterministic) | AI agent (intelligent) |
 |---|---|
@@ -40,31 +40,31 @@ sabori-flow separates **deterministic orchestration** from **intelligent problem
 | Post comments, mask secrets in output | -- |
 | Error handling and recovery | -- |
 
-Issue operations and label management are mechanical tasks. They should be handled by a deterministic system, not by intelligence that costs tokens and can hallucinate.
+Issue operations and label management are mechanical. A deterministic script handles them just fine. Having the AI do it wastes tokens and introduces hallucination risk.
 
 ### Truly automated via CLI
 
-AI chat apps and desktop tools require frequent permission confirmations for file edits, terminal commands, and git operations. This makes full automation impractical -- a human must sit and click "Allow" repeatedly.
+AI chat apps and desktop tools ask for permission confirmations on every file edit, command execution, and git operation. If someone has to sit there clicking "Allow" over and over, that is not really automation.
 
-sabori-flow invokes the AI via CLI (`claude -p --dangerously-skip-permissions`), enabling **zero-intervention execution** from label to pull request. No dialogs, no approvals, no babysitting.
+sabori-flow invokes the AI via CLI (`claude -p --dangerously-skip-permissions`), so no human interaction is needed from the moment you add a label to the moment a PR is opened.
 
 ### LLM-agnostic architecture
 
-The AI agent is a single CLI call in the pipeline. Today it is Claude Code CLI. But the architecture does not depend on any specific provider -- any CLI-based AI agent (OpenAI Codex, GitHub Copilot CLI, etc.) can be swapped in without changing the workflow. *(Multi-engine support is planned but not yet implemented.)*
+The AI agent is a single CLI call in the pipeline. It currently uses Claude Code CLI, but any CLI-based AI agent (OpenAI Codex, GitHub Copilot CLI, etc.) can be swapped in without changing the workflow. *(Multi-engine support is planned but not yet implemented.)*
 
-What matters is the workflow design, not which LLM you plug into it.
+The workflow design matters more than which LLM you plug into it.
 
 ### Realistic flow for real teams
 
-AI agent orchestration -- multi-agent routing, chain-of-thought pipelines, tool-use loops -- is cutting-edge technology with exciting potential. But for most teams today, the bigger and more immediate win is simpler: **plug AI into the structured workflow you already have.**
+Multi-agent orchestration and tool-use loops are exciting technologies, but for many teams the more immediate win is simpler: **integrate AI into the workflow you already have.**
 
-Your team already writes GitHub Issues, reviews PRs, and uses labels. sabori-flow does not ask you to learn a new paradigm. It automates the middle part of what you already do:
+You already write GitHub Issues, review PRs, and use labels. sabori-flow just automates the middle part:
 
 ```
 [Write Issue] → [Add label] → [sabori-flow] → [Review PR] → [Merge]
 ```
 
-This is not a futuristic vision -- it is a practical tool for the way teams actually work right now.
+No new paradigm to adopt. It works as an extension of what your team is already doing.
 
 ## Comparison with Claude Scheduled Tasks
 
