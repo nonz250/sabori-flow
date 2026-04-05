@@ -225,6 +225,8 @@ execution:
   max_parallel: 1
   max_issues_per_repo: 1
   skip_permissions: true
+
+language: ja
 ```
 
 | Key | Description |
@@ -239,6 +241,7 @@ execution:
 | `execution.max_parallel` | Number of parallel executions. Default is `1` (sequential) |
 | `execution.max_issues_per_repo` | Maximum number of issues to process per repository. Default is `1` |
 | `execution.skip_permissions` | Whether to pass `--dangerously-skip-permissions` to Claude Code CLI. Default is `true` |
+| `language` | Language for CLI messages (`ja` / `en`). Default is `ja` |
 
 ## Security
 
