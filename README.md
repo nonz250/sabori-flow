@@ -45,7 +45,9 @@ Issue operations and label management are mechanical. A deterministic script han
 
 ### Truly automated via CLI
 
-AI chat apps and desktop tools ask for permission confirmations on every file edit, command execution, and git operation. If someone has to sit there clicking "Allow" over and over, that defeats the purpose of automation.
+AI chat apps and desktop tools ask for permission confirmations on every file edit, command execution, and git operation.
+Have you ever been interrupted by a notification or a bouncing dock icon from an AI chat app during "automated" processing?
+If someone has to sit there clicking "Allow" over and over, that defeats the purpose of automation.
 
 ### LLM-agnostic architecture
 
