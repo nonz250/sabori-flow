@@ -82,6 +82,7 @@ const jaMessages: MessageKeys = {
     "絶対パスを入力してください (~/... も可)",
   "prompt.autoImplConfirm":
     "Plan 完了後に自動で impl ラベルを付与しますか?",
+  "prompt.selectEngine": "実行エンジンを選択してください:",
   "prompt.intervalMinutes": "スケジュール実行間隔（分）を入力してください（10-1440）:",
   "prompt.intervalMinutesValidation": "10 以上 1440 以下の整数を入力してください",
   "prompt.timeoutMinutes": "Claude CLI の実行タイムアウト（分）を入力してください（1-240）:",
@@ -205,6 +206,7 @@ const enMessages: MessageKeys = {
     "Enter an absolute path (~/... also accepted)",
   "prompt.autoImplConfirm":
     "Automatically add impl label after Plan completion?",
+  "prompt.selectEngine": "Select execution engine:",
   "prompt.intervalMinutes": "Enter the scheduled execution interval in minutes (10-1440):",
   "prompt.intervalMinutesValidation": "Must be an integer between 10 and 1440",
   "prompt.timeoutMinutes": "Enter the Claude CLI execution timeout in minutes (1-240):",
