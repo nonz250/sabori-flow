@@ -1,4 +1,4 @@
-import { select, confirm } from "@inquirer/prompts";
+import { input, select, confirm } from "@inquirer/prompts";
 import { stringify } from "yaml";
 import fs from "fs";
 import { join, resolve } from "node:path";
@@ -16,7 +16,7 @@ import { setLanguage, t } from "../i18n/index.js";
 import type { Language } from "../i18n/types.js";
 import { TEMPLATE_FILES } from "../worker/prompt.js";
 
-function buildConfigData(repos: RepositoryInput[], language: string) {
+function buildConfigData(repos: RepositoryInput[], language: string, intervalMinutes: number) {
   return {
     language,
     repositories: repos.map((r) => ({
@@ -27,7 +27,7 @@ function buildConfigData(repos: RepositoryInput[], language: string) {
       labels: getDefaultLabels(),
       priority_labels: getDefaultPriorityLabels(),
     })),
-    execution: getDefaultExecution(),
+    execution: { ...getDefaultExecution(), interval_minutes: intervalMinutes },
   };
 }
 
@@ -96,8 +96,22 @@ export async function initCommand(): Promise<void> {
       })
     );
 
+    // interval_minutes 入力
+    const intervalMinutesStr = await input({
+      message: t("prompt.intervalMinutes"),
+      default: "60",
+      validate: (v) => {
+        const n = Number(v);
+        if (!Number.isInteger(n) || n < 10 || n > 1440) {
+          return t("prompt.intervalMinutesValidation");
+        }
+        return true;
+      },
+    });
+    const intervalMinutes = Number(intervalMinutesStr);
+
     // YAML 生成・書き込み
-    const config = buildConfigData(repos, language);
+    const config = buildConfigData(repos, language, intervalMinutes);
     const yamlStr = stringify(config);
     fs.writeFileSync(getConfigPath(), yamlStr, { encoding: "utf-8", mode: 0o600 });
 

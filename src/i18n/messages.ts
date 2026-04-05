@@ -43,9 +43,10 @@ const jaMessages: MessageKeys = {
   "install.generatingPlist": "plist を生成中...",
   "install.registeringLaunchd": "launchd に登録中...",
   "install.localComplete":
-    "\nローカルビルドのワーカーを登録しました。1時間ごとにワーカーが実行されます。",
+    "\nローカルビルドのワーカーを登録しました。{minutes}分ごとにワーカーが実行されます。",
   "install.complete":
-    "\nインストールが完了しました。1時間ごとにワーカーが実行されます。",
+    "\nインストールが完了しました。{minutes}分ごとにワーカーが実行されます。",
+  "install.configValidationError": "Error: config.yml のバリデーションに失敗しました: {message}",
   "install.unexpectedError": "予期しないエラーが発生しました:",
 
   // uninstall command
@@ -67,6 +68,8 @@ const jaMessages: MessageKeys = {
     "絶対パスを入力してください (~/... も可)",
   "prompt.autoImplConfirm":
     "Plan 完了後に自動で impl ラベルを付与しますか?",
+  "prompt.intervalMinutes": "スケジュール実行間隔（分）を入力してください（10-1440）:",
+  "prompt.intervalMinutesValidation": "10 以上 1440 以下の整数を入力してください",
 
   // cli descriptions
   "cli.descriptionAdd": "既存の config.yml にリポジトリを追加します",
@@ -114,9 +117,10 @@ const enMessages: MessageKeys = {
   "install.generatingPlist": "Generating plist...",
   "install.registeringLaunchd": "Registering with launchd...",
   "install.localComplete":
-    "\nLocal build worker registered. The worker will run every hour.",
+    "\nLocal build worker registered. The worker will run every {minutes} minutes.",
   "install.complete":
-    "\nInstallation complete. The worker will run every hour.",
+    "\nInstallation complete. The worker will run every {minutes} minutes.",
+  "install.configValidationError": "Error: config.yml validation failed: {message}",
   "install.unexpectedError": "Unexpected error:",
 
   // uninstall command
@@ -137,6 +141,8 @@ const enMessages: MessageKeys = {
     "Enter an absolute path (~/... also accepted)",
   "prompt.autoImplConfirm":
     "Automatically add impl label after Plan completion?",
+  "prompt.intervalMinutes": "Enter the scheduled execution interval in minutes (10-1440):",
+  "prompt.intervalMinutesValidation": "Must be an integer between 10 and 1440",
 
   // cli descriptions
   "cli.descriptionAdd": "Add a repository to existing config.yml",

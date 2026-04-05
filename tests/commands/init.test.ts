@@ -16,6 +16,7 @@ vi.mock("fs", () => ({
 vi.mock("@inquirer/prompts", () => ({
   confirm: vi.fn(),
   select: vi.fn(),
+  input: vi.fn(),
 }));
 
 vi.mock("../../src/commands/helpers/repository-prompt.js", () => ({
@@ -42,7 +43,7 @@ vi.mock("../../src/utils/paths.js", async (importOriginal) => {
 });
 
 import fs from "fs";
-import { confirm, select } from "@inquirer/prompts";
+import { confirm, select, input } from "@inquirer/prompts";
 import { promptRepository } from "../../src/commands/helpers/repository-prompt.js";
 import type { RepositoryInput } from "../../src/commands/helpers/repository-prompt.js";
 import { getBaseDir, getConfigPath, getUserPromptsDir, getDefaultPromptsDir } from "../../src/utils/paths.js";
@@ -50,6 +51,7 @@ import { getBaseDir, getConfigPath, getUserPromptsDir, getDefaultPromptsDir } fr
 const mockedFs = vi.mocked(fs);
 const mockedConfirm = vi.mocked(confirm);
 const mockedSelect = vi.mocked(select);
+const mockedInput = vi.mocked(input);
 const mockedPromptRepository = vi.mocked(promptRepository);
 const mockedGetBaseDir = vi.mocked(getBaseDir);
 const mockedGetConfigPath = vi.mocked(getConfigPath);
@@ -103,6 +105,8 @@ beforeEach(() => {
   mockedGetDefaultPromptsDir.mockReturnValue("/mock/package/prompts");
 
   mockedSelect.mockResolvedValue("ja");
+  // interval_minutes のデフォルト応答
+  mockedInput.mockResolvedValue("60");
 
   consoleSpy = {
     log: vi.spyOn(console, "log").mockImplementation(() => {}),

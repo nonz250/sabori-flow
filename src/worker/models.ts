@@ -68,6 +68,7 @@ export interface ExecutionConfig {
   readonly maxParallel: number;
   readonly maxIssuesPerRepo: number;
   readonly autonomy: Autonomy;
+  readonly intervalMinutes: number;
   readonly language: Language;
 }
 

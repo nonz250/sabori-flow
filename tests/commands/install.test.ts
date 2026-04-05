@@ -32,6 +32,16 @@ vi.mock("../../src/utils/plist.js", () => ({
   renderPlist: vi.fn(),
 }));
 
+vi.mock("../../src/worker/config.js", () => ({
+  loadConfig: vi.fn(),
+  ConfigValidationError: class ConfigValidationError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = "ConfigValidationError";
+    }
+  },
+}));
+
 vi.mock("../../src/utils/paths.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../../src/utils/paths.js")>();
   return {
@@ -50,6 +60,7 @@ vi.mock("../../src/utils/paths.js", async (importOriginal) => {
 import fs from "fs";
 import { exec, commandExists, ShellError } from "../../src/utils/shell.js";
 import { renderPlist } from "../../src/utils/plist.js";
+import { loadConfig, ConfigValidationError } from "../../src/worker/config.js";
 import {
   getConfigPath,
   getLogsDir,
@@ -61,6 +72,7 @@ const mockedFs = vi.mocked(fs);
 const mockedExec = vi.mocked(exec);
 const mockedCommandExists = vi.mocked(commandExists);
 const mockedRenderPlist = vi.mocked(renderPlist);
+const mockedLoadConfig = vi.mocked(loadConfig);
 const mockedGetConfigPath = vi.mocked(getConfigPath);
 const mockedGetLogsDir = vi.mocked(getLogsDir);
 const mockedGetBaseDir = vi.mocked(getBaseDir);
@@ -100,23 +112,29 @@ function setupNormalFlow(overrides?: {
   npxPath?: string;
   templateContent?: string;
   renderedPlist?: string;
+  intervalMinutes?: number;
 }): void {
   const {
     configYaml = YAML.stringify({ repositories: [] }),
     npxPath = "/usr/local/bin/npx",
     templateContent = "<plist>template</plist>",
     renderedPlist = "<plist>rendered</plist>",
+    intervalMinutes = 60,
   } = overrides ?? {};
 
   // config.yml が存在する
   mockedFs.existsSync.mockReturnValue(true);
   // npx コマンドが存在する
   mockedCommandExists.mockReturnValue(true);
-  // config.yml の内容
+  // config.yml の内容（テンプレート読み込み用）
   mockedFs.readFileSync.mockImplementation((filePath: unknown) => {
-    if (filePath === "/mock/config/dir/config.yml") return configYaml;
     if (filePath === "/mock/package-root/launchd/template.plist") return templateContent;
     return "";
+  });
+  // loadConfig の戻り値
+  mockedLoadConfig.mockReturnValue({
+    repositories: [],
+    execution: { maxParallel: 1, maxIssuesPerRepo: 1, intervalMinutes },
   });
   // which npx の結果
   mockedExec.mockImplementation((file: string, args: readonly string[]) => {
@@ -133,20 +151,25 @@ function setupLocalFlow(overrides?: {
   nodePath?: string;
   templateContent?: string;
   renderedPlist?: string;
+  intervalMinutes?: number;
 }): void {
   const {
     configYaml = YAML.stringify({ repositories: [] }),
     nodePath = "/usr/local/bin/node",
     templateContent = "<plist>template</plist>",
     renderedPlist = "<plist>rendered</plist>",
+    intervalMinutes = 60,
   } = overrides ?? {};
 
   mockedFs.existsSync.mockReturnValue(true);
   mockedCommandExists.mockReturnValue(true);
   mockedFs.readFileSync.mockImplementation((filePath: unknown) => {
-    if (filePath === "/mock/config/dir/config.yml") return configYaml;
     if (filePath === "/mock/package-root/launchd/template.plist") return templateContent;
     return "";
+  });
+  mockedLoadConfig.mockReturnValue({
+    repositories: [],
+    execution: { maxParallel: 1, maxIssuesPerRepo: 1, intervalMinutes },
   });
   mockedExec.mockImplementation((file: string, args: readonly string[]) => {
     if (file === "which" && args[0] === "node") return nodePath;
@@ -239,9 +262,6 @@ describe("installCommand - デフォルト（npx モード）", () => {
       });
       mockedFs.readFileSync.mockImplementation((filePath: unknown) => {
         callOrder.push(`readFileSync:${filePath}`);
-        if (filePath === "/mock/config/dir/config.yml") {
-          return YAML.stringify({ repositories: [] });
-        }
         if (filePath === "/mock/package-root/launchd/template.plist") {
           return "<plist>template</plist>";
         }
@@ -316,13 +336,13 @@ describe("installCommand - デフォルト（npx モード）", () => {
       );
     });
 
-    it("完了メッセージに「1時間ごとにワーカーが実行されます」が含まれる", async () => {
+    it("完了メッセージに「60分ごとにワーカーが実行されます」が含まれる", async () => {
       setupNormalFlow();
 
       await runInstallCommand();
 
       expect(consoleSpy.log).toHaveBeenCalledWith(
-        expect.stringContaining("1時間ごとにワーカーが実行されます"),
+        expect.stringContaining("60分ごとにワーカーが実行されます"),
       );
     });
 
@@ -357,6 +377,36 @@ describe("installCommand - デフォルト（npx モード）", () => {
         "load",
         "/mock/home/Library/LaunchAgents/com.github.sabori-flow.plist",
       ]);
+    });
+
+    it("renderPlist に startInterval: 3600 が渡される（デフォルト 60 分）", async () => {
+      setupNormalFlow();
+
+      await runInstallCommand();
+
+      expect(mockedRenderPlist).toHaveBeenCalledTimes(1);
+      const [_template, placeholders] = mockedRenderPlist.mock.calls[0];
+      expect(placeholders.startInterval).toBe(3600);
+    });
+
+    it("interval_minutes: 30 の場合、startInterval: 1800 が渡される", async () => {
+      setupNormalFlow({ intervalMinutes: 30 });
+
+      await runInstallCommand();
+
+      expect(mockedRenderPlist).toHaveBeenCalledTimes(1);
+      const [_template, placeholders] = mockedRenderPlist.mock.calls[0];
+      expect(placeholders.startInterval).toBe(1800);
+    });
+
+    it("interval_minutes: 30 の場合、完了メッセージに「30分ごと」が含まれる", async () => {
+      setupNormalFlow({ intervalMinutes: 30 });
+
+      await runInstallCommand();
+
+      expect(consoleSpy.log).toHaveBeenCalledWith(
+        expect.stringContaining("30分ごとにワーカーが実行されます"),
+      );
     });
   });
 });
@@ -563,6 +613,31 @@ describe("installCommand - ShellError 発生時", () => {
       (call) => call[0] === "",
     );
     expect(stderrCalls).toHaveLength(0);
+  });
+});
+
+describe("installCommand - ConfigValidationError 発生時", () => {
+  it("config.yml のバリデーションエラーメッセージを出力し、早期 return する", async () => {
+    mockedFs.existsSync.mockReturnValue(true);
+    mockedCommandExists.mockReturnValue(true);
+    mockedExec.mockImplementation((file: string, args: readonly string[]) => {
+      if (file === "which" && args[0] === "npx") return "/usr/local/bin/npx";
+      return "";
+    });
+    mockedLoadConfig.mockImplementation(() => {
+      throw new ConfigValidationError("interval_minutes: must be >= 10, got 5");
+    });
+
+    await runInstallCommand();
+
+    expect(consoleSpy.error).toHaveBeenCalledWith(
+      expect.stringContaining("config.yml のバリデーションに失敗しました"),
+    );
+    expect(consoleSpy.error).toHaveBeenCalledWith(
+      expect.stringContaining("interval_minutes: must be >= 10, got 5"),
+    );
+    // renderPlist は呼ばれない（エラーにより早期 return）
+    expect(mockedRenderPlist).not.toHaveBeenCalled();
   });
 });
 
