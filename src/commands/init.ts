@@ -59,48 +59,51 @@ async function copyPromptTemplates(language: Language): Promise<void> {
 }
 
 export async function initCommand(): Promise<void> {
-  // config.yml 存在チェック
-  // ベースディレクトリを事前作成
-  fs.mkdirSync(getBaseDir(), { recursive: true, mode: 0o700 });
+  try {
+    // ベースディレクトリを事前作成
+    fs.mkdirSync(getBaseDir(), { recursive: true, mode: 0o700 });
 
-  const language = await select<Language>({
-    message: "Select language / 言語を選択してください:",
-    choices: [
-      { value: "ja", name: "日本語" },
-      { value: "en", name: "English" },
-    ],
-  });
-  setLanguage(language);
-
-  await copyPromptTemplates(language);
-
-  if (fs.existsSync(getConfigPath())) {
-    const overwrite = await confirm({
-      message: t("init.configExistsOverwrite"),
-      default: false,
+    const language = await select<Language>({
+      message: "Select language / 言語を選択してください:",
+      choices: [
+        { value: "ja", name: "日本語" },
+        { value: "en", name: "English" },
+      ],
     });
-    if (!overwrite) {
-      console.log(t("init.aborted"));
-      return;
+    setLanguage(language);
+
+    await copyPromptTemplates(language);
+
+    if (fs.existsSync(getConfigPath())) {
+      const overwrite = await confirm({
+        message: t("init.configExistsOverwrite"),
+        default: false,
+      });
+      if (!overwrite) {
+        console.log(t("init.aborted"));
+        return;
+      }
     }
+
+    // リポジトリ入力ループ
+    const repos: RepositoryInput[] = [];
+    do {
+      repos.push(await promptRepository());
+    } while (
+      await confirm({
+        message: t("init.addAnotherRepo"),
+        default: false,
+      })
+    );
+
+    // YAML 生成・書き込み
+    const config = buildConfigData(repos, language);
+    const yamlStr = stringify(config);
+    fs.writeFileSync(getConfigPath(), yamlStr, { encoding: "utf-8", mode: 0o600 });
+
+    console.log(t("init.configCreated", { path: getConfigPath() }));
+    console.log(t("init.runInstallNext"));
+  } catch {
+    // Ctrl+C — 静かに終了
   }
-
-  // リポジトリ入力ループ
-  const repos: RepositoryInput[] = [];
-  do {
-    repos.push(await promptRepository());
-  } while (
-    await confirm({
-      message: t("init.addAnotherRepo"),
-      default: false,
-    })
-  );
-
-  // YAML 生成・書き込み
-  const config = buildConfigData(repos, language);
-  const yamlStr = stringify(config);
-  fs.writeFileSync(getConfigPath(), yamlStr, { encoding: "utf-8", mode: 0o600 });
-
-  console.log(t("init.configCreated", { path: getConfigPath() }));
-  console.log(t("init.runInstallNext"));
 }
