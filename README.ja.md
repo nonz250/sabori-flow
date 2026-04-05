@@ -1,6 +1,8 @@
 <div align="center">
 
-<img src="assets/logo.png" alt="sabori-flow" width="240">
+<img src="assets/logo.png" alt="sabori-flow" width="200">
+
+<h1>sabori-flow</h1>
 
 <p><strong>Claude Code CLI で GitHub Issue を自動解決するワーカー。</strong><br>
 ラベルを付けるだけで、方針策定から実装、Pull Request 作成まで sabori-flow が自動で処理します。</p>
