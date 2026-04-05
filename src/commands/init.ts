@@ -1,7 +1,8 @@
 import { select, confirm } from "@inquirer/prompts";
 import { stringify } from "yaml";
 import fs from "fs";
-import { getBaseDir, getConfigPath } from "../utils/paths.js";
+import { join, resolve } from "node:path";
+import { getBaseDir, getConfigPath, getUserPromptsDir, getDefaultPromptsDir } from "../utils/paths.js";
 import {
   getDefaultLabels,
   getDefaultPriorityLabels,
@@ -13,6 +14,7 @@ import {
 } from "./helpers/repository-prompt.js";
 import { setLanguage, t } from "../i18n/index.js";
 import type { Language } from "../i18n/types.js";
+import { TEMPLATE_FILES } from "../worker/prompt.js";
 
 function buildConfigData(repos: RepositoryInput[], language: string) {
   return {
@@ -35,6 +37,33 @@ function buildConfigData(repos: RepositoryInput[], language: string) {
   };
 }
 
+async function copyPromptTemplates(language: Language): Promise<void> {
+  const srcDir = join(getDefaultPromptsDir(), language);
+  const destDir = getUserPromptsDir();
+  fs.mkdirSync(destDir, { recursive: true, mode: 0o700 });
+
+  for (const filename of Object.values(TEMPLATE_FILES)) {
+    const src = resolve(srcDir, filename);
+    const dest = resolve(destDir, filename);
+
+    if (fs.existsSync(dest)) {
+      const overwrite = await confirm({
+        message: t("init.templateExists", { file: filename }),
+        default: false,
+      });
+      if (!overwrite) {
+        console.log(t("init.templateSkipped", { file: filename }));
+        continue;
+      }
+    }
+
+    fs.copyFileSync(src, dest);
+    fs.chmodSync(dest, 0o600);
+  }
+
+  console.log(t("init.templatesCopied", { dir: destDir }));
+}
+
 export async function initCommand(): Promise<void> {
   // config.yml 存在チェック
   // XDG 準拠: config ディレクトリを事前作成
@@ -48,6 +77,8 @@ export async function initCommand(): Promise<void> {
     ],
   });
   setLanguage(language);
+
+  await copyPromptTemplates(language);
 
   if (fs.existsSync(getConfigPath())) {
     const overwrite = await confirm({

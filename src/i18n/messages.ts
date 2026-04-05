@@ -9,6 +9,10 @@ const jaMessages: MessageKeys = {
   "init.configCreated": "\nconfig.yml を作成しました: {path}",
   "init.runInstallNext":
     "次は `sabori-flow install` を実行してください。",
+  "init.templateExists": "{file} は既に存在します。上書きしますか?",
+  "init.templateSkipped": "スキップしました: {file}",
+  "init.templatesCopied":
+    "\nプロンプトテンプレートをコピーしました: {dir}",
 
   // add command
   "add.configNotFound": "Error: config.yml が見つかりません。",
@@ -80,6 +84,9 @@ const enMessages: MessageKeys = {
   "init.addAnotherRepo": "Add another repository?",
   "init.configCreated": "\nconfig.yml created: {path}",
   "init.runInstallNext": "Next, run `sabori-flow install`.",
+  "init.templateExists": "{file} already exists. Overwrite?",
+  "init.templateSkipped": "Skipped: {file}",
+  "init.templatesCopied": "\nPrompt templates copied to: {dir}",
 
   // add command
   "add.configNotFound": "Error: config.yml not found.",
