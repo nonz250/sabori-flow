@@ -1,5 +1,5 @@
 import type { AppConfig, ExecutionConfig, Issue, Phase, RepositoryConfig } from "./models.js";
-import { Autonomy, repoFullName } from "./models.js";
+import { Autonomy, Engine, repoFullName } from "./models.js";
 import { Phase as PhaseEnum } from "./models.js";
 import { loadConfig } from "./config.js";
 import { fetchIssues } from "./fetcher.js";
@@ -189,9 +189,10 @@ export async function workerMain(
   );
 
   if (appConfig.execution.autonomy === Autonomy.FULL) {
-    logger.warn(
-      "autonomy is set to 'full'. Claude Code CLI will run with --dangerously-skip-permissions.",
-    );
+    const engineLabel = appConfig.execution.engine === Engine.CODEX
+      ? "Codex CLI will run with --dangerously-bypass-approvals-and-sandbox"
+      : "Claude Code CLI will run with --dangerously-skip-permissions";
+    logger.warn("autonomy is set to 'full'. %s.", engineLabel);
   }
 
   // リポジトリ並列処理 (Promise.allSettled + セマフォ制御)
