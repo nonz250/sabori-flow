@@ -7,37 +7,37 @@ import {
   getDefaultPriorityLabels,
 } from "../utils/config-defaults.js";
 import { promptRepository } from "./helpers/repository-prompt.js";
+import { setLanguage, t, loadLanguageFromConfig } from "../i18n/index.js";
 
 export async function addCommand(): Promise<void> {
-  // 1. config.yml 存在チェック
+  // Load language from config (falls back to default if config doesn't exist)
+  setLanguage(loadLanguageFromConfig(getConfigPath()));
+
+  // 1. config.yml existence check
   if (!existsSync(getConfigPath())) {
-    console.error("Error: config.yml が見つかりません。");
-    console.error("先に `sabori-flow init` を実行してください。");
+    console.error(t("add.configNotFound"));
+    console.error(t("add.runInitFirst"));
     return;
   }
 
-  // 2. 読み込み + パース
+  // 2. Read + parse
   let config: unknown;
   try {
     const raw = readFileSync(getConfigPath(), "utf-8");
-    config = YAML.parse(raw);
+    config = YAML.parse(raw, { maxAliasCount: 100 });
   } catch {
-    console.error(
-      "Error: config.yml の読み込みに失敗しました。内容を確認してください。",
-    );
+    console.error(t("add.configReadFailed"));
     return;
   }
 
-  // 3. 構造バリデーション
+  // 3. Structure validation
   if (typeof config !== "object" || config === null) {
-    console.error("Error: config.yml の形式が不正です。");
+    console.error(t("add.configFormatInvalid"));
     return;
   }
   const configObj = config as Record<string, unknown>;
   if (!Array.isArray(configObj.repositories)) {
-    console.error(
-      "Error: config.yml に repositories が定義されていないか、形式が不正です。",
-    );
+    console.error(t("add.repositoriesInvalid"));
     return;
   }
   const repositories = configObj.repositories as Array<
@@ -53,11 +53,11 @@ export async function addCommand(): Promise<void> {
   );
   if (duplicateIndex !== -1) {
     const overwrite = await confirm({
-      message: `${repoInput.owner}/${repoInput.repo} は既に登録されています。上書きしますか?`,
+      message: t("add.duplicateOverwrite", { owner: repoInput.owner, repo: repoInput.repo }),
       default: false,
     });
     if (!overwrite) {
-      console.log("中断しました。");
+      console.log(t("add.aborted"));
       return;
     }
     repositories.splice(duplicateIndex, 1);
@@ -76,10 +76,10 @@ export async function addCommand(): Promise<void> {
   try {
     writeFileSync(getConfigPath(), YAML.stringify(configObj), { encoding: "utf-8", mode: 0o600 });
   } catch {
-    console.error("Error: config.yml の書き込みに失敗しました。");
+    console.error(t("add.configWriteFailed"));
     return;
   }
 
   // 8. 成功メッセージ
-  console.log(`\n${repoInput.owner}/${repoInput.repo} を追加しました。`);
+  console.log(t("add.repoAdded", { owner: repoInput.owner, repo: repoInput.repo }));
 }

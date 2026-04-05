@@ -7,6 +7,7 @@ import type {
   ExecutionConfig,
 } from "../../../src/worker/models.js";
 import { Phase, Priority } from "../../../src/worker/models.js";
+import type { Language } from "../../../src/i18n/types.js";
 import type { ProcessResult } from "../../../src/worker/process.js";
 
 // ---------- Label constants ----------
@@ -77,6 +78,7 @@ export function makeProcessResult(
 
 export function makeAppConfig(
   overrides?: Partial<AppConfig> & {
+    language?: Language;
     repositories?: RepositoryConfig[];
     execution?: Partial<ExecutionConfig>;
   },
@@ -87,6 +89,7 @@ export function makeAppConfig(
   };
 
   return {
+    language: overrides?.language ?? "ja",
     repositories: overrides?.repositories ?? [makeRepoConfig()],
     execution: { ...defaultExecution, ...overrides?.execution },
   };

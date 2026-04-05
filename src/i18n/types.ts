@@ -1,0 +1,49 @@
+export type Language = "ja" | "en";
+
+export const SUPPORTED_LANGUAGES: readonly Language[] = ["ja", "en"] as const;
+
+export const DEFAULT_LANGUAGE: Language = "ja";
+
+export interface MessageKeys {
+  // init command
+  "init.configExistsOverwrite": string;
+  "init.aborted": string;
+  "init.addAnotherRepo": string;
+  "init.configCreated": string;
+  "init.runInstallNext": string;
+
+  // add command
+  "add.configNotFound": string;
+  "add.runInitFirst": string;
+  "add.configReadFailed": string;
+  "add.configFormatInvalid": string;
+  "add.repositoriesInvalid": string;
+  "add.duplicateOverwrite": string;
+  "add.aborted": string;
+  "add.configWriteFailed": string;
+  "add.repoAdded": string;
+
+  // install command
+  "install.configNotFound": string;
+  "install.runInitFirst": string;
+  "install.npxNotFound": string;
+  "install.nodeNotFound": string;
+  "install.pathResolveFailed": string;
+  "install.generatingPlist": string;
+  "install.registeringLaunchd": string;
+  "install.localComplete": string;
+  "install.complete": string;
+  "install.unexpectedError": string;
+
+  // uninstall command
+  "uninstall.deleted": string;
+  "uninstall.notRegistered": string;
+  "uninstall.complete": string;
+
+  // repository-prompt (shared helper)
+  "prompt.enterOwner": string;
+  "prompt.enterRepo": string;
+  "prompt.enterLocalPath": string;
+  "prompt.validationAlphanumeric": string;
+  "prompt.validationAbsolutePath": string;
+}

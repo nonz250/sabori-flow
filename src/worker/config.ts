@@ -9,6 +9,8 @@ import type {
   PhaseLabels,
 } from "./models.js";
 import { expandTilde } from "../utils/paths.js";
+import type { Language } from "../i18n/types.js";
+import { SUPPORTED_LANGUAGES, DEFAULT_LANGUAGE } from "../i18n/types.js";
 
 // ---------- Custom error ----------
 
@@ -71,10 +73,31 @@ export function loadConfig(configPath: string): AppConfig {
     "execution" in record ? record["execution"] : undefined,
   );
 
-  return { repositories, execution };
+  const language = parseLanguage(
+    "language" in record ? record["language"] : undefined,
+  );
+
+  return { language, repositories, execution };
 }
 
 // ---------- Internal parsers ----------
+
+function parseLanguage(raw: unknown): Language {
+  if (raw === undefined || raw === null) {
+    return DEFAULT_LANGUAGE;
+  }
+  if (typeof raw !== "string") {
+    throw new ConfigValidationError(
+      `'language' must be a string, got ${typeof raw}`,
+    );
+  }
+  if (!SUPPORTED_LANGUAGES.includes(raw as Language)) {
+    throw new ConfigValidationError(
+      `'language' must be one of: ${SUPPORTED_LANGUAGES.join(", ")}; got '${raw}'`,
+    );
+  }
+  return raw as Language;
+}
 
 function parseRepositories(raw: unknown): readonly RepositoryConfig[] {
   if (!Array.isArray(raw)) {

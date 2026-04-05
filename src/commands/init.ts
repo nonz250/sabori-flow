@@ -1,4 +1,4 @@
-import { confirm } from "@inquirer/prompts";
+import { select, confirm } from "@inquirer/prompts";
 import { stringify } from "yaml";
 import fs from "fs";
 import { getConfigDir, getConfigPath } from "../utils/paths.js";
@@ -11,9 +11,12 @@ import {
   type RepositoryInput,
   promptRepository,
 } from "./helpers/repository-prompt.js";
+import { setLanguage, t } from "../i18n/index.js";
+import type { Language } from "../i18n/types.js";
 
-function buildConfigData(repos: RepositoryInput[]) {
+function buildConfigData(repos: RepositoryInput[], language: string) {
   return {
+    language,
     repositories: repos.map((r) => ({
       owner: r.owner,
       repo: r.repo,
@@ -30,13 +33,22 @@ export async function initCommand(): Promise<void> {
   // XDG 準拠: config ディレクトリを事前作成
   fs.mkdirSync(getConfigDir(), { recursive: true, mode: 0o700 });
 
+  const language = await select<Language>({
+    message: "Select language / 言語を選択してください:",
+    choices: [
+      { value: "ja", name: "日本語" },
+      { value: "en", name: "English" },
+    ],
+  });
+  setLanguage(language);
+
   if (fs.existsSync(getConfigPath())) {
     const overwrite = await confirm({
-      message: "config.yml は既に存在します。上書きしますか?",
+      message: t("init.configExistsOverwrite"),
       default: false,
     });
     if (!overwrite) {
-      console.log("中断しました。");
+      console.log(t("init.aborted"));
       return;
     }
   }
@@ -47,18 +59,16 @@ export async function initCommand(): Promise<void> {
     repos.push(await promptRepository());
   } while (
     await confirm({
-      message: "別のリポジトリを追加しますか?",
+      message: t("init.addAnotherRepo"),
       default: false,
     })
   );
 
   // YAML 生成・書き込み
-  const config = buildConfigData(repos);
+  const config = buildConfigData(repos, language);
   const yamlStr = stringify(config);
   fs.writeFileSync(getConfigPath(), yamlStr, { encoding: "utf-8", mode: 0o600 });
 
-  console.log(`\nconfig.yml を作成しました: ${getConfigPath()}`);
-  console.log(
-    "次は `sabori-flow install` を実行してください。",
-  );
+  console.log(t("init.configCreated", { path: getConfigPath() }));
+  console.log(t("init.runInstallNext"));
 }
