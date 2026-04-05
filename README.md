@@ -133,7 +133,7 @@ This unregisters from launchd and removes the plist file. You will be prompted w
 
 ### Workflow
 
-Add a label to an Issue. The worker automatically detects it every hour and processes it.
+Add a label to an Issue. The worker automatically detects it at the configured interval and processes it.
 
 ```mermaid
 flowchart TD
@@ -225,6 +225,7 @@ execution:
   max_parallel: 1
   max_issues_per_repo: 1
   autonomy: interactive
+  interval_minutes: 60
 
 language: ja
 ```
@@ -241,7 +242,10 @@ language: ja
 | `execution.max_parallel` | Number of parallel executions. Default is `1` (sequential) |
 | `execution.max_issues_per_repo` | Maximum number of issues to process per repository. Default is `1` |
 | `execution.autonomy` | CLI autonomy level: `full` (unrestricted), `sandboxed` (sandboxed execution, CLI support required), `interactive` (requires user approval). Default is `interactive` |
+| `execution.interval_minutes` | Scheduled execution interval in minutes (10-1440). Default is `60` |
 | `language` | Language for CLI messages and prompt templates (`ja` / `en`). Default is `ja` |
+
+> **Note:** After editing `config.yml`, run `npx sabori-flow reinstall` to apply the changes to launchd.
 
 ## Security
 
