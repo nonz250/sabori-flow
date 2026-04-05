@@ -139,13 +139,34 @@ export function resetLoggerForTest(): void {
 
 // ---------- Internal helpers ----------
 
+function formatLocalISOTimestamp(date: Date): string {
+  const pad2 = (n: number): string => String(n).padStart(2, "0");
+  const pad3 = (n: number): string => String(n).padStart(3, "0");
+
+  const year = date.getFullYear();
+  const month = pad2(date.getMonth() + 1);
+  const day = pad2(date.getDate());
+  const hours = pad2(date.getHours());
+  const minutes = pad2(date.getMinutes());
+  const seconds = pad2(date.getSeconds());
+  const millis = pad3(date.getMilliseconds());
+
+  const offsetMin = date.getTimezoneOffset();
+  const sign = offsetMin <= 0 ? "+" : "-";
+  const absOffset = Math.abs(offsetMin);
+  const offHours = pad2(Math.floor(absOffset / 60));
+  const offMinutes = pad2(absOffset % 60);
+
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${millis}${sign}${offHours}:${offMinutes}`;
+}
+
 function formatMessage(
   level: LogLevel,
   name: string,
   message: string,
   args: unknown[],
 ): string {
-  const timestamp = new Date().toISOString();
+  const timestamp = formatLocalISOTimestamp(new Date());
   const upperLevel = level.toUpperCase();
   const expanded = expandPlaceholders(message, args);
   return `[${timestamp}] ${upperLevel} - [${name}] ${expanded}`;
