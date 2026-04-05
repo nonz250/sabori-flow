@@ -224,6 +224,7 @@ repositories:
 execution:
   max_parallel: 1
   max_issues_per_repo: 1
+  skip_permissions: true
 ```
 
 | Key | Description |
@@ -237,10 +238,11 @@ execution:
 | `repositories[].priority_labels` | Priority labels. Issues with labels higher in the list are processed first |
 | `execution.max_parallel` | Number of parallel executions. Default is `1` (sequential) |
 | `execution.max_issues_per_repo` | Maximum number of issues to process per repository. Default is `1` |
+| `execution.skip_permissions` | Whether to pass `--dangerously-skip-permissions` to Claude Code CLI. Default is `true` |
 
 ## Security
 
-This tool runs Claude Code CLI with `--dangerously-skip-permissions`, which allows nearly arbitrary operations on your machine. It is executed periodically by launchd without user interaction.
+By default, this tool runs Claude Code CLI with `--dangerously-skip-permissions`, which allows nearly arbitrary operations on your machine. You can disable this by setting `execution.skip_permissions: false` in `config.yml`. It is executed periodically by launchd without user interaction.
 
 By default, the `npx` installation fetches packages from the npm registry at runtime. If the npm package were compromised, malicious code could be executed automatically by the scheduler.
 
