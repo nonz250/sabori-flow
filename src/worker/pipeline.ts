@@ -1,5 +1,5 @@
 import type { Issue, PhaseLabels, RepositoryConfig, ExecutionConfig } from "./models.js";
-import { Phase, repoFullName } from "./models.js";
+import { Autonomy, Phase, repoFullName } from "./models.js";
 import type { ProcessResult } from "./process.js";
 import { buildPrompt } from "./prompt.js";
 import { runClaude } from "./executor.js";
@@ -25,7 +25,7 @@ export interface PipelineDeps {
   buildPrompt: (issue: Issue, repoConfig: RepositoryConfig) => string;
   runClaude: (
     prompt: string,
-    options: { cwd: string; skipPermissions?: boolean },
+    options: { cwd: string; autonomy?: Autonomy },
   ) => Promise<ProcessResult>;
   transitionToInProgress: (
     repo: string,
@@ -150,7 +150,7 @@ export async function processIssue(
         // 3-2. Claude CLI 実行（レベル 2）
         let result: ProcessResult;
         try {
-          result = await deps.runClaude(prompt, { cwd: worktreePath, skipPermissions: executionConfig.skipPermissions });
+          result = await deps.runClaude(prompt, { cwd: worktreePath, autonomy: executionConfig.autonomy });
         } catch (error: unknown) {
           logger.error(
             "Issue #%s: Claude CLI の実行に失敗しました [repo=%s]: %s",

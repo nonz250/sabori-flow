@@ -87,7 +87,7 @@ export function makeAppConfig(
   const defaultExecution: ExecutionConfig = {
     maxParallel: 1,
     maxIssuesPerRepo: 10,
-    skipPermissions: true,
+    autonomy: "interactive",
   };
 
   return {

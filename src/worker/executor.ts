@@ -4,6 +4,7 @@ import {
   ProcessExecutionError,
 } from "./process.js";
 import type { ProcessResult } from "./process.js";
+import { Autonomy } from "./models.js";
 
 export class ExecutorError extends Error {
   constructor(message: string) {
@@ -17,7 +18,7 @@ const DEFAULT_TIMEOUT_MS = 1_800_000; // 30 minutes
 export interface RunClaudeOptions {
   readonly cwd?: string;
   readonly timeoutMs?: number;
-  readonly skipPermissions?: boolean;
+  readonly autonomy?: Autonomy;
 }
 
 /**
@@ -37,8 +38,8 @@ export async function runClaude(
   const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
   const args = ["-p"];
-  const skipPermissions = options?.skipPermissions ?? true;
-  if (skipPermissions) {
+  const autonomy = options?.autonomy ?? Autonomy.INTERACTIVE;
+  if (autonomy === Autonomy.FULL) {
     args.push("--dangerously-skip-permissions");
   }
 
