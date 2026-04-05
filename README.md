@@ -33,9 +33,9 @@ sabori-flow is a **workflow product**, not an AI product. The pipeline design (I
 ### Script orchestrates, AI solves
 
 sabori-flow separates orchestration (TypeScript) from problem-solving (AI).
-**The AI focuses on understanding the Issue and writing code.** Everything else is handled by TypeScript scripts.
+**The AI focuses on understanding the Issue and writing code.** Everything else is handled by the worker.
 
-| TypeScript script (deterministic) | AI agent (intelligent) |
+| Worker (deterministic) | AI agent (intelligent) |
 |---|---|
 | Fetch Issues, filter by label, sort by priority | Read the Issue, understand the requirement |
 | Transition labels (plan → in-progress → done) | Plan the approach, write code |
@@ -135,30 +135,25 @@ This unregisters from launchd and removes related files.
 
 Add a label to an Issue. The worker automatically detects it every hour and processes it.
 
-```mermaid
-flowchart TD
-    A["User adds claude/plan label to Issue"] --> B["Worker runs Plan Phase"]
-    B --> C{"Plan succeeded?"}
-    C -- Yes --> D["Plan comment posted to Issue"]
-    C -- No --> E["claude/plan:failed label applied"]
-    D --> F["User reviews plan and adds claude/impl label"]
-    F --> G["Worker runs Impl Phase"]
-    G --> H{"Impl succeeded?"}
-    H -- Yes --> I["Pull Request created"]
-    H -- No --> J["claude/impl:failed label applied"]
+```
+1. User adds claude/plan label to Issue
+2. Worker runs Plan Phase
+   -> Success: Plan comment posted to Issue
+   -> Failure: claude/plan:failed label applied
+3. User reviews plan and adds claude/impl label
+4. Worker runs Impl Phase
+   -> Success: Pull Request created
+   -> Failure: claude/impl:failed label applied
 ```
 
 ### Label Transitions
 
-```mermaid
-flowchart LR
-    A["claude/plan"] --> B["claude/plan:in-progress"]
-    B --> C["claude/plan:done"]
-    B --> D["claude/plan:failed"]
+```
+claude/plan  -->  claude/plan:in-progress  -->  claude/plan:done
+                                           -->  claude/plan:failed
 
-    E["claude/impl"] --> F["claude/impl:in-progress"]
-    F --> G["claude/impl:done"]
-    F --> H["claude/impl:failed"]
+claude/impl  -->  claude/impl:in-progress  -->  claude/impl:done
+                                           -->  claude/impl:failed
 ```
 
 ### Handling Failures
