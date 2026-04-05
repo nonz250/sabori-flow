@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
-import { basename, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 
+import type { Language } from "../i18n/types.js";
 import type { Issue, RepositoryConfig } from "./models.js";
 import { Phase, repoFullName } from "./models.js";
-import { getDefaultPromptsDir } from "../utils/paths.js";
+import { getUserPromptsDir, getDefaultPromptsDir } from "../utils/paths.js";
 import { createLogger } from "./logger.js";
 
 /** テンプレート関連のエラー */
@@ -17,7 +18,7 @@ export class PromptTemplateError extends Error {
 
 const logger = createLogger("prompt");
 
-const TEMPLATE_FILES: Record<Phase, string> = {
+export const TEMPLATE_FILES: Record<Phase, string> = {
   [Phase.PLAN]: "plan.md",
   [Phase.IMPL]: "impl.md",
 };
@@ -44,31 +45,62 @@ const USER_INPUT_KEYS: ReadonlySet<string> = new Set([
  * Issue とリポジトリ設定からプロンプト文字列を組み立てる。
  *
  * テンプレートファイルを読み込み、プレースホルダを展開して返す。
- * `repoConfig.promptsDir` が指定されていればそちらを優先し、
- * ファイルが存在しなければパッケージ同梱のデフォルトテンプレートにフォールバックする。
+ * 3 段階のフォールバックでテンプレートを解決する:
+ *   1. リポジトリ固有のカスタムディレクトリ (`repoConfig.promptsDir`)
+ *   2. ユーザー共通ディレクトリ (`~/.sabori-flow/prompts/`)
+ *   3. パッケージ同梱のデフォルトテンプレート (`prompts/<language>/`)
  *
  * @throws {PromptTemplateError} テンプレートの読み込みまたは展開に失敗した場合
  */
 export function buildPrompt(
   issue: Issue,
   repoConfig: RepositoryConfig,
+  language: Language = "ja",
 ): string {
   const customDir = repoConfig.promptsDir;
-  const defaultDir = getDefaultPromptsDir();
-  const template = loadTemplate(issue.phase, customDir, defaultDir);
+  const userDir = getUserPromptsDir();
+  const defaultDir = join(getDefaultPromptsDir(), language);
+  const template = loadTemplate(issue.phase, customDir, userDir, defaultDir);
   const variables = buildVariables(issue, repoConfig);
   return render(template, variables);
 }
 
+type TrustLevel = "untrusted" | "trusted";
+
 /**
- * テンプレートファイルを読み込む。
+ * ディレクトリからテンプレートファイルの読み込みを試行する。
  *
- * カスタムプロンプトディレクトリが指定されている場合はそちらを優先し、
- * ファイルが存在しなければデフォルトディレクトリにフォールバックする。
- * ファイルが存在するが読み込めない場合はエラーとする（フォールバックしない）。
+ * ファイルが存在すれば内容を返し、存在しなければ null を返す。
+ * untrusted ディレクトリの場合はパス包含検証とバウンダリプレースホルダ検証を行う。
  *
- * カスタムテンプレートにはバウンダリプレースホルダの存在を検証し、
- * 欠落している場合はプロンプトインジェクション防止のためエラーとする。
+ * @throws {PromptTemplateError} ファイルが存在するが検証に失敗した場合
+ */
+function loadFromDir(
+  dir: string,
+  filename: string,
+  trust: TrustLevel,
+): string | null {
+  const filePath = resolve(dir, filename);
+  if (!existsSync(filePath)) return null;
+
+  if (trust === "untrusted") {
+    validatePathContainment(filePath, dir);
+  }
+  const content = readTemplateFile(filePath);
+  if (trust === "untrusted") {
+    validateBoundaryPlaceholders(content, filePath);
+  }
+  return content;
+}
+
+/**
+ * 3 段階フォールバックでテンプレートファイルを読み込む。
+ *
+ *   1. リポジトリ固有のカスタムディレクトリ（untrusted: パス検証 + バウンダリ検証）
+ *   2. ユーザー共通ディレクトリ（untrusted: パス検証 + バウンダリ検証）
+ *   3. パッケージ同梱のデフォルトディレクトリ（trusted: 検証なし）
+ *
+ * ファイルが存在するが読み込めない/検証に失敗する場合はエラーとする（フォールバックしない）。
  *
  * @throws {PromptTemplateError} フェーズが未定義、テンプレートが存在しない、
  *   バウンダリプレースホルダが欠落、またはファイルサイズ超過の場合
@@ -76,6 +108,7 @@ export function buildPrompt(
 function loadTemplate(
   phase: Phase,
   customDir: string | null,
+  userDir: string,
   defaultDir: string,
 ): string {
   const filename = TEMPLATE_FILES[phase];
@@ -83,27 +116,34 @@ function loadTemplate(
     throw new PromptTemplateError(`Unknown phase: ${phase}`);
   }
 
-  // カスタムディレクトリからの読み込みを試行
+  // Tier 1: per-repo custom directory
   if (customDir !== null) {
-    const customPath = resolve(customDir, filename);
-
-    if (existsSync(customPath)) {
-      validatePathContainment(customPath, customDir);
-      const content = readTemplateFile(customPath);
-      validateBoundaryPlaceholders(content, customPath);
+    const content = loadFromDir(customDir, filename, "untrusted");
+    if (content !== null) {
+      logger.info("Loaded template from custom directory: %s", customDir);
       return content;
     }
-
     logger.info(
-      "Custom template not found: %s (falling back to default)",
-      customPath,
+      "Custom template not found in %s (falling back to user prompts)",
+      customDir,
     );
   }
 
-  // デフォルトディレクトリからの読み込み
-  const defaultPath = resolve(defaultDir, filename);
-  if (existsSync(defaultPath)) {
-    return readTemplateFile(defaultPath);
+  // Tier 2: user common prompts (~/.sabori-flow/prompts/)
+  const userContent = loadFromDir(userDir, filename, "untrusted");
+  if (userContent !== null) {
+    logger.info("Loaded template from user directory: %s", userDir);
+    return userContent;
+  }
+  logger.info(
+    "User template not found in %s (falling back to package default)",
+    userDir,
+  );
+
+  // Tier 3: package-bundled default
+  const defaultContent = loadFromDir(defaultDir, filename, "trusted");
+  if (defaultContent !== null) {
+    return defaultContent;
   }
 
   throw new PromptTemplateError(
