@@ -199,14 +199,14 @@ launchctl start com.github.nonz250.sabori-flow
 
 ## Configuration
 
-The configuration file is stored at `~/.config/sabori-flow/config.yml`. Create it based on `config.yml.example`, or generate it interactively with `npx sabori-flow init`.
+The configuration file is stored at `~/.sabori-flow/config.yml`. Create it based on `config.yml.example`, or generate it interactively with `npx sabori-flow init`.
 
 ```yaml
 repositories:
   - owner: nonz250
     repo: example-app
     local_path: /path/to/repo
-    # prompts_dir: /path/to/custom/prompts  # Optional: custom prompt template directory
+    # prompts_dir: /path/to/custom/prompts  # Optional: per-repo custom prompt template directory (highest priority)
     labels:
       plan:
         trigger: claude/plan
@@ -235,7 +235,7 @@ language: ja
 | `repositories[].owner` | Repository owner |
 | `repositories[].repo` | Repository name |
 | `repositories[].local_path` | Local path to the cloned repository |
-| `repositories[].prompts_dir` | (Optional) Custom prompt template directory. Absolute path. Templates in this directory take precedence; falls back to built-in defaults if not found |
+| `repositories[].prompts_dir` | (Optional) Per-repo custom prompt template directory. Highest priority in the 3-tier fallback: per-repo → `~/.sabori-flow/prompts/` → package defaults |
 | `repositories[].labels` | Label names for each phase (customizable) |
 | `repositories[].labels.plan` | Labels for the plan phase: `trigger`, `in_progress`, `done`, `failed` |
 | `repositories[].labels.impl` | Labels for the impl phase: `trigger`, `in_progress`, `done`, `failed` |
@@ -243,7 +243,7 @@ language: ja
 | `execution.max_parallel` | Number of parallel executions. Default is `1` (sequential) |
 | `execution.max_issues_per_repo` | Maximum number of issues to process per repository. Default is `1` |
 | `execution.autonomy` | CLI autonomy level: `full` (unrestricted), `sandboxed` (sandboxed execution, CLI support required), `interactive` (requires user approval). Default is `interactive` |
-| `language` | Language for CLI messages (`ja` / `en`). Default is `ja` |
+| `language` | Language for CLI messages and prompt templates (`ja` / `en`). Default is `ja` |
 
 ## Security
 
@@ -256,7 +256,7 @@ Additionally, the following defenses are built in.
 - **Author permission check** -- Only issues created by users with OWNER, MEMBER, or COLLABORATOR association are processed; others are automatically skipped.
 - **Secret masking** -- Before posting a success comment, output is scanned and secrets are automatically masked.
 - **Random boundary tokens** -- Prompts use randomized boundary tokens to mitigate prompt injection.
-- **Custom template validation** -- Custom prompt templates must include boundary placeholders and are checked for path traversal and size limits (100KB).
+- **Custom template validation** -- Custom and user-edited prompt templates must include boundary placeholders and are checked for path traversal and size limits (100KB). Package-bundled templates are trusted.
 
 To mitigate this risk, use the `--local` flag to run from a locally built copy you can audit.
 

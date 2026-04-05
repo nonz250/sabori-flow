@@ -3,7 +3,7 @@ repositories:
   - owner: nonz250
     repo: example-app
     local_path: /Users/you/projects/example-app
-    # prompts_dir: /Users/you/.config/sabori-flow/prompts/example-app  # optional: custom prompt templates
+    # prompts_dir: /path/to/custom/prompts  # optional: per-repo custom prompt templates (highest priority)
     labels:
       plan:
         trigger: claude/plan
