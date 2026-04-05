@@ -120,6 +120,7 @@ describe("loadConfig - normal", () => {
     expect(repo.priorityLabels).toEqual(["priority:high", "priority:low"]);
     expect(result.execution.maxParallel).toBe(4);
     expect(result.language).toBe("ja");
+    expect(result.execution.autonomy).toBe("interactive");
   });
 
   it("execution default (max_parallel=1 when execution is omitted)", () => {
@@ -127,6 +128,7 @@ describe("loadConfig - normal", () => {
     const result = loadConfig("/path/to/config.yml");
 
     expect(result.execution.maxParallel).toBe(1);
+    expect(result.execution.autonomy).toBe("interactive");
   });
 
   it("empty priority_labels", () => {
@@ -485,6 +487,96 @@ describe("loadConfig - execution validation", () => {
 
     const result = loadConfig("/path/to/config.yml");
     expect(result.execution.maxIssuesPerRepo).toBe(20);
+  });
+
+  it("autonomy: 'full' が正しくパースされる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      'max_parallel: 4\n  autonomy: "full"',
+    );
+    mockYaml(yaml);
+
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.autonomy).toBe("full");
+  });
+
+  it("autonomy: 'sandboxed' が正しくパースされる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      'max_parallel: 4\n  autonomy: "sandboxed"',
+    );
+    mockYaml(yaml);
+
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.autonomy).toBe("sandboxed");
+  });
+
+  it("autonomy: 'interactive' が正しくパースされる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      'max_parallel: 4\n  autonomy: "interactive"',
+    );
+    mockYaml(yaml);
+
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.autonomy).toBe("interactive");
+  });
+
+  it("autonomy デフォルト値 (execution あり、autonomy 省略)", () => {
+    mockYaml(VALID_YAML);
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.autonomy).toBe("interactive");
+  });
+
+  it("autonomy デフォルト値 (execution 省略)", () => {
+    mockYaml(VALID_YAML_NO_EXECUTION);
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.autonomy).toBe("interactive");
+  });
+
+  it("autonomy に不正な文字列を指定するとエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      'max_parallel: 4\n  autonomy: "invalid"',
+    );
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /execution.autonomy: must be one of: full, sandboxed, interactive/,
+    );
+  });
+
+  it("autonomy に boolean を指定するとエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  autonomy: true",
+    );
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /execution.autonomy: must be a string, got boolean/,
+    );
+  });
+
+  it("autonomy に数値を指定するとエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  autonomy: 1",
+    );
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /execution.autonomy: must be a string, got number/,
+    );
   });
 });
 

@@ -1,5 +1,5 @@
-import type { AppConfig, Issue, Phase, RepositoryConfig } from "./models.js";
-import { repoFullName } from "./models.js";
+import type { AppConfig, ExecutionConfig, Issue, Phase, RepositoryConfig } from "./models.js";
+import { Autonomy, repoFullName } from "./models.js";
 import { Phase as PhaseEnum } from "./models.js";
 import { loadConfig } from "./config.js";
 import { fetchIssues } from "./fetcher.js";
@@ -20,6 +20,7 @@ export interface WorkerDeps {
   processIssue: (
     issue: Issue,
     repoConfig: RepositoryConfig,
+    executionConfig: ExecutionConfig,
   ) => Promise<boolean>;
 }
 
@@ -40,6 +41,7 @@ export const defaultWorkerDeps: WorkerDeps = {
 async function processPhase(
   repoConfig: RepositoryConfig,
   phase: Phase,
+  executionConfig: ExecutionConfig,
   deps: WorkerDeps,
   remainingQuota: number,
 ): Promise<{ anySuccess: boolean; processedCount: number }> {
@@ -90,7 +92,7 @@ async function processPhase(
       issue.priority,
       issue.title,
     );
-    const success = await deps.processIssue(issue, repoConfig);
+    const success = await deps.processIssue(issue, repoConfig, executionConfig);
     if (success) {
       anySuccess = true;
     }
@@ -106,19 +108,19 @@ async function processPhase(
  */
 async function processRepository(
   repoConfig: RepositoryConfig,
-  maxIssuesPerRepo: number,
+  executionConfig: ExecutionConfig,
   deps: WorkerDeps,
 ): Promise<boolean> {
   const fullName = repoFullName(repoConfig);
   let anySuccess = false;
-  let remaining = maxIssuesPerRepo;
+  let remaining = executionConfig.maxIssuesPerRepo;
 
   for (const phase of [PhaseEnum.PLAN, PhaseEnum.IMPL]) {
     if (remaining <= 0) {
       logger.info("[%s] リポジトリ上限に達したため %s フェーズをスキップ", fullName, phase);
       break;
     }
-    const result = await processPhase(repoConfig, phase, deps, remaining);
+    const result = await processPhase(repoConfig, phase, executionConfig, deps, remaining);
     remaining -= result.processedCount;
     if (result.anySuccess) {
       anySuccess = true;
@@ -186,6 +188,12 @@ export async function workerMain(
     appConfig.repositories.length,
   );
 
+  if (appConfig.execution.autonomy === Autonomy.FULL) {
+    logger.warn(
+      "autonomy is set to 'full'. Claude Code CLI will run with --dangerously-skip-permissions.",
+    );
+  }
+
   // リポジトリ並列処理 (Promise.allSettled + セマフォ制御)
   const semaphore = new Semaphore(appConfig.execution.maxParallel);
 
@@ -193,7 +201,7 @@ export async function workerMain(
     appConfig.repositories.map(async (repoConfig) => {
       await semaphore.acquire();
       try {
-        return await processRepository(repoConfig, appConfig.execution.maxIssuesPerRepo, deps);
+        return await processRepository(repoConfig, appConfig.execution, deps);
       } finally {
         semaphore.release();
       }

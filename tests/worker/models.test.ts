@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   Phase,
   Priority,
+  Autonomy,
   repoFullName,
 } from "../../src/worker/models.js";
 import type {
@@ -34,6 +35,20 @@ describe("Priority", () => {
 
   it("NONE の値が 2 である", () => {
     expect(Priority.NONE).toBe(2);
+  });
+});
+
+describe("Autonomy", () => {
+  it("FULL の値が 'full' である", () => {
+    expect(Autonomy.FULL).toBe("full");
+  });
+
+  it("SANDBOXED の値が 'sandboxed' である", () => {
+    expect(Autonomy.SANDBOXED).toBe("sandboxed");
+  });
+
+  it("INTERACTIVE の値が 'interactive' である", () => {
+    expect(Autonomy.INTERACTIVE).toBe("interactive");
   });
 });
 
@@ -126,6 +141,7 @@ describe("型の構造テスト", () => {
     const executionConfig: ExecutionConfig = {
       maxParallel: 4,
       maxIssuesPerRepo: 5,
+      autonomy: Autonomy.FULL,
     };
 
     const appConfig: AppConfig = {

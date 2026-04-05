@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 import { workerMain } from "../../src/worker/main.js";
-import { Phase, Priority } from "../../src/worker/models.js";
+import { Phase, Priority, Autonomy } from "../../src/worker/models.js";
 import {
   makeRepoConfig,
   makeIssue,
@@ -10,14 +10,18 @@ import {
 import { createMockWorkerDeps } from "./helpers/mock-deps.js";
 import type { WorkerDeps } from "../../src/worker/main.js";
 
-// logger を抑制
-vi.mock("../../src/worker/logger.js", () => ({
-  createLogger: vi.fn(() => ({
+const { mockLoggerInstance } = vi.hoisted(() => ({
+  mockLoggerInstance: {
     debug: vi.fn(),
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
-  })),
+  },
+}));
+
+// logger を抑制
+vi.mock("../../src/worker/logger.js", () => ({
+  createLogger: vi.fn(() => mockLoggerInstance),
   configureLogger: vi.fn(),
   rotateOldLogs: vi.fn(),
 }));
@@ -511,6 +515,53 @@ describe("workerMain", () => {
 
       expect(result).toBe(0);
       expect(deps.processIssue).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // autonomy WARN ログ
+  // -----------------------------------------------------------------------
+
+  describe("autonomy WARN ログ", () => {
+    it("autonomy が full の場合 WARN ログが出力される", async () => {
+      vi.mocked(deps.loadConfig).mockReturnValue(
+        makeAppConfig({ execution: { autonomy: Autonomy.FULL } }),
+      );
+      vi.mocked(deps.fetchIssues).mockResolvedValue([]);
+
+      mockLoggerInstance.warn.mockClear();
+
+      await workerMain("/path/to/config.yml", deps);
+
+      expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
+        "autonomy is set to 'full'. Claude Code CLI will run with --dangerously-skip-permissions.",
+      );
+    });
+
+    it("autonomy が interactive の場合 autonomy WARN ログが出力されない", async () => {
+      vi.mocked(deps.loadConfig).mockReturnValue(
+        makeAppConfig({ execution: { autonomy: Autonomy.INTERACTIVE } }),
+      );
+      vi.mocked(deps.fetchIssues).mockResolvedValue([]);
+
+      mockLoggerInstance.warn.mockClear();
+
+      await workerMain("/path/to/config.yml", deps);
+
+      expect(mockLoggerInstance.warn).not.toHaveBeenCalled();
+    });
+
+    it("autonomy が sandboxed の場合 autonomy WARN ログが出力されない", async () => {
+      vi.mocked(deps.loadConfig).mockReturnValue(
+        makeAppConfig({ execution: { autonomy: Autonomy.SANDBOXED } }),
+      );
+      vi.mocked(deps.fetchIssues).mockResolvedValue([]);
+
+      mockLoggerInstance.warn.mockClear();
+
+      await workerMain("/path/to/config.yml", deps);
+
+      expect(mockLoggerInstance.warn).not.toHaveBeenCalled();
     });
   });
 });

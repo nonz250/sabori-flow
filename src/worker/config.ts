@@ -1,12 +1,13 @@
 import { readFileSync, realpathSync } from "node:fs";
 import YAML from "yaml";
 
-import type {
-  AppConfig,
-  ExecutionConfig,
-  RepositoryConfig,
-  LabelsConfig,
-  PhaseLabels,
+import {
+  Autonomy,
+  type AppConfig,
+  type ExecutionConfig,
+  type RepositoryConfig,
+  type LabelsConfig,
+  type PhaseLabels,
 } from "./models.js";
 import { expandTilde } from "../utils/paths.js";
 import type { Language } from "../i18n/types.js";
@@ -312,7 +313,7 @@ function parsePhaseLabels(raw: unknown, phaseName: string): PhaseLabels {
 
 function parseExecution(raw: unknown): ExecutionConfig {
   if (raw === undefined || raw === null) {
-    return { maxParallel: 1, maxIssuesPerRepo: 1 };
+    return { maxParallel: 1, maxIssuesPerRepo: 1, autonomy: Autonomy.INTERACTIVE };
   }
 
   if (typeof raw !== "object" || Array.isArray(raw)) {
@@ -365,7 +366,28 @@ function parseExecution(raw: unknown): ExecutionConfig {
     );
   }
 
-  return { maxParallel: rawMaxParallel, maxIssuesPerRepo: rawMaxIssuesPerRepo };
+  // autonomy
+  const rawAutonomy =
+    "autonomy" in record ? record["autonomy"] : Autonomy.INTERACTIVE;
+
+  if (typeof rawAutonomy !== "string") {
+    throw new ConfigValidationError(
+      `execution.autonomy: must be a string, got ${typeof rawAutonomy}`,
+    );
+  }
+
+  const validAutonomyValues = Object.values(Autonomy) as string[];
+  if (!validAutonomyValues.includes(rawAutonomy)) {
+    throw new ConfigValidationError(
+      `execution.autonomy: must be one of: ${validAutonomyValues.join(", ")}; got '${rawAutonomy}'`,
+    );
+  }
+
+  return {
+    maxParallel: rawMaxParallel,
+    maxIssuesPerRepo: rawMaxIssuesPerRepo,
+    autonomy: rawAutonomy as Autonomy,
+  };
 }
 
 // ---------- Helpers ----------

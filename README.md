@@ -224,6 +224,9 @@ repositories:
 execution:
   max_parallel: 1
   max_issues_per_repo: 1
+  autonomy: interactive
+
+language: ja
 ```
 
 | Key | Description |
@@ -237,10 +240,12 @@ execution:
 | `repositories[].priority_labels` | Priority labels. Issues with labels higher in the list are processed first |
 | `execution.max_parallel` | Number of parallel executions. Default is `1` (sequential) |
 | `execution.max_issues_per_repo` | Maximum number of issues to process per repository. Default is `1` |
+| `execution.autonomy` | CLI autonomy level: `full` (unrestricted), `sandboxed` (sandboxed execution, CLI support required), `interactive` (requires user approval). Default is `interactive` |
+| `language` | Language for CLI messages (`ja` / `en`). Default is `ja` |
 
 ## Security
 
-This tool runs Claude Code CLI with `--dangerously-skip-permissions`, which allows nearly arbitrary operations on your machine. It is executed periodically by launchd without user interaction.
+By default, this tool runs Claude Code CLI in `interactive` mode, which requires user approval for each action. To enable fully autonomous execution, set `execution.autonomy: full` in `config.yml` — this passes `--dangerously-skip-permissions` to Claude Code CLI, allowing nearly arbitrary operations on your machine. It is executed periodically by launchd without user interaction.
 
 By default, the `npx` installation fetches packages from the npm registry at runtime. If the npm package were compromised, malicious code could be executed automatically by the scheduler.
 
