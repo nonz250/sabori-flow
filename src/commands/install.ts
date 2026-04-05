@@ -13,6 +13,7 @@ import {
 import { exec, commandExists, ShellError } from "../utils/shell.js";
 import { renderPlist } from "../utils/plist.js";
 import { setLanguage, t, loadLanguageFromConfig } from "../i18n/index.js";
+import { loadConfig, ConfigValidationError } from "../worker/config.js";
 
 const STANDARD_PATHS = ["/usr/local/bin", "/usr/bin", "/bin"];
 const REQUIRED_COMMANDS = ["node", "git", "gh", "claude"];
@@ -83,7 +84,12 @@ export async function installCommand(
   }
 
   try {
-    // 3. logs ディレクトリ作成
+    // 3. config.yml を読み込んで interval_minutes を取得
+    const config = loadConfig(getConfigPath());
+    const intervalMinutes = config.execution.intervalMinutes;
+    const startInterval = intervalMinutes * 60;
+
+    // 4. logs ディレクトリ作成
     const logDir = getLogsDir();
     fs.mkdirSync(logDir, { recursive: true, mode: 0o700 });
 
@@ -95,6 +101,7 @@ export async function installCommand(
       programArguments,
       path: buildMinimalPath(),
       logDir,
+      startInterval,
     });
     fs.writeFileSync(getPlistGeneratedPath(), plist, { encoding: "utf-8", mode: 0o600 });
 
@@ -107,15 +114,17 @@ export async function installCommand(
 
     if (options.local) {
       console.log(
-        t("install.localComplete"),
+        t("install.localComplete", { minutes: String(intervalMinutes) }),
       );
     } else {
       console.log(
-        t("install.complete"),
+        t("install.complete", { minutes: String(intervalMinutes) }),
       );
     }
   } catch (error) {
-    if (error instanceof ShellError) {
+    if (error instanceof ConfigValidationError) {
+      console.error(t("install.configValidationError", { message: error.message }));
+    } else if (error instanceof ShellError) {
       console.error(`Error: ${error.message}`);
       if (error.stderr) console.error(error.stderr);
     } else {

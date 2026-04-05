@@ -36,6 +36,7 @@ export interface MessageKeys {
   "install.registeringLaunchd": string;
   "install.localComplete": string;
   "install.complete": string;
+  "install.configValidationError": string;
   "install.unexpectedError": string;
 
   // uninstall command
@@ -52,6 +53,8 @@ export interface MessageKeys {
   "prompt.validationAlphanumeric": string;
   "prompt.validationAbsolutePath": string;
   "prompt.autoImplConfirm": string;
+  "prompt.intervalMinutes": string;
+  "prompt.intervalMinutesValidation": string;
 
   // cli descriptions
   "cli.descriptionAdd": string;

@@ -23,6 +23,7 @@ execution:
   max_parallel: 1
   # max_issues_per_repo: 1  # リポジトリあたりの Issue 処理上限（省略時は 1）
   # autonomy: interactive    # full / sandboxed / interactive（省略時は interactive）
+  # interval_minutes: 60  # スケジュール実行間隔（分、10-1440、省略時は 60）
 
 # 表示言語
 # language: ja  # ja / en（省略時は ja）
