@@ -12,7 +12,6 @@ import {
   type RepositoryInput,
   promptRepository,
 } from "./helpers/repository-prompt.js";
-import { detectLegacyPaths, formatMigrationMessage } from "../utils/migration.js";
 import { setLanguage, t } from "../i18n/index.js";
 import type { Language } from "../i18n/types.js";
 import { TEMPLATE_FILES } from "../worker/prompt.js";
@@ -63,13 +62,6 @@ export async function initCommand(): Promise<void> {
   // config.yml 存在チェック
   // ベースディレクトリを事前作成
   fs.mkdirSync(getBaseDir(), { recursive: true, mode: 0o700 });
-
-  const legacy = detectLegacyPaths();
-  const migrationMsg = formatMigrationMessage(legacy);
-  if (migrationMsg !== null) {
-    console.warn(t("init.legacyPathWarning"));
-    console.warn(migrationMsg);
-  }
 
   const language = await select<Language>({
     message: "Select language / 言語を選択してください:",

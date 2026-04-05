@@ -14,7 +14,6 @@ export interface MessageKeys {
   "init.templateExists": string;
   "init.templateSkipped": string;
   "init.templatesCopied": string;
-  "init.legacyPathWarning": string;
 
   // add command
   "add.configNotFound": string;

@@ -13,8 +13,6 @@ const jaMessages: MessageKeys = {
   "init.templateSkipped": "スキップしました: {file}",
   "init.templatesCopied":
     "\nプロンプトテンプレートをコピーしました: {dir}",
-  "init.legacyPathWarning":
-    "旧パスに設定が検出されました。以下のコマンドで移行してください:",
 
   // add command
   "add.configNotFound": "Error: config.yml が見つかりません。",
@@ -87,8 +85,6 @@ const enMessages: MessageKeys = {
   "init.templateExists": "{file} already exists. Overwrite?",
   "init.templateSkipped": "Skipped: {file}",
   "init.templatesCopied": "\nPrompt templates copied to: {dir}",
-  "init.legacyPathWarning":
-    "Legacy configuration detected at old paths. Please migrate:",
 
   // add command
   "add.configNotFound": "Error: config.yml not found.",
