@@ -7,6 +7,7 @@ import {
   transitionToInProgress,
   transitionToDone,
   transitionToFailed,
+  addImplTriggerLabel,
 } from "./label.js";
 import {
   postSuccessComment,
@@ -41,6 +42,11 @@ export interface PipelineDeps {
     num: number,
     labels: PhaseLabels,
   ) => Promise<void>;
+  addImplTriggerLabel: (
+    repo: string,
+    num: number,
+    implTriggerLabel: string,
+  ) => Promise<void>;
   postSuccessComment: (
     repo: string,
     num: number,
@@ -64,6 +70,7 @@ export const defaultDeps: PipelineDeps = {
   transitionToInProgress,
   transitionToDone,
   transitionToFailed,
+  addImplTriggerLabel,
   postSuccessComment,
   postFailureComment,
   withWorktree,
@@ -164,9 +171,11 @@ export async function processIssue(
           return false;
         }
 
-        // 4-A. 成功: done 遷移 + 成功コメント（レベル 3）
+        // 4-A. 成功: done 遷移 + 自動 impl ラベル付与 + 成功コメント（レベル 3）
+        let doneTransitionSucceeded = false;
         try {
           await deps.transitionToDone(repo, issue.number, phaseLabels);
+          doneTransitionSucceeded = true;
         } catch (error: unknown) {
           logger.warn(
             "Issue #%s: done ラベル遷移に失敗しました [repo=%s]: %s",
@@ -174,6 +183,20 @@ export async function processIssue(
             repo,
             error,
           );
+        }
+
+        // plan 成功 + autoImplAfterPlan 有効時に impl trigger ラベルを付与
+        if (doneTransitionSucceeded && issue.phase === Phase.PLAN && repoConfig.autoImplAfterPlan) {
+          try {
+            await deps.addImplTriggerLabel(repo, issue.number, repoConfig.labels.impl.trigger);
+          } catch (error: unknown) {
+            logger.warn(
+              "Issue #%s: impl trigger ラベルの自動付与に失敗しました [repo=%s]: %s",
+              issue.number,
+              repo,
+              error,
+            );
+          }
         }
 
         try {

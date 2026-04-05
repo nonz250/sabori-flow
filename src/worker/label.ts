@@ -65,6 +65,78 @@ export async function transitionToFailed(
   });
 }
 
+/**
+ * Issue に impl trigger ラベルを付与する。
+ *
+ * @throws {LabelError} ラベル操作に失敗した場合
+ */
+export async function addImplTriggerLabel(
+  repoFullName: string,
+  issueNumber: number,
+  implTriggerLabel: string,
+): Promise<void> {
+  try {
+    const result = await runCommand(
+      "gh",
+      [
+        "issue",
+        "edit",
+        "--repo",
+        repoFullName,
+        String(issueNumber),
+        "--add-label",
+        implTriggerLabel,
+      ],
+      { timeoutMs: GH_TIMEOUT_MS },
+    );
+
+    if (!result.success) {
+      if (isLabelNotFoundError(result.stderr, implTriggerLabel)) {
+        logger.info(
+          "Label '%s' not found in %s — attempting to create",
+          implTriggerLabel,
+          repoFullName,
+        );
+        await ensureLabel(repoFullName, implTriggerLabel);
+
+        const retryResult = await runCommand(
+          "gh",
+          [
+            "issue",
+            "edit",
+            "--repo",
+            repoFullName,
+            String(issueNumber),
+            "--add-label",
+            implTriggerLabel,
+          ],
+          { timeoutMs: GH_TIMEOUT_MS },
+        );
+
+        if (!retryResult.success) {
+          throw new LabelError(retryResult.stderr);
+        }
+        return;
+      }
+
+      throw new LabelError(result.stderr);
+    }
+  } catch (error: unknown) {
+    if (error instanceof LabelError) {
+      throw error;
+    }
+    if (error instanceof ProcessTimeoutError) {
+      throw new LabelError(
+        `gh issue edit timed out after ${GH_TIMEOUT_MS / 1_000} seconds`,
+      );
+    }
+    if (error instanceof ProcessExecutionError) {
+      throw new LabelError(error.message);
+    }
+    throw error;
+  }
+}
+
 interface LabelTransition {
   readonly addLabel: string;
   readonly removeLabel: string;

@@ -70,6 +70,7 @@ export async function addCommand(): Promise<void> {
     local_path: repoInput.local_path,
     labels: getDefaultLabels(),
     priority_labels: getDefaultPriorityLabels(),
+    auto_impl_after_plan: repoInput.auto_impl_after_plan,
   });
 
   // 7. 書き戻し

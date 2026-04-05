@@ -367,4 +367,71 @@ describe("processIssue", () => {
       expect(deps.transitionToFailed).toHaveBeenCalledOnce();
     });
   });
+
+  // -----------------------------------------------------------------------
+  // autoImplAfterPlan: plan 成功後の自動 impl ラベル付与
+  // -----------------------------------------------------------------------
+
+  describe("autoImplAfterPlan", () => {
+    it("plan 成功 + autoImplAfterPlan: true で addImplTriggerLabel が呼ばれる", async () => {
+      const issue = makeIssue({ phase: Phase.PLAN });
+      const repoConfig = makeRepoConfig({ autoImplAfterPlan: true });
+
+      const result = await processIssue(issue, repoConfig, deps);
+
+      expect(result).toBe(true);
+      expect(deps.addImplTriggerLabel).toHaveBeenCalledOnce();
+      expect(deps.addImplTriggerLabel).toHaveBeenCalledWith(
+        "testowner/testrepo",
+        42,
+        "claude/impl",
+      );
+    });
+
+    it("plan 成功 + autoImplAfterPlan: false で addImplTriggerLabel が呼ばれない", async () => {
+      const issue = makeIssue({ phase: Phase.PLAN });
+      const repoConfig = makeRepoConfig({ autoImplAfterPlan: false });
+
+      const result = await processIssue(issue, repoConfig, deps);
+
+      expect(result).toBe(true);
+      expect(deps.addImplTriggerLabel).not.toHaveBeenCalled();
+    });
+
+    it("impl 成功 + autoImplAfterPlan: true で addImplTriggerLabel が呼ばれない", async () => {
+      const issue = makeIssue({ phase: Phase.IMPL });
+      const repoConfig = makeRepoConfig({ autoImplAfterPlan: true });
+
+      const result = await processIssue(issue, repoConfig, deps);
+
+      expect(result).toBe(true);
+      expect(deps.addImplTriggerLabel).not.toHaveBeenCalled();
+    });
+
+    it("plan 成功 + autoImplAfterPlan: true + addImplTriggerLabel 失敗でも true が返る", async () => {
+      const issue = makeIssue({ phase: Phase.PLAN });
+      const repoConfig = makeRepoConfig({ autoImplAfterPlan: true });
+      vi.mocked(deps.addImplTriggerLabel).mockRejectedValue(
+        new Error("label add failed"),
+      );
+
+      const result = await processIssue(issue, repoConfig, deps);
+
+      expect(result).toBe(true);
+      expect(deps.addImplTriggerLabel).toHaveBeenCalledOnce();
+    });
+
+    it("plan 成功 + autoImplAfterPlan: true + transitionToDone 失敗時は addImplTriggerLabel が呼ばれない", async () => {
+      const issue = makeIssue({ phase: Phase.PLAN });
+      const repoConfig = makeRepoConfig({ autoImplAfterPlan: true });
+      vi.mocked(deps.transitionToDone).mockRejectedValue(
+        new Error("done label failed"),
+      );
+
+      const result = await processIssue(issue, repoConfig, deps);
+
+      expect(result).toBe(true);
+      expect(deps.addImplTriggerLabel).not.toHaveBeenCalled();
+    });
+  });
 });

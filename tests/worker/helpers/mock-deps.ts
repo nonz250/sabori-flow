@@ -20,6 +20,7 @@ export function createMockPipelineDeps(
     transitionToInProgress: vi.fn().mockResolvedValue(undefined),
     transitionToDone: vi.fn().mockResolvedValue(undefined),
     transitionToFailed: vi.fn().mockResolvedValue(undefined),
+    addImplTriggerLabel: vi.fn().mockResolvedValue(undefined),
     postSuccessComment: vi.fn().mockResolvedValue(undefined),
     postFailureComment: vi.fn().mockResolvedValue(undefined),
     withWorktree: vi.fn().mockImplementation(
