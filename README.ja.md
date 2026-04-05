@@ -133,7 +133,7 @@ launchd からの登録解除と plist の削除が行われます。`~/.sabori-
 
 ### ワークフロー
 
-Issue にラベルを付けるだけです。ワーカーが 1 時間ごとに自動検出して処理します。
+Issue にラベルを付けるだけです。ワーカーが設定された間隔で自動検出して処理します。
 
 ```mermaid
 flowchart TD
@@ -225,6 +225,7 @@ execution:
   max_parallel: 1
   max_issues_per_repo: 1
   autonomy: interactive
+  interval_minutes: 60
 
 language: ja
 ```
@@ -241,7 +242,10 @@ language: ja
 | `execution.max_parallel` | 並列実行数。デフォルトは `1`（逐次実行） |
 | `execution.max_issues_per_repo` | リポジトリあたりの Issue 処理上限。デフォルトは `1` |
 | `execution.autonomy` | CLI の自律実行レベル: `full`（無制限）、`sandboxed`（サンドボックス実行、CLI の対応が必要）、`interactive`（ユーザー承認が必要）。デフォルトは `interactive` |
+| `execution.interval_minutes` | スケジュール実行間隔（分、10-1440）。デフォルトは `60` |
 | `language` | CLI メッセージおよびプロンプトテンプレートの言語（`ja` / `en`）。デフォルトは `ja` |
+
+> **Note:** `config.yml` を編集した後は、`npx sabori-flow reinstall` を実行して launchd に変更を反映してください。
 
 ## セキュリティ
 
