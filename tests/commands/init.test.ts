@@ -73,7 +73,6 @@ function makeRepoInput(overrides?: Partial<RepositoryInput>): RepositoryInput {
     repo: "test-repo",
     local_path: "/tmp/test-owner/test-repo",
     auto_impl_after_plan: false,
-    prompts_dir: null,
     ...overrides,
   };
 }
@@ -245,34 +244,6 @@ describe("initCommand - 書き込まれる YAML の内容", () => {
     // priority_labels の構造
     const priorityLabels = repo.priority_labels as string[];
     expect(priorityLabels).toEqual(["priority:high", "priority:low"]);
-  });
-
-  it("prompts_dir が null の場合、YAML に prompts_dir キーが含まれない", async () => {
-    const repoInput = makeRepoInput({ prompts_dir: null });
-
-    mockExistsSyncForConfig(false);
-    mockedPromptRepository.mockResolvedValueOnce(repoInput);
-    mockedConfirm.mockResolvedValueOnce(false);
-
-    await runInitCommand();
-
-    const written = parseWrittenYaml();
-    const repos = written.repositories as Array<Record<string, unknown>>;
-    expect(repos[0]).not.toHaveProperty("prompts_dir");
-  });
-
-  it("prompts_dir が指定された場合、YAML に prompts_dir が含まれる", async () => {
-    const repoInput = makeRepoInput({ prompts_dir: "/custom/prompts" });
-
-    mockExistsSyncForConfig(false);
-    mockedPromptRepository.mockResolvedValueOnce(repoInput);
-    mockedConfirm.mockResolvedValueOnce(false);
-
-    await runInitCommand();
-
-    const written = parseWrittenYaml();
-    const repos = written.repositories as Array<Record<string, unknown>>;
-    expect(repos[0].prompts_dir).toBe("/custom/prompts");
   });
 
   it("execution セクションに max_parallel, max_issues_per_repo が含まれ log_dir は含まれない", async () => {

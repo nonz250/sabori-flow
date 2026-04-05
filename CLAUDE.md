@@ -154,18 +154,16 @@ src/
 
 パッケージ同梱テンプレートは `prompts/{lang}/` に言語別で配置される。`init` コマンド実行時に選択言語のテンプレートが `~/.sabori-flow/prompts/` にコピーされ、ユーザーが自由にカスタマイズ可能。
 
-テンプレート読み込みの優先順位（3 層フォールバック）:
+テンプレート読み込みの優先順位（2 層フォールバック）:
 
-1. `repositories[].prompts_dir`（リポジトリ固有カスタム）
-2. `~/.sabori-flow/prompts/`（ユーザー共通、init 時にコピー）
-3. パッケージ同梱 `prompts/{lang}/`（フォールバック）
+1. `~/.sabori-flow/prompts/`（ユーザー共通、init 時にコピー）
+2. パッケージ同梱 `prompts/{lang}/`（フォールバック）
 
-信頼レベル: 1, 2 は untrusted（バウンダリ検証 + パストラバーサル検証）、3 は trusted（検証なし）。
+信頼レベル: 1 は untrusted（バウンダリ検証 + パストラバーサル検証）、2 は trusted（検証なし）。
 
 ### config.yml の設定項目
 
 - `repositories`: 対象リポジトリ一覧（必須、1 件以上）
-- `repositories[].prompts_dir`: リポジトリ固有のカスタムプロンプトテンプレートディレクトリ（任意、絶対パス）。3 層フォールバックの最優先ティア
 - `execution.max_parallel`: 並列実行数（整数、1-10、デフォルト: 1）
 - `execution.max_issues_per_repo`: リポジトリあたりの最大処理 Issue 数（整数、1-20、デフォルト: 1）
 - `execution.autonomy`: CLI の自律実行レベル（`full` / `sandboxed` / `interactive`、デフォルト: `interactive`）

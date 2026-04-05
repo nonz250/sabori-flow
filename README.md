@@ -206,7 +206,6 @@ repositories:
   - owner: nonz250
     repo: example-app
     local_path: /path/to/repo
-    # prompts_dir: /path/to/custom/prompts  # Optional: per-repo custom prompt template directory (highest priority)
     labels:
       plan:
         trigger: claude/plan
@@ -235,7 +234,6 @@ language: ja
 | `repositories[].owner` | Repository owner |
 | `repositories[].repo` | Repository name |
 | `repositories[].local_path` | Local path to the cloned repository |
-| `repositories[].prompts_dir` | (Optional) Per-repo custom prompt template directory. Highest priority in the 3-tier fallback: per-repo → `~/.sabori-flow/prompts/` → package defaults |
 | `repositories[].labels` | Label names for each phase (customizable) |
 | `repositories[].labels.plan` | Labels for the plan phase: `trigger`, `in_progress`, `done`, `failed` |
 | `repositories[].labels.impl` | Labels for the impl phase: `trigger`, `in_progress`, `done`, `failed` |

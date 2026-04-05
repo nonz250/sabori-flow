@@ -1,4 +1,4 @@
-import { readFileSync, realpathSync, statSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import YAML from "yaml";
 
 import {
@@ -159,50 +159,6 @@ function parseRepositories(raw: unknown): readonly RepositoryConfig[] {
       );
     }
 
-    // prompts_dir (optional)
-    let promptsDir: string | null = null;
-    if ("prompts_dir" in record && record["prompts_dir"] != null) {
-      const rawPromptsDir = record["prompts_dir"];
-      if (typeof rawPromptsDir !== "string" || rawPromptsDir === "") {
-        throw new ConfigValidationError(
-          `${prefix}.prompts_dir: must be a non-empty string`,
-        );
-      }
-
-      const expandedPromptsDir = expandTilde(rawPromptsDir);
-
-      if (!isAbsolutePath(expandedPromptsDir)) {
-        throw new ConfigValidationError(
-          `${prefix}.prompts_dir: must be an absolute path, got '${expandedPromptsDir}'`,
-        );
-      }
-
-      let resolvedPromptsDir: string;
-      try {
-        resolvedPromptsDir = realpathSync(expandedPromptsDir);
-      } catch {
-        throw new ConfigValidationError(
-          `${prefix}.prompts_dir: path does not exist: '${expandedPromptsDir}'`,
-        );
-      }
-
-      try {
-        const stat = statSync(resolvedPromptsDir);
-        if (!stat.isDirectory()) {
-          throw new ConfigValidationError(
-            `${prefix}.prompts_dir: path is not a directory: '${expandedPromptsDir}'`,
-          );
-        }
-      } catch (error: unknown) {
-        if (error instanceof ConfigValidationError) throw error;
-        throw new ConfigValidationError(
-          `${prefix}.prompts_dir: cannot access path: '${expandedPromptsDir}'`,
-        );
-      }
-
-      promptsDir = resolvedPromptsDir;
-    }
-
     // labels
     if (!("labels" in record)) {
       throw new ConfigValidationError(`${prefix}: 'labels' is required`);
@@ -286,7 +242,6 @@ function parseRepositories(raw: unknown): readonly RepositoryConfig[] {
       owner,
       repo,
       localPath: resolvedLocalPath,
-      promptsDir,
       labels,
       priorityLabels: priorityRaw as string[],
       autoImplAfterPlan,

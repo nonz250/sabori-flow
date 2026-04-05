@@ -42,13 +42,11 @@ const mockedGetDefaultPromptsDir = vi.mocked(getDefaultPromptsDir);
 function makeRepoConfig(
   owner = "testowner",
   repo = "testrepo",
-  promptsDir: string | null = null,
 ): RepositoryConfig {
   return {
     owner,
     repo,
     localPath: "/tmp/testowner/testrepo",
-    promptsDir,
     labels: {
       plan: {
         trigger: "claude/plan",
@@ -512,150 +510,10 @@ describe("buildPrompt - integration", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Custom prompt directory tests (tier 1)
+// User prompt directory tests
 // ---------------------------------------------------------------------------
 
-describe("buildPrompt - custom prompt directory (tier 1)", () => {
-  const CUSTOM_DIR = "/custom/prompts";
-  const CUSTOM_TEMPLATE = "{boundary_open}\nCustom: {issue_title}\n{boundary_close}";
-
-  beforeEach(() => {
-    vi.restoreAllMocks();
-    mockedGetUserPromptsDir.mockReturnValue(USER_DIR);
-    mockedGetDefaultPromptsDir.mockReturnValue(DEFAULT_DIR);
-  });
-
-  function setupCustomDirMocks(customExists: boolean): void {
-    mockedExistsSync.mockImplementation((p) => {
-      const path = String(p);
-      if (path.startsWith(CUSTOM_DIR)) return customExists;
-      if (path.startsWith(USER_DIR)) return false;
-      return true; // default dir always exists
-    });
-    mockedStatSync.mockReturnValue({ size: 1024, isFile: () => true } as unknown as ReturnType<typeof statSync>);
-    mockedRealpathSync.mockImplementation((p) => String(p));
-  }
-
-  it("Uses custom directory template when it exists", () => {
-    setupCustomDirMocks(true);
-    mockedReadFileSync.mockReturnValue(CUSTOM_TEMPLATE);
-
-    const result = buildPrompt(
-      makeIssue(),
-      makeRepoConfig("testowner", "testrepo", CUSTOM_DIR),
-      "ja",
-    );
-
-    expect(result).toContain("Custom: Test Issue Title");
-    expect(result).toMatch(BOUNDARY_OPEN_PATTERN);
-  });
-
-  it("Falls back to default when custom directory template missing", () => {
-    setupCustomDirMocks(false);
-    mockedReadFileSync.mockReturnValue(MINIMAL_PLAN_TEMPLATE);
-
-    const result = buildPrompt(
-      makeIssue(),
-      makeRepoConfig("testowner", "testrepo", CUSTOM_DIR),
-      "ja",
-    );
-
-    expect(result).toContain("Repo: testowner/testrepo");
-  });
-
-  it("PromptTemplateError when custom template missing {boundary_open}", () => {
-    setupCustomDirMocks(true);
-    mockedReadFileSync.mockReturnValue("Custom: {issue_title}\n{boundary_close}");
-
-    expect(() =>
-      buildPrompt(
-        makeIssue(),
-        makeRepoConfig("testowner", "testrepo", CUSTOM_DIR),
-        "ja",
-      ),
-    ).toThrow(PromptTemplateError);
-    expect(() =>
-      buildPrompt(
-        makeIssue(),
-        makeRepoConfig("testowner", "testrepo", CUSTOM_DIR),
-        "ja",
-      ),
-    ).toThrow(/missing required boundary placeholders.*\{boundary_open\}/);
-  });
-
-  it("PromptTemplateError when custom template missing {boundary_close}", () => {
-    setupCustomDirMocks(true);
-    mockedReadFileSync.mockReturnValue("{boundary_open}\nCustom: {issue_title}");
-
-    expect(() =>
-      buildPrompt(
-        makeIssue(),
-        makeRepoConfig("testowner", "testrepo", CUSTOM_DIR),
-        "ja",
-      ),
-    ).toThrow(PromptTemplateError);
-    expect(() =>
-      buildPrompt(
-        makeIssue(),
-        makeRepoConfig("testowner", "testrepo", CUSTOM_DIR),
-        "ja",
-      ),
-    ).toThrow(/missing required boundary placeholders.*\{boundary_close\}/);
-  });
-
-  it("Both missing boundary placeholders are reported", () => {
-    setupCustomDirMocks(true);
-    mockedReadFileSync.mockReturnValue("No boundary: {issue_title}");
-
-    expect(() =>
-      buildPrompt(
-        makeIssue(),
-        makeRepoConfig("testowner", "testrepo", CUSTOM_DIR),
-        "ja",
-      ),
-    ).toThrow(/\{boundary_open\}.*\{boundary_close\}/);
-  });
-
-  it("Uses default directory only when promptsDir is null", () => {
-    setupDefaultDirMocks();
-    mockedReadFileSync.mockReturnValue(MINIMAL_PLAN_TEMPLATE);
-
-    const result = buildPrompt(makeIssue(), makeRepoConfig(), "ja");
-
-    expect(result).toContain("Repo: testowner/testrepo");
-  });
-
-  it("PromptTemplateError when template path escapes custom directory", () => {
-    mockedExistsSync.mockReturnValue(true);
-    mockedStatSync.mockReturnValue({ size: 1024, isFile: () => true } as unknown as ReturnType<typeof statSync>);
-    mockedRealpathSync.mockImplementation((p) => {
-      const path = String(p);
-      if (path.endsWith("plan.md")) return "/etc/passwd";
-      return CUSTOM_DIR;
-    });
-
-    expect(() =>
-      buildPrompt(
-        makeIssue(),
-        makeRepoConfig("testowner", "testrepo", CUSTOM_DIR),
-        "ja",
-      ),
-    ).toThrow(PromptTemplateError);
-    expect(() =>
-      buildPrompt(
-        makeIssue(),
-        makeRepoConfig("testowner", "testrepo", CUSTOM_DIR),
-        "ja",
-      ),
-    ).toThrow(/escapes the prompts directory/);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// User prompt directory tests (tier 2)
-// ---------------------------------------------------------------------------
-
-describe("buildPrompt - user prompt directory (tier 2)", () => {
+describe("buildPrompt - user prompt directory", () => {
   const USER_TEMPLATE = "{boundary_open}\nUser: {issue_title}\n{boundary_close}";
 
   beforeEach(() => {
@@ -729,12 +587,10 @@ describe("buildPrompt - user prompt directory (tier 2)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 3-tier priority tests
+// 2-tier priority tests
 // ---------------------------------------------------------------------------
 
-describe("buildPrompt - 3-tier priority", () => {
-  const CUSTOM_DIR = "/custom/prompts";
-  const CUSTOM_TEMPLATE = "{boundary_open}\nCustom: {issue_title}\n{boundary_close}";
+describe("buildPrompt - 2-tier priority", () => {
   const USER_TEMPLATE = "{boundary_open}\nUser: {issue_title}\n{boundary_close}";
 
   beforeEach(() => {
@@ -745,40 +601,22 @@ describe("buildPrompt - 3-tier priority", () => {
     mockedRealpathSync.mockImplementation((p) => String(p));
   });
 
-  it("Tier 1 (custom) wins when all 3 tiers have templates", () => {
+  it("Tier 1 (user) wins when both tiers have templates", () => {
     mockedExistsSync.mockReturnValue(true);
-    mockedReadFileSync.mockReturnValue(CUSTOM_TEMPLATE);
-
-    const result = buildPrompt(
-      makeIssue(),
-      makeRepoConfig("testowner", "testrepo", CUSTOM_DIR),
-      "ja",
-    );
-
-    expect(result).toContain("Custom: Test Issue Title");
-  });
-
-  it("Tier 2 (user) wins when tier 1 is empty and tiers 2 and 3 have templates", () => {
-    mockedExistsSync.mockImplementation((p) => {
-      const path = String(p);
-      if (path.startsWith(CUSTOM_DIR)) return false;
-      return true; // user dir and default dir exist
-    });
     mockedReadFileSync.mockReturnValue(USER_TEMPLATE);
 
     const result = buildPrompt(
       makeIssue(),
-      makeRepoConfig("testowner", "testrepo", CUSTOM_DIR),
+      makeRepoConfig(),
       "ja",
     );
 
     expect(result).toContain("User: Test Issue Title");
   });
 
-  it("Tier 3 (default) wins when tiers 1 and 2 are empty", () => {
+  it("Tier 2 (default) wins when tier 1 is empty", () => {
     mockedExistsSync.mockImplementation((p) => {
       const path = String(p);
-      if (path.startsWith(CUSTOM_DIR)) return false;
       if (path.startsWith(USER_DIR)) return false;
       return true; // default dir exists
     });
@@ -786,7 +624,7 @@ describe("buildPrompt - 3-tier priority", () => {
 
     const result = buildPrompt(
       makeIssue(),
-      makeRepoConfig("testowner", "testrepo", CUSTOM_DIR),
+      makeRepoConfig(),
       "ja",
     );
 

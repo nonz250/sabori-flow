@@ -206,7 +206,6 @@ repositories:
   - owner: nonz250
     repo: example-app
     local_path: /path/to/repo
-    # prompts_dir: /path/to/custom/prompts  # 任意: リポジトリ固有のカスタムプロンプトディレクトリ（最優先）
     labels:
       plan:
         trigger: claude/plan
@@ -235,7 +234,6 @@ language: ja
 | `repositories[].owner` | リポジトリオーナー |
 | `repositories[].repo` | リポジトリ名 |
 | `repositories[].local_path` | ローカルのクローン先パス |
-| `repositories[].prompts_dir` | （任意）リポジトリ固有のカスタムプロンプトテンプレートディレクトリ。3 層フォールバックの最優先ティア: リポジトリ固有 → `~/.sabori-flow/prompts/` → パッケージ同梱 |
 | `repositories[].labels` | 各フェーズのラベル名（カスタマイズ可能） |
 | `repositories[].labels.plan` | plan フェーズのラベル: `trigger`, `in_progress`, `done`, `failed` |
 | `repositories[].labels.impl` | impl フェーズのラベル: `trigger`, `in_progress`, `done`, `failed` |

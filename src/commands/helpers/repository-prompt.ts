@@ -8,7 +8,6 @@ export interface RepositoryInput {
   repo: string;
   local_path: string;
   auto_impl_after_plan: boolean;
-  prompts_dir: string | null;
 }
 
 export async function promptRepository(): Promise<RepositoryInput> {
@@ -34,18 +33,5 @@ export async function promptRepository(): Promise<RepositoryInput> {
     message: t("prompt.autoImplConfirm"),
     default: false,
   });
-  const rawPromptsDir = await input({
-    message:
-      t("prompt.enterPromptsDir"),
-    validate: (v) => {
-      if (v === "") return true;
-      const expanded = expandTilde(v);
-      return (
-        path.isAbsolute(expanded) || t("prompt.validationAbsolutePath")
-      );
-    },
-  });
-  const prompts_dir =
-    rawPromptsDir === "" ? null : expandTilde(rawPromptsDir);
-  return { owner, repo, local_path, auto_impl_after_plan, prompts_dir };
+  return { owner, repo, local_path, auto_impl_after_plan };
 }

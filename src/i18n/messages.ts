@@ -66,8 +66,6 @@ const jaMessages: MessageKeys = {
     "絶対パスを入力してください (~/... も可)",
   "prompt.autoImplConfirm":
     "Plan 完了後に自動で impl ラベルを付与しますか?",
-  "prompt.enterPromptsDir":
-    "カスタムプロンプトのディレクトリを指定しますか? (空欄でスキップ):",
 
   // cli descriptions
   "cli.descriptionAdd": "既存の config.yml にリポジトリを追加します",
@@ -137,8 +135,6 @@ const enMessages: MessageKeys = {
     "Enter an absolute path (~/... also accepted)",
   "prompt.autoImplConfirm":
     "Automatically add impl label after Plan completion?",
-  "prompt.enterPromptsDir":
-    "Specify custom prompts directory? (Leave blank to skip):",
 
   // cli descriptions
   "cli.descriptionAdd": "Add a repository to existing config.yml",
