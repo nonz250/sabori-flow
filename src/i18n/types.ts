@@ -36,6 +36,7 @@ export interface MessageKeys {
   "install.registeringLaunchd": string;
   "install.localComplete": string;
   "install.complete": string;
+  "install.configValidationError": string;
   "install.unexpectedError": string;
 
   // uninstall command

@@ -46,6 +46,7 @@ const jaMessages: MessageKeys = {
     "\nローカルビルドのワーカーを登録しました。{minutes}分ごとにワーカーが実行されます。",
   "install.complete":
     "\nインストールが完了しました。{minutes}分ごとにワーカーが実行されます。",
+  "install.configValidationError": "Error: config.yml のバリデーションに失敗しました: {message}",
   "install.unexpectedError": "予期しないエラーが発生しました:",
 
   // uninstall command
@@ -117,6 +118,7 @@ const enMessages: MessageKeys = {
     "\nLocal build worker registered. The worker will run every {minutes} minutes.",
   "install.complete":
     "\nInstallation complete. The worker will run every {minutes} minutes.",
+  "install.configValidationError": "Error: config.yml validation failed: {message}",
   "install.unexpectedError": "Unexpected error:",
 
   // uninstall command

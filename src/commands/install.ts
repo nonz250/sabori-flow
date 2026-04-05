@@ -123,7 +123,7 @@ export async function installCommand(
     }
   } catch (error) {
     if (error instanceof ConfigValidationError) {
-      console.error(`Error: config.yml のバリデーションに失敗しました: ${error.message}`);
+      console.error(t("install.configValidationError", { message: error.message }));
     } else if (error instanceof ShellError) {
       console.error(`Error: ${error.message}`);
       if (error.stderr) console.error(error.stderr);
