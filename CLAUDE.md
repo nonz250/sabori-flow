@@ -95,9 +95,7 @@ src/
 - ユーザー入力由来の変数（issue_body, issue_title）を最後に展開（二重展開防止）
 - UUID ベースのランダムバウンダリでデータ境界を明示（予測不能なトークンによるプロンプトインジェクション対策）
 - Issue 作成者の権限チェック（OWNER / MEMBER / COLLABORATOR のみ処理対象）
-- カスタムテンプレートのパストラバーサル防止（`realpathSync` + ディレクトリ配下検証）
-- カスタムテンプレートのバウンダリプレースホルダ必須チェック（`{boundary_open}` / `{boundary_close}` 欠落時はエラー）
-- テンプレートファイルのサイズ上限（100KB）
+- テンプレートファイルのサイズ上限（100KB）、レギュラーファイル判定
 
 #### 出力保護
 - `sanitizeOutput` による成功コメントのシークレットマスキング（AWS キー、GitHub トークン、SSH 秘密鍵、Bearer トークン等）
@@ -158,7 +156,6 @@ src/
 1. `~/.sabori-flow/prompts/`（ユーザー共通、init 時にコピー）
 2. パッケージ同梱 `prompts/{lang}/`（フォールバック）
 
-信頼レベル: 1 は untrusted（バウンダリ検証 + パストラバーサル検証）、2 は trusted（検証なし）。
 
 ### config.yml の設定項目
 

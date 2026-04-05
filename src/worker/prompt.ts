@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 
 import type { Language } from "../i18n/types.js";
@@ -26,12 +26,6 @@ export const TEMPLATE_FILES: Record<Phase, string> = {
 /** テンプレートファイルの最大サイズ (100KB) */
 const MAX_TEMPLATE_SIZE = 100 * 1024;
 
-/** バウンダリプレースホルダ（セキュリティ上必須） */
-const REQUIRED_BOUNDARY_PLACEHOLDERS = [
-  "{boundary_open}",
-  "{boundary_close}",
-] as const;
-
 /**
  * ユーザー入力由来の変数キー。
  * 二重展開防止のため、これらは最後に展開する。
@@ -46,8 +40,8 @@ const USER_INPUT_KEYS: ReadonlySet<string> = new Set([
  *
  * テンプレートファイルを読み込み、プレースホルダを展開して返す。
  * 2 段階のフォールバックでテンプレートを解決する:
- *   1. ユーザー共通ディレクトリ (`~/.sabori-flow/prompts/`) — untrusted
- *   2. パッケージ同梱のデフォルトテンプレート (`prompts/<language>/`) — trusted
+ *   1. ユーザーディレクトリ (`~/.sabori-flow/prompts/`)
+ *   2. パッケージ同梱のデフォルトテンプレート (`prompts/<language>/`)
  *
  * @throws {PromptTemplateError} テンプレートの読み込みまたは展開に失敗した場合
  */
@@ -63,44 +57,14 @@ export function buildPrompt(
   return render(template, variables);
 }
 
-type TrustLevel = "untrusted" | "trusted";
-
-/**
- * ディレクトリからテンプレートファイルの読み込みを試行する。
- *
- * ファイルが存在すれば内容を返し、存在しなければ null を返す。
- * untrusted ディレクトリの場合はパス包含検証とバウンダリプレースホルダ検証を行う。
- *
- * @throws {PromptTemplateError} ファイルが存在するが検証に失敗した場合
- */
-function loadFromDir(
-  dir: string,
-  filename: string,
-  trust: TrustLevel,
-): string | null {
-  const filePath = resolve(dir, filename);
-  if (!existsSync(filePath)) return null;
-
-  if (trust === "untrusted") {
-    validatePathContainment(filePath, dir);
-  }
-  const content = readTemplateFile(filePath);
-  if (trust === "untrusted") {
-    validateBoundaryPlaceholders(content, filePath);
-  }
-  return content;
-}
-
 /**
  * 2 段階フォールバックでテンプレートファイルを読み込む。
  *
- *   1. ユーザー共通ディレクトリ（untrusted: パス検証 + バウンダリ検証）
- *   2. パッケージ同梱のデフォルトディレクトリ（trusted: 検証なし）
- *
- * ファイルが存在するが読み込めない/検証に失敗する場合はエラーとする（フォールバックしない）。
+ *   1. ユーザーディレクトリ (`~/.sabori-flow/prompts/`)
+ *   2. パッケージ同梱のデフォルトディレクトリ (`prompts/<language>/`)
  *
  * @throws {PromptTemplateError} フェーズが未定義、テンプレートが存在しない、
- *   バウンダリプレースホルダが欠落、またはファイルサイズ超過の場合
+ *   またはファイルサイズ超過の場合
  */
 function loadTemplate(
   phase: Phase,
@@ -112,21 +76,21 @@ function loadTemplate(
     throw new PromptTemplateError(`Unknown phase: ${phase}`);
   }
 
-  // Tier 1: user common prompts (~/.sabori-flow/prompts/)
-  const userContent = loadFromDir(userDir, filename, "untrusted");
-  if (userContent !== null) {
+  // 1. ユーザーディレクトリ (~/.sabori-flow/prompts/)
+  const userPath = resolve(userDir, filename);
+  if (existsSync(userPath)) {
     logger.info("Loaded template from user directory: %s", userDir);
-    return userContent;
+    return readTemplateFile(userPath);
   }
   logger.info(
     "User template not found in %s (falling back to package default)",
     userDir,
   );
 
-  // Tier 2: package-bundled default
-  const defaultContent = loadFromDir(defaultDir, filename, "trusted");
-  if (defaultContent !== null) {
-    return defaultContent;
+  // 2. パッケージ同梱デフォルト
+  const defaultPath = resolve(defaultDir, filename);
+  if (existsSync(defaultPath)) {
+    return readTemplateFile(defaultPath);
   }
 
   throw new PromptTemplateError(
@@ -135,88 +99,9 @@ function loadTemplate(
 }
 
 /**
- * テンプレートファイルパスがディレクトリ配下に収まっていることを検証する。
- *
- * シンボリックリンクやパストラバーサルにより、テンプレートファイルが
- * 指定ディレクトリの外に逸脱することを防止する。
- *
- * 呼び出し元がファイルの存在を確認済みであることを前提とする。
- *
- * @throws {PromptTemplateError} パスがディレクトリ外に逸脱している場合
- */
-function validatePathContainment(
-  filePath: string,
-  dirPath: string,
-): void {
-  let resolvedFile: string;
-  try {
-    resolvedFile = realpathSync(filePath);
-  } catch {
-    throw new PromptTemplateError(
-      `Cannot resolve template file path: ${basename(filePath)}`,
-    );
-  }
-
-  let resolvedDir: string;
-  try {
-    resolvedDir = realpathSync(dirPath);
-  } catch {
-    throw new PromptTemplateError(
-      `Cannot resolve template directory path: ${dirPath}`,
-    );
-  }
-
-  // resolvedFile が resolvedDir 配下であることを確認
-  const normalizedDir = resolvedDir.endsWith("/") ? resolvedDir : `${resolvedDir}/`;
-  if (!resolvedFile.startsWith(normalizedDir)) {
-    throw new PromptTemplateError(
-      `Template file path escapes the prompts directory: ${basename(filePath)}`,
-    );
-  }
-}
-
-/**
- * カスタムテンプレートにバウンダリプレースホルダが含まれていることを検証する。
- *
- * バウンダリマーカーが欠落しているテンプレートは、Issue body 内の
- * 悪意あるテキストがプロンプトインジェクションとして解釈されるリスクがある。
- *
- * @throws {PromptTemplateError} 必須のバウンダリプレースホルダが欠落している場合
- */
-function validateBoundaryPlaceholders(
-  content: string,
-  templatePath: string,
-): void {
-  const missing = REQUIRED_BOUNDARY_PLACEHOLDERS.filter(
-    (placeholder) => !content.includes(placeholder),
-  );
-
-  if (missing.length > 0) {
-    throw new PromptTemplateError(
-      `Custom template '${basename(templatePath)}' is missing required boundary placeholders: ${missing.join(", ")}. ` +
-      `These are required to prevent prompt injection attacks.`,
-    );
-  }
-
-  // Check order: {boundary_open} must come before {issue_body} which must come before {boundary_close}
-  if (content.includes("{issue_body}")) {
-    const openIdx = content.indexOf("{boundary_open}");
-    const bodyIdx = content.indexOf("{issue_body}");
-    const closeIdx = content.indexOf("{boundary_close}");
-    if (!(openIdx < bodyIdx && bodyIdx < closeIdx)) {
-      throw new PromptTemplateError(
-        `Custom template '${basename(templatePath)}': {issue_body} must appear ` +
-        `between {boundary_open} and {boundary_close} for prompt injection protection.`,
-      );
-    }
-  }
-}
-
-/**
  * テンプレートファイルを読み込む内部ヘルパー。
  *
- * レギュラーファイル判定とファイルサイズの上限チェックを行い、
- * 不正なファイルや巨大ファイルによる DoS を防止する。
+ * レギュラーファイル判定とファイルサイズの上限チェックを行う。
  *
  * @throws {PromptTemplateError} ファイルの読み込みに失敗、レギュラーファイルでない、
  *   またはサイズ超過の場合

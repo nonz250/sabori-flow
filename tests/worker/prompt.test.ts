@@ -18,8 +18,7 @@ vi.mock("../../src/utils/paths.js", () => ({
   getDefaultPromptsDir: vi.fn(() => "/mock/default/prompts"),
 }));
 
-import { existsSync, readFileSync, statSync, realpathSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import {
   buildPrompt,
   PromptTemplateError,
@@ -31,7 +30,6 @@ import { getUserPromptsDir, getDefaultPromptsDir } from "../../src/utils/paths.j
 const mockedReadFileSync = vi.mocked(readFileSync);
 const mockedExistsSync = vi.mocked(existsSync);
 const mockedStatSync = vi.mocked(statSync);
-const mockedRealpathSync = vi.mocked(realpathSync);
 const mockedGetUserPromptsDir = vi.mocked(getUserPromptsDir);
 const mockedGetDefaultPromptsDir = vi.mocked(getDefaultPromptsDir);
 
@@ -415,7 +413,6 @@ describe("buildPrompt - integration", () => {
     mockedReadFileSync.mockImplementation(actualFs.readFileSync as typeof readFileSync);
     mockedExistsSync.mockImplementation(actualFs.existsSync as typeof existsSync);
     mockedStatSync.mockImplementation(actualFs.statSync as typeof statSync);
-    mockedRealpathSync.mockImplementation(actualFs.realpathSync as typeof realpathSync);
     // getUserPromptsDir returns a non-existent path so it falls through to package default
     mockedGetUserPromptsDir.mockReturnValue("/nonexistent/user/prompts");
     // getDefaultPromptsDir returns the real package prompts dir
@@ -529,10 +526,9 @@ describe("buildPrompt - user prompt directory", () => {
       return true; // default dir always exists
     });
     mockedStatSync.mockReturnValue({ size: 1024, isFile: () => true } as unknown as ReturnType<typeof statSync>);
-    mockedRealpathSync.mockImplementation((p) => String(p));
   }
 
-  it("Uses user directory template when it exists (with boundary validation)", () => {
+  it("Uses user directory template when it exists", () => {
     setupUserDirMocks(true);
     mockedReadFileSync.mockReturnValue(USER_TEMPLATE);
 
@@ -541,39 +537,6 @@ describe("buildPrompt - user prompt directory", () => {
     expect(result).toContain("User: Test Issue Title");
     expect(result).toMatch(BOUNDARY_OPEN_PATTERN);
     expect(result).toMatch(BOUNDARY_CLOSE_PATTERN);
-  });
-
-  it("PromptTemplateError when user template missing boundary placeholders", () => {
-    setupUserDirMocks(true);
-    mockedReadFileSync.mockReturnValue("User: {issue_title}");
-
-    expect(() =>
-      buildPrompt(makeIssue(), makeRepoConfig(), "ja"),
-    ).toThrow(PromptTemplateError);
-    expect(() =>
-      buildPrompt(makeIssue(), makeRepoConfig(), "ja"),
-    ).toThrow(/missing required boundary placeholders/);
-  });
-
-  it("PromptTemplateError when user template path escapes directory", () => {
-    mockedExistsSync.mockImplementation((p) => {
-      const path = String(p);
-      if (path.startsWith(USER_DIR)) return true;
-      return true;
-    });
-    mockedStatSync.mockReturnValue({ size: 1024, isFile: () => true } as unknown as ReturnType<typeof statSync>);
-    mockedRealpathSync.mockImplementation((p) => {
-      const path = String(p);
-      if (path.endsWith("plan.md")) return "/etc/shadow";
-      return USER_DIR;
-    });
-
-    expect(() =>
-      buildPrompt(makeIssue(), makeRepoConfig(), "ja"),
-    ).toThrow(PromptTemplateError);
-    expect(() =>
-      buildPrompt(makeIssue(), makeRepoConfig(), "ja"),
-    ).toThrow(/escapes the prompts directory/);
   });
 
   it("Falls back to package default when user directory is empty", () => {
@@ -598,7 +561,6 @@ describe("buildPrompt - 2-tier priority", () => {
     mockedGetUserPromptsDir.mockReturnValue(USER_DIR);
     mockedGetDefaultPromptsDir.mockReturnValue(DEFAULT_DIR);
     mockedStatSync.mockReturnValue({ size: 1024, isFile: () => true } as unknown as ReturnType<typeof statSync>);
-    mockedRealpathSync.mockImplementation((p) => String(p));
   });
 
   it("Tier 1 (user) wins when both tiers have templates", () => {
