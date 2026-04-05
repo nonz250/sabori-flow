@@ -1,5 +1,6 @@
 import fs from "fs";
-import { PLIST_DEST_PATH, getConfigPath, getPlistGeneratedPath } from "../utils/paths.js";
+import { confirm } from "@inquirer/prompts";
+import { PLIST_DEST_PATH, getBaseDir, getConfigPath, getPlistGeneratedPath } from "../utils/paths.js";
 import { exec } from "../utils/shell.js";
 import { setLanguage, t, loadLanguageFromConfig } from "../i18n/index.js";
 
@@ -20,9 +21,27 @@ export async function uninstallCommand(): Promise<void> {
   }
 
   // 2. 生成済み plist 削除
-  if (fs.existsSync(getPlistGeneratedPath())) {
-    fs.unlinkSync(getPlistGeneratedPath());
+  const generatedPlist = getPlistGeneratedPath();
+  if (fs.existsSync(generatedPlist)) {
+    fs.unlinkSync(generatedPlist);
   }
 
   console.log(t("uninstall.complete"));
+
+  // 3. 全データ削除の確認
+  const baseDir = getBaseDir();
+  if (fs.existsSync(baseDir)) {
+    try {
+      const deleteAll = await confirm({
+        message: t("uninstall.confirmDeleteAll", { dir: baseDir }),
+        default: false,
+      });
+      if (deleteAll) {
+        fs.rmSync(baseDir, { recursive: true, force: true });
+        console.log(t("uninstall.deletedAll", { dir: baseDir }));
+      }
+    } catch {
+      // Ctrl+C — データ削除をスキップして静かに終了
+    }
+  }
 }

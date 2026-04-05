@@ -5,9 +5,13 @@ import { addCommand } from "./commands/add.js";
 import { initCommand } from "./commands/init.js";
 import { installCommand } from "./commands/install.js";
 import { uninstallCommand } from "./commands/uninstall.js";
+import { setLanguage, loadLanguageFromConfig, t } from "./i18n/index.js";
+import { getConfigPath } from "./utils/paths.js";
 
 const require = createRequire(import.meta.url);
 const pkg = require("../package.json") as { version: string };
+
+setLanguage(loadLanguageFromConfig(getConfigPath()));
 
 const program = new Command();
 
@@ -18,28 +22,28 @@ program
 
 program
   .command("add")
-  .description("既存の config.yml にリポジトリを追加します")
+  .description(t("cli.descriptionAdd"))
   .action(addCommand);
 
 program
   .command("init")
-  .description("対話的に config.yml を作成します")
+  .description(t("cli.descriptionInit"))
   .action(initCommand);
 
 program
   .command("install")
-  .description("plist 生成 + launchd 登録を行います")
-  .option("--local", "ローカルビルドのワーカーを登録します")
+  .description(t("cli.descriptionInstall"))
+  .option("--local", t("cli.optionLocal"))
   .action((options) => installCommand(options));
 
 program
   .command("uninstall")
-  .description("launchd の登録を解除します")
+  .description(t("cli.descriptionUninstall"))
   .action(uninstallCommand);
 
 program
   .command("worker")
-  .description("ワーカーを実行します（通常は launchd から自動的に呼び出されます）")
+  .description(t("cli.descriptionWorker"))
   .action(async () => {
     const { workerMain } = await import("./worker/main.js");
     const exitCode = await workerMain();

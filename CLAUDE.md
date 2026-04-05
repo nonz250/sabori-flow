@@ -53,7 +53,7 @@ src/
     logger.ts        # 軽量ロガー
     process.ts       # child_process ラッパー
   utils/             # 共有ユーティリティ
-    paths.ts         # XDG Base Directory 準拠パス解決 + expandTilde（チルダ展開）
+    paths.ts         # ~/.sabori-flow/ ベースのパス解決 + expandTilde（チルダ展開）
     plist.ts, shell.ts, config-defaults.ts
 ```
 
@@ -95,6 +95,7 @@ src/
 - ユーザー入力由来の変数（issue_body, issue_title）を最後に展開（二重展開防止）
 - UUID ベースのランダムバウンダリでデータ境界を明示（予測不能なトークンによるプロンプトインジェクション対策）
 - Issue 作成者の権限チェック（OWNER / MEMBER / COLLABORATOR のみ処理対象）
+- テンプレートファイルのサイズ上限（100KB）、レギュラーファイル判定
 
 #### 出力保護
 - `sanitizeOutput` による成功コメントのシークレットマスキング（AWS キー、GitHub トークン、SSH 秘密鍵、Bearer トークン等）
@@ -107,6 +108,7 @@ src/
 - launchd に埋め込む PATH の最小化（必要コマンドの所在 + 標準パスのみ）
 - plist ファイルのパーミッション（0o600）
 - config.yml のパーミッション（0o600）
+- テンプレートコピー時のパーミッション設定（コピー先ファイル: 0o600、ディレクトリ: 0o700）
 - `local_path` の `realpathSync` による実パス解決
 - YAML パースの `maxAliasCount` 制限（エイリアス爆弾対策）
 - ログローテーションのシンボリックリンクチェック
@@ -136,13 +138,24 @@ src/
 
 ### パス管理
 
-XDG Base Directory 準拠でパスを解決する。
+全ユーザーデータを `~/.sabori-flow/` に集約する。
 
-| 用途 | パス | 備考 |
-|---|---|---|
-| 設定ファイル | `$XDG_CONFIG_HOME/sabori-flow/config.yml`（デフォルト: `~/.config/sabori-flow/config.yml`） | |
-| データ | `$XDG_DATA_HOME/sabori-flow/`（デフォルト: `~/.local/share/sabori-flow/`） | 生成済み plist 等 |
-| ログ | `~/.sabori-flow/logs` | 固定、設定不可 |
+| 用途 | パス |
+|---|---|
+| 設定ファイル | `~/.sabori-flow/config.yml` |
+| プロンプトテンプレート | `~/.sabori-flow/prompts/` |
+| ログ | `~/.sabori-flow/logs/` |
+| plist バックアップ | `~/.sabori-flow/com.github.sabori-flow.plist` |
+
+### プロンプトテンプレート
+
+パッケージ同梱テンプレートは `prompts/{lang}/` に言語別で配置される。`init` コマンド実行時に選択言語のテンプレートが `~/.sabori-flow/prompts/` にコピーされ、ユーザーが自由にカスタマイズ可能。
+
+テンプレート読み込みの優先順位（2 層フォールバック）:
+
+1. `~/.sabori-flow/prompts/`（ユーザー共通、init 時にコピー）
+2. パッケージ同梱 `prompts/{lang}/`（フォールバック）
+
 
 ### config.yml の設定項目
 
@@ -150,7 +163,7 @@ XDG Base Directory 準拠でパスを解決する。
 - `execution.max_parallel`: 並列実行数（整数、1-10、デフォルト: 1）
 - `execution.max_issues_per_repo`: リポジトリあたりの最大処理 Issue 数（整数、1-20、デフォルト: 1）
 - `execution.autonomy`: CLI の自律実行レベル（`full` / `sandboxed` / `interactive`、デフォルト: `interactive`）
-- `language`: CLI メッセージの表示言語（`ja` / `en`、デフォルト: `ja`）
+- `language`: CLI メッセージおよびプロンプトテンプレートの言語（`ja` / `en`、デフォルト: `ja`）
 
 ## コーディング規約
 

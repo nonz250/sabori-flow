@@ -11,6 +11,9 @@ export interface MessageKeys {
   "init.addAnotherRepo": string;
   "init.configCreated": string;
   "init.runInstallNext": string;
+  "init.templateExists": string;
+  "init.templateSkipped": string;
+  "init.templatesCopied": string;
 
   // add command
   "add.configNotFound": string;
@@ -39,6 +42,8 @@ export interface MessageKeys {
   "uninstall.deleted": string;
   "uninstall.notRegistered": string;
   "uninstall.complete": string;
+  "uninstall.confirmDeleteAll": string;
+  "uninstall.deletedAll": string;
 
   // repository-prompt (shared helper)
   "prompt.enterOwner": string;
@@ -46,4 +51,13 @@ export interface MessageKeys {
   "prompt.enterLocalPath": string;
   "prompt.validationAlphanumeric": string;
   "prompt.validationAbsolutePath": string;
+  "prompt.autoImplConfirm": string;
+
+  // cli descriptions
+  "cli.descriptionAdd": string;
+  "cli.descriptionInit": string;
+  "cli.descriptionInstall": string;
+  "cli.optionLocal": string;
+  "cli.descriptionUninstall": string;
+  "cli.descriptionWorker": string;
 }
