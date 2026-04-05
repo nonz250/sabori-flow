@@ -87,10 +87,8 @@ function loadTemplate(
   if (customDir !== null) {
     const customPath = resolve(customDir, filename);
 
-    // パス逸脱チェック: 解決後のパスがカスタムディレクトリ配下であることを検証
-    validatePathContainment(customPath, customDir);
-
     if (existsSync(customPath)) {
+      validatePathContainment(customPath, customDir);
       const content = readTemplateFile(customPath);
       validateBoundaryPlaceholders(content, customPath);
       return content;
@@ -119,15 +117,14 @@ function loadTemplate(
  * シンボリックリンクやパストラバーサルにより、テンプレートファイルが
  * 指定ディレクトリの外に逸脱することを防止する。
  *
+ * 呼び出し元がファイルの存在を確認済みであることを前提とする。
+ *
  * @throws {PromptTemplateError} パスがディレクトリ外に逸脱している場合
  */
 function validatePathContainment(
   filePath: string,
   dirPath: string,
 ): void {
-  // ファイルが存在する場合のみ realpathSync で解決
-  if (!existsSync(filePath)) return;
-
   let resolvedFile: string;
   try {
     resolvedFile = realpathSync(filePath);
@@ -177,18 +174,38 @@ function validateBoundaryPlaceholders(
       `These are required to prevent prompt injection attacks.`,
     );
   }
+
+  // Check order: {boundary_open} must come before {issue_body} which must come before {boundary_close}
+  if (content.includes("{issue_body}")) {
+    const openIdx = content.indexOf("{boundary_open}");
+    const bodyIdx = content.indexOf("{issue_body}");
+    const closeIdx = content.indexOf("{boundary_close}");
+    if (!(openIdx < bodyIdx && bodyIdx < closeIdx)) {
+      throw new PromptTemplateError(
+        `Custom template '${basename(templatePath)}': {issue_body} must appear ` +
+        `between {boundary_open} and {boundary_close} for prompt injection protection.`,
+      );
+    }
+  }
 }
 
 /**
  * テンプレートファイルを読み込む内部ヘルパー。
  *
- * ファイルサイズの上限チェックを行い、巨大ファイルによる DoS を防止する。
+ * レギュラーファイル判定とファイルサイズの上限チェックを行い、
+ * 不正なファイルや巨大ファイルによる DoS を防止する。
  *
- * @throws {PromptTemplateError} ファイルの読み込みに失敗、またはサイズ超過の場合
+ * @throws {PromptTemplateError} ファイルの読み込みに失敗、レギュラーファイルでない、
+ *   またはサイズ超過の場合
  */
 function readTemplateFile(templatePath: string): string {
   try {
     const stat = statSync(templatePath);
+    if (!stat.isFile()) {
+      throw new PromptTemplateError(
+        `Template path is not a regular file: ${basename(templatePath)}`,
+      );
+    }
     if (stat.size > MAX_TEMPLATE_SIZE) {
       throw new PromptTemplateError(
         `Template file too large: ${basename(templatePath)} (${stat.size} bytes, max ${MAX_TEMPLATE_SIZE} bytes)`,
