@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 import { workerMain } from "../../src/worker/main.js";
-import { Phase, Priority, Autonomy } from "../../src/worker/models.js";
+import { Phase, Priority, Autonomy, Engine } from "../../src/worker/models.js";
 import {
   makeRepoConfig,
   makeIssue,
@@ -534,7 +534,26 @@ describe("workerMain", () => {
       await workerMain("/path/to/config.yml", deps);
 
       expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
-        "autonomy is set to 'full'. Claude Code CLI will run with --dangerously-skip-permissions.",
+        "autonomy is set to 'full'. %s CLI will run with %s.",
+        "claude",
+        "--dangerously-skip-permissions",
+      );
+    });
+
+    it("autonomy が full かつ engine が copilot の場合 --yolo で WARN ログが出力される", async () => {
+      vi.mocked(deps.loadConfig).mockReturnValue(
+        makeAppConfig({ execution: { autonomy: Autonomy.FULL, engine: Engine.COPILOT } }),
+      );
+      vi.mocked(deps.fetchIssues).mockResolvedValue([]);
+
+      mockLoggerInstance.warn.mockClear();
+
+      await workerMain("/path/to/config.yml", deps);
+
+      expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
+        "autonomy is set to 'full'. %s CLI will run with %s.",
+        "copilot",
+        "--yolo",
       );
     });
 

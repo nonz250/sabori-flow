@@ -14,6 +14,7 @@ import { createMockPipelineDeps } from "./helpers/mock-deps.js";
 import type { PipelineDeps } from "../../src/worker/pipeline.js";
 
 const DEFAULT_EXECUTION_CONFIG: ExecutionConfig = {
+  engine: "claude",
   maxParallel: 1,
   maxIssuesPerRepo: 10,
   autonomy: "interactive",
@@ -47,7 +48,7 @@ describe("processIssue", () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
-      vi.mocked(deps.runClaude).mockResolvedValue(
+      vi.mocked(deps.runEngine).mockResolvedValue(
         makeProcessResult({ stdout: "Claude output" }),
       );
 
@@ -62,7 +63,7 @@ describe("processIssue", () => {
       );
       expect(deps.buildPrompt).toHaveBeenCalledOnce();
       expect(deps.buildPrompt).toHaveBeenCalledWith(issue, repoConfig, "ja");
-      expect(deps.runClaude).toHaveBeenCalledOnce();
+      expect(deps.runEngine).toHaveBeenCalledOnce();
       expect(deps.transitionToDone).toHaveBeenCalledOnce();
       expect(deps.transitionToDone).toHaveBeenCalledWith(
         "testowner/testrepo",
@@ -115,10 +116,11 @@ describe("processIssue", () => {
       );
     });
 
-    it("runClaude に executionConfig.autonomy が渡される", async () => {
+    it("runEngine に executionConfig.autonomy が渡される", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       const executionConfig: ExecutionConfig = {
+        engine: "claude",
         maxParallel: 1,
         maxIssuesPerRepo: 10,
         autonomy: "full",
@@ -127,21 +129,21 @@ describe("processIssue", () => {
 
       await processIssue(issue, repoConfig, executionConfig, deps);
 
-      expect(deps.runClaude).toHaveBeenCalledOnce();
-      expect(deps.runClaude).toHaveBeenCalledWith(
+      expect(deps.runEngine).toHaveBeenCalledOnce();
+      expect(deps.runEngine).toHaveBeenCalledWith(
         "generated prompt",
         { cwd: "/tmp/worktrees/issue-mock", autonomy: "full" },
       );
     });
 
-    it("autonomy が interactive の場合も runClaude に正しく渡される", async () => {
+    it("autonomy が interactive の場合も runEngine に正しく渡される", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
 
       await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, deps);
 
-      expect(deps.runClaude).toHaveBeenCalledOnce();
-      expect(deps.runClaude).toHaveBeenCalledWith(
+      expect(deps.runEngine).toHaveBeenCalledOnce();
+      expect(deps.runEngine).toHaveBeenCalledWith(
         "generated prompt",
         { cwd: "/tmp/worktrees/issue-mock", autonomy: "interactive" },
       );
@@ -151,7 +153,7 @@ describe("processIssue", () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
-      vi.mocked(deps.runClaude).mockResolvedValue(
+      vi.mocked(deps.runEngine).mockResolvedValue(
         makeProcessResult({
           stdout: "Found token: ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijkl in output",
         }),
@@ -185,7 +187,7 @@ describe("processIssue", () => {
 
       expect(result).toBe(false);
       expect(deps.buildPrompt).not.toHaveBeenCalled();
-      expect(deps.runClaude).not.toHaveBeenCalled();
+      expect(deps.runEngine).not.toHaveBeenCalled();
       expect(deps.transitionToDone).not.toHaveBeenCalled();
       expect(deps.transitionToFailed).not.toHaveBeenCalled();
       expect(deps.postSuccessComment).not.toHaveBeenCalled();
@@ -208,7 +210,7 @@ describe("processIssue", () => {
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, deps);
 
       expect(result).toBe(false);
-      expect(deps.runClaude).not.toHaveBeenCalled();
+      expect(deps.runEngine).not.toHaveBeenCalled();
       expect(deps.transitionToDone).not.toHaveBeenCalled();
       expect(deps.postSuccessComment).not.toHaveBeenCalled();
       expect(deps.transitionToFailed).toHaveBeenCalledOnce();
@@ -225,11 +227,11 @@ describe("processIssue", () => {
       );
     });
 
-    it("runClaude が例外を投げると failed 遷移 + 失敗コメントが呼ばれ false が返る", async () => {
+    it("runEngine が例外を投げると failed 遷移 + 失敗コメントが呼ばれ false が返る", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
-      vi.mocked(deps.runClaude).mockRejectedValue(
+      vi.mocked(deps.runEngine).mockRejectedValue(
         new Error("timeout after 1800 seconds"),
       );
 
@@ -252,11 +254,11 @@ describe("processIssue", () => {
       );
     });
 
-    it("runClaude が success=false を返すと failed 遷移 + 失敗コメントが呼ばれ false が返る", async () => {
+    it("runEngine が success=false を返すと failed 遷移 + 失敗コメントが呼ばれ false が返る", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
-      vi.mocked(deps.runClaude).mockResolvedValue(
+      vi.mocked(deps.runEngine).mockResolvedValue(
         makeProcessResult({ success: false, stderr: "CLI error output" }),
       );
 
@@ -279,11 +281,11 @@ describe("processIssue", () => {
       );
     });
 
-    it("runClaude が success=false かつ stderr が空の場合もデフォルトのエラーメッセージが使われる", async () => {
+    it("runEngine が success=false かつ stderr が空の場合もデフォルトのエラーメッセージが使われる", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
-      vi.mocked(deps.runClaude).mockResolvedValue(
+      vi.mocked(deps.runEngine).mockResolvedValue(
         makeProcessResult({ success: false, stderr: "", stdout: "stdout error" }),
       );
 
@@ -297,11 +299,11 @@ describe("processIssue", () => {
       );
     });
 
-    it("runClaude が success=false かつ stderr/stdout ともに空の場合もデフォルトのエラーメッセージが使われる", async () => {
+    it("runEngine が success=false かつ stderr/stdout ともに空の場合もデフォルトのエラーメッセージが使われる", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
-      vi.mocked(deps.runClaude).mockResolvedValue(
+      vi.mocked(deps.runEngine).mockResolvedValue(
         makeProcessResult({ success: false, stderr: "", stdout: "" }),
       );
 
@@ -377,7 +379,7 @@ describe("processIssue", () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
-      vi.mocked(deps.runClaude).mockRejectedValue(
+      vi.mocked(deps.runEngine).mockRejectedValue(
         new Error("executor error"),
       );
       vi.mocked(deps.transitionToFailed).mockRejectedValue(
@@ -394,7 +396,7 @@ describe("processIssue", () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
-      vi.mocked(deps.runClaude).mockRejectedValue(
+      vi.mocked(deps.runEngine).mockRejectedValue(
         new Error("executor error"),
       );
       vi.mocked(deps.postFailureComment).mockRejectedValue(
@@ -405,6 +407,34 @@ describe("processIssue", () => {
 
       expect(result).toBe(false);
       expect(deps.transitionToFailed).toHaveBeenCalledOnce();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // engine 別の失敗メッセージ
+  // -----------------------------------------------------------------------
+
+  describe("engine 別の失敗メッセージ", () => {
+    it("engine が copilot の場合、失敗コメントに Copilot が含まれる", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      const copilotConfig: ExecutionConfig = {
+        ...DEFAULT_EXECUTION_CONFIG,
+        engine: "copilot",
+      };
+      vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
+      vi.mocked(deps.runEngine).mockResolvedValue(
+        makeProcessResult({ success: false, stderr: "error" }),
+      );
+
+      const result = await processIssue(issue, repoConfig, copilotConfig, deps);
+
+      expect(result).toBe(false);
+      expect(deps.postFailureComment).toHaveBeenCalledWith(
+        "testowner/testrepo",
+        42,
+        "Copilot CLI がエラーを返しました",
+      );
     });
   });
 
