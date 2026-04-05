@@ -85,7 +85,7 @@ Claude offers [Scheduled Tasks](https://code.claude.com/docs/en/scheduled-tasks)
 ### When to use Claude Scheduled Tasks instead
 
 - You need tasks to run **when your machine is off** (Cloud tasks).
-- Your automation is **not Issue-driven** (e.g., daily summaries, Slack notifications).
+- Your automation is **not Issue-driven**.
 - You prefer a **zero-code setup** where a prompt is enough.
 
 ## Prerequisites
