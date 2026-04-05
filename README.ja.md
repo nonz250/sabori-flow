@@ -199,14 +199,14 @@ launchctl start com.github.nonz250.sabori-flow
 
 ## 設定
 
-設定ファイルは `~/.config/sabori-flow/config.yml` に保存されます。`config.yml.example` を参考に作成するか、`npx sabori-flow init` で対話的に生成できます。
+設定ファイルは `~/.sabori-flow/config.yml` に保存されます。`config.yml.example` を参考に作成するか、`npx sabori-flow init` で対話的に生成できます。
 
 ```yaml
 repositories:
   - owner: nonz250
     repo: example-app
     local_path: /path/to/repo
-    # prompts_dir: /path/to/custom/prompts  # 任意: カスタムプロンプトテンプレートのディレクトリ
+    # prompts_dir: /path/to/custom/prompts  # 任意: リポジトリ固有のカスタムプロンプトディレクトリ（最優先）
     labels:
       plan:
         trigger: claude/plan
@@ -235,7 +235,7 @@ language: ja
 | `repositories[].owner` | リポジトリオーナー |
 | `repositories[].repo` | リポジトリ名 |
 | `repositories[].local_path` | ローカルのクローン先パス |
-| `repositories[].prompts_dir` | （任意）カスタムプロンプトテンプレートのディレクトリ。絶対パスで指定。このディレクトリのテンプレートを優先し、存在しなければデフォルトにフォールバック |
+| `repositories[].prompts_dir` | （任意）リポジトリ固有のカスタムプロンプトテンプレートディレクトリ。3 層フォールバックの最優先ティア: リポジトリ固有 → `~/.sabori-flow/prompts/` → パッケージ同梱 |
 | `repositories[].labels` | 各フェーズのラベル名（カスタマイズ可能） |
 | `repositories[].labels.plan` | plan フェーズのラベル: `trigger`, `in_progress`, `done`, `failed` |
 | `repositories[].labels.impl` | impl フェーズのラベル: `trigger`, `in_progress`, `done`, `failed` |
@@ -243,7 +243,7 @@ language: ja
 | `execution.max_parallel` | 並列実行数。デフォルトは `1`（逐次実行） |
 | `execution.max_issues_per_repo` | リポジトリあたりの Issue 処理上限。デフォルトは `1` |
 | `execution.autonomy` | CLI の自律実行レベル: `full`（無制限）、`sandboxed`（サンドボックス実行、CLI の対応が必要）、`interactive`（ユーザー承認が必要）。デフォルトは `interactive` |
-| `language` | CLI メッセージの表示言語（`ja` / `en`）。デフォルトは `ja` |
+| `language` | CLI メッセージおよびプロンプトテンプレートの言語（`ja` / `en`）。デフォルトは `ja` |
 
 ## セキュリティ
 
@@ -256,7 +256,7 @@ language: ja
 - **Issue 作成者の権限チェック** -- OWNER、MEMBER、COLLABORATOR 以外のユーザーが作成した Issue は自動的にスキップされます。
 - **シークレットマスキング** -- 成功コメント投稿前に出力をスキャンし、シークレットを自動的にマスクします。
 - **ランダムバウンダリトークン** -- プロンプトにランダムなバウンダリトークンを使用し、プロンプトインジェクションを緩和します。
-- **カスタムテンプレートの検証** -- カスタムプロンプトテンプレートにはバウンダリプレースホルダの存在が必須で、パストラバーサルとサイズ上限（100KB）のチェックも行われます。
+- **カスタムテンプレートの検証** -- カスタムおよびユーザー編集プロンプトテンプレートにはバウンダリプレースホルダの存在が必須で、パストラバーサルとサイズ上限（100KB）のチェックも行われます。パッケージ同梱テンプレートは信頼済みとして検証をスキップします。
 
 このリスクを軽減したい場合、`--local` フラグを使用して、あなたがたチーム全体でローカルコードを監査し、監査済み��ローカルビルドとしてら実行してください。
 
