@@ -109,7 +109,7 @@ The `install` command generates the plist file and registers with launchd.
 
 ### Adding a Repository
 
-To add a new repository to an existing `config.yml`:
+To add a new repository to an existing `config.yml`.
 
 ```bash
 npx sabori-flow add
@@ -240,13 +240,13 @@ This tool runs Claude Code CLI with `--dangerously-skip-permissions`, which allo
 
 By default, the `npx` installation fetches packages from the npm registry at runtime. If the npm package were compromised, malicious code could be executed automatically by the scheduler.
 
-Additionally, the following defenses are built in:
+Additionally, the following defenses are built in.
 
 - **Author permission check** -- Only issues created by users with OWNER, MEMBER, or COLLABORATOR association are processed; others are automatically skipped.
 - **Secret masking** -- Before posting a success comment, output is scanned and secrets are automatically masked.
 - **Random boundary tokens** -- Prompts use randomized boundary tokens to mitigate prompt injection.
 
-To mitigate this risk, use the `--local` flag to run from a locally built copy you can audit:
+To mitigate this risk, use the `--local` flag to run from a locally built copy you can audit.
 
 ```bash
 git clone https://github.com/nonz250/sabori-flow.git
