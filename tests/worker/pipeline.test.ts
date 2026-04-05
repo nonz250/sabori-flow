@@ -415,7 +415,7 @@ describe("processIssue", () => {
       const issue = makeIssue({ phase: Phase.PLAN });
       const repoConfig = makeRepoConfig({ autoImplAfterPlan: true });
 
-      const result = await processIssue(issue, repoConfig, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, deps);
 
       expect(result).toBe(true);
       expect(deps.addImplTriggerLabel).toHaveBeenCalledOnce();
@@ -430,7 +430,7 @@ describe("processIssue", () => {
       const issue = makeIssue({ phase: Phase.PLAN });
       const repoConfig = makeRepoConfig({ autoImplAfterPlan: false });
 
-      const result = await processIssue(issue, repoConfig, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, deps);
 
       expect(result).toBe(true);
       expect(deps.addImplTriggerLabel).not.toHaveBeenCalled();
@@ -440,7 +440,7 @@ describe("processIssue", () => {
       const issue = makeIssue({ phase: Phase.IMPL });
       const repoConfig = makeRepoConfig({ autoImplAfterPlan: true });
 
-      const result = await processIssue(issue, repoConfig, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, deps);
 
       expect(result).toBe(true);
       expect(deps.addImplTriggerLabel).not.toHaveBeenCalled();
@@ -453,7 +453,7 @@ describe("processIssue", () => {
         new Error("label add failed"),
       );
 
-      const result = await processIssue(issue, repoConfig, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, deps);
 
       expect(result).toBe(true);
       expect(deps.addImplTriggerLabel).toHaveBeenCalledOnce();
@@ -466,7 +466,7 @@ describe("processIssue", () => {
         new Error("done label failed"),
       );
 
-      const result = await processIssue(issue, repoConfig, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, deps);
 
       expect(result).toBe(true);
       expect(deps.addImplTriggerLabel).not.toHaveBeenCalled();
