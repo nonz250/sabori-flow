@@ -24,20 +24,35 @@
 
 GitHub Issue にラベルを付けるだけで、sabori-flow がバックグラウンドで Issue を読み、方針を立て、コードを実装し、Pull Request を作成します。**ラベルを付けたら、あとは放置**。それが sabori-flow のコンセプトです。
 
-## sabori-flow vs Claude App
+## sabori-flow vs Claude Scheduled Tasks
 
-sabori-flow と [Claude](https://claude.ai/)（チャットインターフェース）は同じ AI を利用していますが、用途が大きく異なります:
+Claude には [Scheduled Tasks](https://code.claude.com/docs/en/scheduled-tasks)（スケジュールされたタスク）という機能があります。cron ベースでプロンプトを定期実行する仕組み（Cloud / Desktop）です。sabori-flow は根本的に異なるアプローチを採用しています: **プロンプト駆動ではなく、Issue 駆動**です。
 
-| | sabori-flow | Claude App |
-|---|---|---|
-| **実行方式** | バックグラウンド自動実行（launchd） | 手動チャット |
-| **トリガー** | GitHub Issue のラベル | ユーザーのプロンプト入力 |
-| **コードアクセス** | ローカルリポジトリに直接アクセス | コピー＆ペーストまたはファイルアップロード |
-| **出力** | Pull Request + Issue コメント | チャットレスポンス |
-| **適用場面** | 定型タスク・明確な Issue の自動処理 | 対話的な設計・調査・議論 |
-| **人間の介入** | ラベル付与 + plan レビューのみ | 常時対話 |
+| | sabori-flow | Claude Scheduled Tasks (Cloud) | Claude Scheduled Tasks (Desktop) |
+|---|---|---|---|
+| **トリガー** | GitHub Issue のラベル | cron スケジュール + 固定プロンプト | cron スケジュール + 固定プロンプト |
+| **ワークフロー** | 自動状態遷移（ラベル: plan → in-progress → done/failed） | ステートレス -- 毎回ゼロから実行 | ステートレス -- 毎回ゼロから実行 |
+| **コードアクセス** | git worktree 経由でローカルリポジトリに高速アクセス | 毎回 fresh clone | ローカル checkout または worktree |
+| **マルチリポジトリ** | 組み込み対応（`config.yml` で複数リポジトリ + 並列実行制御） | タスクごとに 1 リポジトリ | タスクごとに 1 リポジトリ |
+| **出力** | Pull Request + Issue コメント（ステータス追跡付き） | セッションログ、PR は手動作成 | セッションログ、PR は手動作成 |
+| **セキュリティ** | 出力のシークレットマスキング、Issue 作成者の権限チェック、shell 非経由実行 | Anthropic サンドボックス | Desktop のパーミッション設定 |
+| **カスタマイズ性** | TypeScript パイプライン全体 + Markdown プロンプトテンプレート | プロンプトのみ | プロンプトのみ |
+| **依存** | Claude Code CLI + `gh` CLI（アプリ不要） | claude.ai アカウント + 有料プラン | Desktop アプリの起動が必要 |
+| **PC オフ時の動作** | 不可 | 可能 | 不可 |
 
-**sabori-flow を使う場面**: Issue に書ける程度に明確なタスクで、対話のやり取りが不要なとき。**Claude App を使う場面**: アイデアを探りたい、追加の質問をしたい、曖昧な問題を対話的に解決したいとき。
+### なぜ sabori-flow？
+
+- **Issue がそのままタスクになる。** cron プロンプトで「何をするか」を書く必要はありません。GitHub Issue を書いてラベルを付けるだけ。Issue 自体が仕様書です。
+- **ステートフルなパイプライン。** ラベル遷移（`claude/plan` → `claude/plan:in-progress` → `claude/plan:done`）により、何が処理中で何が完了したか一目でわかります。Claude Scheduled Tasks はステートレスで、「どの Issue を処理済みか」という概念がありません。
+- **安全な並列実行。** git worktree で各 Issue を独立した作業コピーに分離。現在のブランチに干渉しません。
+- **信頼できる出力。** Issue コメント投稿前にシークレットを自動マスキング。3 段階のエラーハンドリングで Issue が壊れた状態で放置されません。
+- **フルカスタマイズ可能。** パイプライン全体が TypeScript で書かれています。プロンプトテンプレートの差し替え、ラベル体系の変更、後処理の追加が自由自在。Claude Scheduled Tasks で変更できるのはプロンプトだけです。
+
+### Claude Scheduled Tasks を使うべき場面
+
+- **マシンがオフでも実行したい**場合（Cloud タスク）。
+- **Issue 駆動ではない自動化** -- 例: 日次コードレビューサマリー、定期的な依存関係チェック、Slack 通知など。
+- **コード不要のセットアップ**で、プロンプト 1 つで十分な場合。
 
 ## 前提条件
 
