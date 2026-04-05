@@ -224,7 +224,7 @@ repositories:
 execution:
   max_parallel: 1
   max_issues_per_repo: 1
-  skip_permissions: true
+  autonomy: interactive
 
 language: ja
 ```
@@ -240,12 +240,12 @@ language: ja
 | `repositories[].priority_labels` | 優先度ラベル。リストの上位ほど先に処理される |
 | `execution.max_parallel` | 並列実行数。デフォルトは `1`（逐次実行） |
 | `execution.max_issues_per_repo` | リポジトリあたりの Issue 処理上限。デフォルトは `1` |
-| `execution.skip_permissions` | Claude Code CLI に `--dangerously-skip-permissions` を付与するか。デフォルトは `true` |
+| `execution.autonomy` | CLI の自律実行レベル: `full`（無制限）、`sandboxed`（サンドボックス実行、CLI の対応が必要）、`interactive`（ユーザー承認が必要）。デフォルトは `interactive` |
 | `language` | CLI メッセージの表示言語（`ja` / `en`）。デフォルトは `ja` |
 
 ## セキュリティ
 
-このツールはデフォルトで Claude Code CLI を `--dangerously-skip-permissions` で実行するため、マシン上でほぼ任意の操作が可能です。`config.yml` で `execution.skip_permissions: false` に設定することで無効化できます。launchd により定期的にユーザー操作なしで実行されます。
+このツールはデフォルトで `interactive` モードで Claude Code CLI を実行し、各操作にユーザー承認が必要です。完全自律実行を有効にするには `config.yml` で `execution.autonomy: full` を設定してください。これにより Claude Code CLI に `--dangerously-skip-permissions` が付与され、マシン上でほぼ任意の操作が可能になります。launchd により定期的にユーザー操作なしで実行されます。
 
 デフォルトの `npx` 方式では、実行時に npm レジストリからパッケージを取得します。万が一 npm パッケージが侵害された場合、悪意あるコードがスケジューラにより自動実行される可能性があります。
 
