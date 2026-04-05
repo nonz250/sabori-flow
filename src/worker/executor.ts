@@ -4,7 +4,7 @@ import {
   ProcessExecutionError,
 } from "./process.js";
 import type { ProcessResult, RunCommandOptions } from "./process.js";
-import { Autonomy } from "./models.js";
+import { Autonomy, Engine } from "./models.js";
 
 export class ExecutorError extends Error {
   constructor(message: string) {
@@ -28,7 +28,7 @@ export class ExecutorTimeoutError extends ExecutorError {
 const DEFAULT_TIMEOUT_MS = 3_600_000; // 60 minutes
 const BG_WAIT_CEILING_MS = 3_600_000; // 60 minutes
 
-export interface RunClaudeOptions {
+export interface RunEngineOptions {
   readonly cwd?: string;
   readonly timeoutMs?: number;
   readonly autonomy?: Autonomy;
@@ -48,7 +48,7 @@ export interface RunClaudeOptions {
  */
 export async function runClaude(
   prompt: string,
-  options?: RunClaudeOptions,
+  options?: RunEngineOptions,
 ): Promise<ProcessResult> {
   const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
@@ -159,6 +159,89 @@ export function resolveAutonomyLogMessage(
     default: {
       const _exhaustive: never = autonomy;
       throw new Error(`Unknown autonomy level: ${_exhaustive}`);
+    }
+  }
+}
+
+/**
+ * OpenAI Codex CLI を実行し、結果を返す。
+ *
+ * プロンプトは位置引数として渡す（Codex CLI は stdin 非対応）。
+ *
+ * NOTE: プロンプトがコマンドライン引数に含まれるため、
+ * `ps` コマンド等で他のプロセスから可視になる点に注意。
+ */
+export async function runCodex(
+  prompt: string,
+  options?: RunEngineOptions,
+): Promise<ProcessResult> {
+  const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+
+  const autonomy = options?.autonomy ?? Autonomy.INTERACTIVE;
+  const autonomyFlags = resolveCodexAutonomyFlags(autonomy);
+  const args = ["exec", ...autonomyFlags, prompt];
+
+  try {
+    return await runCommand(
+      "codex",
+      args,
+      {
+        cwd: options?.cwd,
+        timeoutMs,
+      },
+    );
+  } catch (error: unknown) {
+    if (error instanceof ProcessTimeoutError) {
+      throw new ExecutorError(
+        `Codex CLI timed out after ${timeoutMs}ms`,
+      );
+    }
+    if (error instanceof ProcessExecutionError) {
+      throw new ExecutorError(error.message);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Autonomy レベルから Codex CLI のフラグを解決する。
+ *
+ * - full: --dangerously-bypass-approvals-and-sandbox (no sandbox, no approvals)
+ * - sandboxed: --full-auto (sandboxed autonomous execution)
+ * - interactive: no flags (default interactive mode)
+ */
+export function resolveCodexAutonomyFlags(autonomy: Autonomy): readonly string[] {
+  switch (autonomy) {
+    case Autonomy.FULL:
+      return ["--dangerously-bypass-approvals-and-sandbox"];
+    case Autonomy.AUTO:
+    case Autonomy.SANDBOXED:
+      return ["--full-auto"];
+    case Autonomy.INTERACTIVE:
+      return [];
+    default: {
+      const _exhaustive: never = autonomy;
+      throw new Error(`Unknown autonomy level: ${_exhaustive}`);
+    }
+  }
+}
+
+/**
+ * エンジンに応じた CLI を実行するディスパッチ関数。
+ */
+export async function runEngine(
+  engine: Engine,
+  prompt: string,
+  options?: RunEngineOptions,
+): Promise<ProcessResult> {
+  switch (engine) {
+    case Engine.CLAUDE:
+      return runClaude(prompt, options);
+    case Engine.CODEX:
+      return runCodex(prompt, options);
+    default: {
+      const _exhaustive: never = engine;
+      throw new Error(`Unknown engine: ${_exhaustive}`);
     }
   }
 }
