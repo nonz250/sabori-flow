@@ -127,7 +127,7 @@ This interactively prompts for owner, repo, and local path, then appends the ent
 npx sabori-flow uninstall
 ```
 
-This unregisters from launchd and removes related files.
+This unregisters from launchd and removes the plist file. You will be prompted whether to delete `~/.sabori-flow/` entirely (config, prompts, and logs).
 
 ## Usage
 
