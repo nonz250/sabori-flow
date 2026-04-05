@@ -4,7 +4,11 @@ import { PLIST_DEST_PATH, getBaseDir, getConfigPath, getPlistGeneratedPath } fro
 import { exec } from "../utils/shell.js";
 import { setLanguage, t, loadLanguageFromConfig } from "../i18n/index.js";
 
-export async function uninstallCommand(): Promise<void> {
+export async function uninstallCommand(
+  options: { interactive?: boolean } = {},
+): Promise<void> {
+  const { interactive = true } = options;
+
   setLanguage(loadLanguageFromConfig(getConfigPath()));
 
   // 1. launchd 解除
@@ -29,19 +33,21 @@ export async function uninstallCommand(): Promise<void> {
   console.log(t("uninstall.complete"));
 
   // 3. 全データ削除の確認
-  const baseDir = getBaseDir();
-  if (fs.existsSync(baseDir)) {
-    try {
-      const deleteAll = await confirm({
-        message: t("uninstall.confirmDeleteAll", { dir: baseDir }),
-        default: false,
-      });
-      if (deleteAll) {
-        fs.rmSync(baseDir, { recursive: true, force: true });
-        console.log(t("uninstall.deletedAll", { dir: baseDir }));
+  if (interactive) {
+    const baseDir = getBaseDir();
+    if (fs.existsSync(baseDir)) {
+      try {
+        const deleteAll = await confirm({
+          message: t("uninstall.confirmDeleteAll", { dir: baseDir }),
+          default: false,
+        });
+        if (deleteAll) {
+          fs.rmSync(baseDir, { recursive: true, force: true });
+          console.log(t("uninstall.deletedAll", { dir: baseDir }));
+        }
+      } catch {
+        // Ctrl+C — データ削除をスキップして静かに終了
       }
-    } catch {
-      // Ctrl+C — データ削除をスキップして静かに終了
     }
   }
 }
