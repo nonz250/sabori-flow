@@ -2,7 +2,7 @@
 
 ## プロジェクト概要
 
-TypeScript (Node.js) と Claude Code CLI を使って GitHub Issue を自動的に検出し、定期的に対象 Issue を解決するワーカー。
+TypeScript (Node.js) と CLI ベースの AI コーディングエージェント（Claude Code CLI / OpenAI Codex CLI）を使って GitHub Issue を自動的に検出し、定期的に対象 Issue を解決するワーカー。
 npm パッケージとして公開されており、`npx sabori-flow` で利用可能。
 ローカルマシンの launchd で 1 時間ごとに定期実行される。
 
@@ -14,7 +14,7 @@ npm パッケージとして公開されており、`npx sabori-flow` で利用�
 ## 技術スタック
 
 - TypeScript / Node.js（ワーカー本体 + CLI、npm パッケージとして配布）
-- Claude Code CLI（Issue 解決エンジン。`claude -p` で非対話実行、`execution.autonomy` 設定に応じてフラグを付与）
+- Claude Code CLI / OpenAI Codex CLI（Issue 解決エンジン。`execution.engine` で選択。Claude: `claude -p` で非対話実行、Codex: `codex exec` で非対話実行。`execution.autonomy` 設定に応じてフラグを付与）
 - GitHub CLI (`gh`)（Issue 取得・PR 作成・ラベル操作・コメント投稿）
 - yaml（設定ファイル `config.yml` の読み込み）
 - vitest（テストフレームワーク）
@@ -24,8 +24,8 @@ npm パッケージとして公開されており、`npx sabori-flow` で利用�
 
 ### 責務分担
 
-- **TypeScript ワーカー** (`src/worker/`): Issue 取得、ラベル遷移、優先度ソート、プロンプト生成、Claude Code CLI の呼び出し、結果判定、コメント投稿、ログ出力
-- **Claude Code CLI**: Issue の解決（方針策定・実装）。Node.js から stdin 経由でプロンプトを渡して非対話実行
+- **TypeScript ワーカー** (`src/worker/`): Issue 取得、ラベル遷移、優先度ソート、プロンプト生成、CLI エンジンの呼び出し、結果判定、コメント投稿、ログ出力
+- **Claude Code CLI / Codex CLI**: Issue の解決（方針策定・実装）。Claude は stdin 経由、Codex は位置引数でプロンプトを渡して非対話実行
 - **TypeScript CLI** (`src/commands/`): 対話的セットアップ（config.yml 生成、launchd 登録・解除）
 - **launchd**: `npx sabori-flow worker` を定期実行（デフォルト）。`--local` 時は `node dist/worker.js` を直接実行
 
@@ -49,7 +49,7 @@ src/
     pipeline.ts      # 1 Issue の処理パイプライン + resumeSpecReview（DI パターン）
     prompt.ts        # プロンプトテンプレート読み込み・展開
     prompt-migration.ts # フラットレイアウト→言語別ディレクトリへの移行
-    executor.ts      # Claude CLI 実行
+    executor.ts      # CLI エンジン実行（Claude / Codex）
     worktree.ts      # git worktree ライフサイクル管理
     label.ts         # ラベル遷移操作（applyLabelTransition）
     comment.ts       # Issue コメント投稿（成功・失敗・spec 提案）
@@ -74,7 +74,7 @@ src/
    - `git fetch origin` でリモートの最新を取得
    - git worktree 作成（`~/.sabori-flow/worktrees/<owner>/<repo>/issue-<番号>-<タイムスタンプ>/` に `origin/<default_branch>` を起点にブランチを作成）
    - プロンプト生成（テンプレート + Issue 情報）
-   - `claude -p` を worktree 内で実行（`execution.autonomy` に応じてフラグを付与）
+   - `execution.engine` に応じた CLI を worktree 内で実行（`execution.autonomy` に応じてフラグを付与）
    - impl のみ: Issue に紐づく PR の存在を検証。0 件なら worktree を保持したまま `claude -p --continue` でセッションを 1 回だけ再開し、再照会する（検証自体が失敗した場合は WARNING を残して成功扱い）
    - 成功: 出力サニタイズ後、done ラベル + 成功コメント / 失敗: failed ラベル + 構造化された失敗診断コメント（カテゴリ、stderr、stdout、exit code 等）
    - worktree 削除（finally）
@@ -175,6 +175,7 @@ spec の review 状態では、ワーカーが毎サイクル評価を行う。�
 - `repositories[].default_branch`: デフォルトブランチ名（文字列、デフォルト: `main`）。worktree 作成時に `origin/<default_branch>` を起点として使用
 - `execution.max_parallel`: 並列実行数（整数、1-10、デフォルト: 1）
 - `execution.max_issues_per_repo`: リポジトリあたりの最大処理 Issue 数（整数、1-20、デフォルト: 1）
+- `execution.engine`: 実行エンジン（`claude` / `codex`、デフォルト: `claude`）
 - `execution.autonomy`: CLI の自律実行レベル（`interactive` / `auto` / `full` / `sandboxed`、デフォルト: `interactive`）
   - `interactive`: 各操作にユーザー承認が必要。launchd 無人実行には不向き
   - `auto`: Claude Code の `--permission-mode auto`。分類器が危険操作のみブロック (v2.1.83+ / Max・Team・Enterprise プラン必須)
