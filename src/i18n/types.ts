@@ -55,6 +55,7 @@ export interface MessageKeys {
   "prompt.autoImplConfirm": string;
   "prompt.intervalMinutes": string;
   "prompt.intervalMinutesValidation": string;
+  "prompt.selectEngine": string;
 
   // cli descriptions
   "cli.descriptionAdd": string;
