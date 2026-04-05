@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 
 vi.mock("node:fs");
 
-import { readFileSync, realpathSync } from "node:fs";
+import { readFileSync, realpathSync, statSync } from "node:fs";
 import {
   loadConfig,
   ConfigValidationError,
@@ -11,6 +11,7 @@ import {
 
 const mockedReadFileSync = vi.mocked(readFileSync);
 const mockedRealpathSync = vi.mocked(realpathSync);
+const mockedStatSync = vi.mocked(statSync);
 
 // ---------- Helper ----------
 
@@ -18,6 +19,10 @@ function mockYaml(content: string): void {
   mockedReadFileSync.mockReturnValue(content);
   // realpathSync はデフォルトで受け取ったパスをそのまま返す
   mockedRealpathSync.mockImplementation((p) => p as string);
+  // statSync はデフォルトでディレクトリとして返す
+  mockedStatSync.mockReturnValue({
+    isDirectory: () => true,
+  } as ReturnType<typeof statSync>);
 }
 
 function mockFileNotFound(): void {
@@ -120,6 +125,7 @@ describe("loadConfig - normal", () => {
     expect(repo.priorityLabels).toEqual(["priority:high", "priority:low"]);
     expect(result.execution.maxParallel).toBe(4);
     expect(result.language).toBe("ja");
+    expect(result.execution.language).toBe("ja");
     expect(result.execution.autonomy).toBe("interactive");
   });
 
@@ -648,7 +654,6 @@ describe("loadConfig - tilde expansion", () => {
 
     expect(result.repositories[0].localPath).toBe(expected);
   });
-
 });
 
 describe("loadConfig - language validation", () => {

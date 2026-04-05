@@ -30,7 +30,7 @@ export async function promptRepository(): Promise<RepositoryInput> {
   });
   const local_path = expandTilde(rawPath);
   const auto_impl_after_plan = await confirm({
-    message: "Plan 完了後に自動で impl ラベルを付与しますか?",
+    message: t("prompt.autoImplConfirm"),
     default: false,
   });
   return { owner, repo, local_path, auto_impl_after_plan };

@@ -39,11 +39,11 @@ vi.mock("../../src/utils/paths.js", async (importOriginal) => {
     PACKAGE_ROOT: "/mock/package-root",
     PLIST_TEMPLATE_PATH: "/mock/package-root/launchd/template.plist",
     PLIST_DEST_DIR: "/mock/home/Library/LaunchAgents",
-    PLIST_DEST_PATH: "/mock/home/Library/LaunchAgents/com.github.nonz250.sabori-flow.plist",
+    PLIST_DEST_PATH: "/mock/home/Library/LaunchAgents/com.github.sabori-flow.plist",
     getConfigPath: vi.fn().mockReturnValue("/mock/config/dir/config.yml"),
     getLogsDir: vi.fn().mockReturnValue("/mock/data/logs"),
-    getDataDir: vi.fn().mockReturnValue("/mock/data"),
-    getPlistGeneratedPath: vi.fn().mockReturnValue("/mock/data/com.github.nonz250.sabori-flow.plist"),
+    getBaseDir: vi.fn().mockReturnValue("/mock/data"),
+    getPlistGeneratedPath: vi.fn().mockReturnValue("/mock/data/com.github.sabori-flow.plist"),
   };
 });
 
@@ -53,7 +53,7 @@ import { renderPlist } from "../../src/utils/plist.js";
 import {
   getConfigPath,
   getLogsDir,
-  getDataDir,
+  getBaseDir,
   getPlistGeneratedPath,
 } from "../../src/utils/paths.js";
 
@@ -63,7 +63,7 @@ const mockedCommandExists = vi.mocked(commandExists);
 const mockedRenderPlist = vi.mocked(renderPlist);
 const mockedGetConfigPath = vi.mocked(getConfigPath);
 const mockedGetLogsDir = vi.mocked(getLogsDir);
-const mockedGetDataDir = vi.mocked(getDataDir);
+const mockedGetBaseDir = vi.mocked(getBaseDir);
 const mockedGetPlistGeneratedPath = vi.mocked(getPlistGeneratedPath);
 
 // ---------- Setup ----------
@@ -76,8 +76,8 @@ beforeEach(() => {
   // paths のモック関数は restoreAllMocks でリセットされるため毎回再設定
   mockedGetConfigPath.mockReturnValue("/mock/config/dir/config.yml");
   mockedGetLogsDir.mockReturnValue("/mock/data/logs");
-  mockedGetDataDir.mockReturnValue("/mock/data");
-  mockedGetPlistGeneratedPath.mockReturnValue("/mock/data/com.github.nonz250.sabori-flow.plist");
+  mockedGetBaseDir.mockReturnValue("/mock/data");
+  mockedGetPlistGeneratedPath.mockReturnValue("/mock/data/com.github.sabori-flow.plist");
 
   consoleSpy = {
     log: vi.spyOn(console, "log").mockImplementation(() => {}),
@@ -311,7 +311,7 @@ describe("installCommand - デフォルト（npx モード）", () => {
       await runInstallCommand();
 
       expect(mockedFs.chmodSync).toHaveBeenCalledWith(
-        "/mock/home/Library/LaunchAgents/com.github.nonz250.sabori-flow.plist",
+        "/mock/home/Library/LaunchAgents/com.github.sabori-flow.plist",
         0o600,
       );
     });
@@ -336,13 +336,13 @@ describe("installCommand - デフォルト（npx モード）", () => {
       );
     });
 
-    it("生成した plist を getDataDir 配下に mode 0o600 で書き込む", async () => {
+    it("生成した plist を getBaseDir 配下に mode 0o600 で書き込む", async () => {
       setupNormalFlow({ renderedPlist: "<plist>final-output</plist>" });
 
       await runInstallCommand();
 
       expect(mockedFs.writeFileSync).toHaveBeenCalledWith(
-        "/mock/data/com.github.nonz250.sabori-flow.plist",
+        "/mock/data/com.github.sabori-flow.plist",
         "<plist>final-output</plist>",
         { encoding: "utf-8", mode: 0o600 },
       );
@@ -355,7 +355,7 @@ describe("installCommand - デフォルト（npx モード）", () => {
 
       expect(mockedExec).toHaveBeenCalledWith("launchctl", [
         "load",
-        "/mock/home/Library/LaunchAgents/com.github.nonz250.sabori-flow.plist",
+        "/mock/home/Library/LaunchAgents/com.github.sabori-flow.plist",
       ]);
     });
   });
@@ -449,7 +449,7 @@ describe("installCommand - --local モード", () => {
 
       expect(mockedExec).toHaveBeenCalledWith("launchctl", [
         "load",
-        "/mock/home/Library/LaunchAgents/com.github.nonz250.sabori-flow.plist",
+        "/mock/home/Library/LaunchAgents/com.github.sabori-flow.plist",
       ]);
     });
   });

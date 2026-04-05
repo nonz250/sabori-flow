@@ -7,7 +7,7 @@ import {
   PLIST_DEST_PATH,
   getConfigPath,
   getLogsDir,
-  getDataDir,
+  getBaseDir,
   getPlistGeneratedPath,
 } from "../utils/paths.js";
 import { exec, commandExists, ShellError } from "../utils/shell.js";
@@ -89,7 +89,7 @@ export async function installCommand(
 
     // 4. plist 生成
     console.log(t("install.generatingPlist"));
-    fs.mkdirSync(getDataDir(), { recursive: true, mode: 0o700 });
+    fs.mkdirSync(getBaseDir(), { recursive: true, mode: 0o700 });
     const template = fs.readFileSync(PLIST_TEMPLATE_PATH, "utf-8");
     const plist = renderPlist(template, {
       programArguments,

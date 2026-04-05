@@ -17,6 +17,7 @@ const DEFAULT_EXECUTION_CONFIG: ExecutionConfig = {
   maxParallel: 1,
   maxIssuesPerRepo: 10,
   autonomy: "interactive",
+  language: "ja",
 };
 
 // logger 出力を抑制
@@ -60,7 +61,7 @@ describe("processIssue", () => {
         PLAN_LABELS,
       );
       expect(deps.buildPrompt).toHaveBeenCalledOnce();
-      expect(deps.buildPrompt).toHaveBeenCalledWith(issue, repoConfig);
+      expect(deps.buildPrompt).toHaveBeenCalledWith(issue, repoConfig, "ja");
       expect(deps.runClaude).toHaveBeenCalledOnce();
       expect(deps.transitionToDone).toHaveBeenCalledOnce();
       expect(deps.transitionToDone).toHaveBeenCalledWith(
@@ -121,6 +122,7 @@ describe("processIssue", () => {
         maxParallel: 1,
         maxIssuesPerRepo: 10,
         autonomy: "full",
+        language: "ja",
       };
 
       await processIssue(issue, repoConfig, executionConfig, deps);

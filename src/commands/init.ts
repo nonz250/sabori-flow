@@ -1,7 +1,8 @@
 import { select, confirm } from "@inquirer/prompts";
 import { stringify } from "yaml";
 import fs from "fs";
-import { getConfigDir, getConfigPath } from "../utils/paths.js";
+import { join, resolve } from "node:path";
+import { getBaseDir, getConfigPath, getUserPromptsDir, getDefaultPromptsDir } from "../utils/paths.js";
 import {
   getDefaultLabels,
   getDefaultPriorityLabels,
@@ -13,6 +14,7 @@ import {
 } from "./helpers/repository-prompt.js";
 import { setLanguage, t } from "../i18n/index.js";
 import type { Language } from "../i18n/types.js";
+import { TEMPLATE_FILES } from "../worker/prompt.js";
 
 function buildConfigData(repos: RepositoryInput[], language: string) {
   return {
@@ -21,55 +23,87 @@ function buildConfigData(repos: RepositoryInput[], language: string) {
       owner: r.owner,
       repo: r.repo,
       local_path: r.local_path,
+      auto_impl_after_plan: r.auto_impl_after_plan,
       labels: getDefaultLabels(),
       priority_labels: getDefaultPriorityLabels(),
-      auto_impl_after_plan: r.auto_impl_after_plan,
     })),
     execution: getDefaultExecution(),
   };
 }
 
-export async function initCommand(): Promise<void> {
-  // config.yml 存在チェック
-  // XDG 準拠: config ディレクトリを事前作成
-  fs.mkdirSync(getConfigDir(), { recursive: true, mode: 0o700 });
+async function copyPromptTemplates(language: Language): Promise<void> {
+  const srcDir = join(getDefaultPromptsDir(), language);
+  const destDir = getUserPromptsDir();
+  fs.mkdirSync(destDir, { recursive: true, mode: 0o700 });
 
-  const language = await select<Language>({
-    message: "Select language / 言語を選択してください:",
-    choices: [
-      { value: "ja", name: "日本語" },
-      { value: "en", name: "English" },
-    ],
-  });
-  setLanguage(language);
+  for (const filename of Object.values(TEMPLATE_FILES)) {
+    const src = resolve(srcDir, filename);
+    const dest = resolve(destDir, filename);
 
-  if (fs.existsSync(getConfigPath())) {
-    const overwrite = await confirm({
-      message: t("init.configExistsOverwrite"),
-      default: false,
-    });
-    if (!overwrite) {
-      console.log(t("init.aborted"));
-      return;
+    if (fs.existsSync(dest)) {
+      const overwrite = await confirm({
+        message: t("init.templateExists", { file: filename }),
+        default: false,
+      });
+      if (!overwrite) {
+        console.log(t("init.templateSkipped", { file: filename }));
+        continue;
+      }
     }
+
+    fs.copyFileSync(src, dest);
+    fs.chmodSync(dest, 0o600);
   }
 
-  // リポジトリ入力ループ
-  const repos: RepositoryInput[] = [];
-  do {
-    repos.push(await promptRepository());
-  } while (
-    await confirm({
-      message: t("init.addAnotherRepo"),
-      default: false,
-    })
-  );
+  console.log(t("init.templatesCopied", { dir: destDir }));
+}
 
-  // YAML 生成・書き込み
-  const config = buildConfigData(repos, language);
-  const yamlStr = stringify(config);
-  fs.writeFileSync(getConfigPath(), yamlStr, { encoding: "utf-8", mode: 0o600 });
+export async function initCommand(): Promise<void> {
+  try {
+    // ベースディレクトリを事前作成
+    fs.mkdirSync(getBaseDir(), { recursive: true, mode: 0o700 });
 
-  console.log(t("init.configCreated", { path: getConfigPath() }));
-  console.log(t("init.runInstallNext"));
+    const language = await select<Language>({
+      message: "Select language / 言語を選択してください:",
+      choices: [
+        { value: "ja", name: "日本語" },
+        { value: "en", name: "English" },
+      ],
+    });
+    setLanguage(language);
+
+    await copyPromptTemplates(language);
+
+    if (fs.existsSync(getConfigPath())) {
+      const overwrite = await confirm({
+        message: t("init.configExistsOverwrite"),
+        default: false,
+      });
+      if (!overwrite) {
+        console.log(t("init.aborted"));
+        return;
+      }
+    }
+
+    // リポジトリ入力ループ
+    const repos: RepositoryInput[] = [];
+    do {
+      repos.push(await promptRepository());
+    } while (
+      await confirm({
+        message: t("init.addAnotherRepo"),
+        default: false,
+      })
+    );
+
+    // YAML 生成・書き込み
+    const config = buildConfigData(repos, language);
+    const yamlStr = stringify(config);
+    fs.writeFileSync(getConfigPath(), yamlStr, { encoding: "utf-8", mode: 0o600 });
+
+    console.log(t("init.configCreated", { path: getConfigPath() }));
+    console.log(t("init.runInstallNext"));
+  } catch {
+    // Ctrl+C — 静かに終了
+  }
 }

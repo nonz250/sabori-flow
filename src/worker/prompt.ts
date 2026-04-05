@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
-import { basename, resolve } from "node:path";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { basename, join, resolve } from "node:path";
 
+import type { Language } from "../i18n/types.js";
 import type { Issue, RepositoryConfig } from "./models.js";
 import { Phase, repoFullName } from "./models.js";
-import { getDefaultPromptsDir } from "../utils/paths.js";
+import { getUserPromptsDir, getDefaultPromptsDir } from "../utils/paths.js";
+import { createLogger } from "./logger.js";
 
 /** テンプレート関連のエラー */
 export class PromptTemplateError extends Error {
@@ -14,10 +16,15 @@ export class PromptTemplateError extends Error {
   }
 }
 
-const TEMPLATE_FILES: Record<Phase, string> = {
+const logger = createLogger("prompt");
+
+export const TEMPLATE_FILES: Record<Phase, string> = {
   [Phase.PLAN]: "plan.md",
   [Phase.IMPL]: "impl.md",
 };
+
+/** テンプレートファイルの最大サイズ (100KB) */
+const MAX_TEMPLATE_SIZE = 100 * 1024;
 
 /**
  * ユーザー入力由来の変数キー。
@@ -32,41 +39,58 @@ const USER_INPUT_KEYS: ReadonlySet<string> = new Set([
  * Issue とリポジトリ設定からプロンプト文字列を組み立てる。
  *
  * テンプレートファイルを読み込み、プレースホルダを展開して返す。
- * ユーザーカスタムプロンプトが存在すればそちらを優先し、
- * 存在しなければパッケージ同梱のデフォルトテンプレートにフォールバックする。
+ * 2 段階のフォールバックでテンプレートを解決する:
+ *   1. ユーザーディレクトリ (`~/.sabori-flow/prompts/`)
+ *   2. パッケージ同梱のデフォルトテンプレート (`prompts/<language>/`)
  *
  * @throws {PromptTemplateError} テンプレートの読み込みまたは展開に失敗した場合
  */
 export function buildPrompt(
   issue: Issue,
   repoConfig: RepositoryConfig,
-  promptsDir: string = getDefaultPromptsDir(),
+  language: Language,
 ): string {
-  const template = loadTemplate(issue.phase, promptsDir);
+  const userDir = getUserPromptsDir();
+  const defaultDir = join(getDefaultPromptsDir(), language);
+  const template = loadTemplate(issue.phase, userDir, defaultDir);
   const variables = buildVariables(issue, repoConfig);
   return render(template, variables);
 }
 
 /**
- * テンプレートファイルを読み込む。
+ * 2 段階フォールバックでテンプレートファイルを読み込む。
  *
- * パッケージ同梱のプロンプトディレクトリからのみ読み込む。
- * ユーザーカスタムプロンプトは将来的にセキュアな設計で提供予定（Issue #22）。
+ *   1. ユーザーディレクトリ (`~/.sabori-flow/prompts/`)
+ *   2. パッケージ同梱のデフォルトディレクトリ (`prompts/<language>/`)
  *
- * @throws {PromptTemplateError} フェーズが未定義またはテンプレートが存在しない場合
+ * @throws {PromptTemplateError} フェーズが未定義、テンプレートが存在しない、
+ *   またはファイルサイズ超過の場合
  */
 function loadTemplate(
   phase: Phase,
-  promptsDir: string,
+  userDir: string,
+  defaultDir: string,
 ): string {
   const filename = TEMPLATE_FILES[phase];
   if (filename === undefined) {
     throw new PromptTemplateError(`Unknown phase: ${phase}`);
   }
 
-  const templatePath = resolve(promptsDir, filename);
-  if (existsSync(templatePath)) {
-    return readTemplateFile(templatePath);
+  // 1. ユーザーディレクトリ (~/.sabori-flow/prompts/)
+  const userPath = resolve(userDir, filename);
+  if (existsSync(userPath)) {
+    logger.info("Loaded template from user directory: %s", userDir);
+    return readTemplateFile(userPath);
+  }
+  logger.info(
+    "User template not found in %s (falling back to package default)",
+    userDir,
+  );
+
+  // 2. パッケージ同梱デフォルト
+  const defaultPath = resolve(defaultDir, filename);
+  if (existsSync(defaultPath)) {
+    return readTemplateFile(defaultPath);
   }
 
   throw new PromptTemplateError(
@@ -77,12 +101,27 @@ function loadTemplate(
 /**
  * テンプレートファイルを読み込む内部ヘルパー。
  *
- * @throws {PromptTemplateError} ファイルの読み込みに失敗した場合
+ * レギュラーファイル判定とファイルサイズの上限チェックを行う。
+ *
+ * @throws {PromptTemplateError} ファイルの読み込みに失敗、レギュラーファイルでない、
+ *   またはサイズ超過の場合
  */
 function readTemplateFile(templatePath: string): string {
   try {
+    const stat = statSync(templatePath);
+    if (!stat.isFile()) {
+      throw new PromptTemplateError(
+        `Template path is not a regular file: ${basename(templatePath)}`,
+      );
+    }
+    if (stat.size > MAX_TEMPLATE_SIZE) {
+      throw new PromptTemplateError(
+        `Template file too large: ${basename(templatePath)} (${stat.size} bytes, max ${MAX_TEMPLATE_SIZE} bytes)`,
+      );
+    }
     return readFileSync(templatePath, "utf-8");
-  } catch {
+  } catch (error: unknown) {
+    if (error instanceof PromptTemplateError) throw error;
     throw new PromptTemplateError(
       `Failed to read template file: ${basename(templatePath)}`,
     );

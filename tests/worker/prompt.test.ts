@@ -2,17 +2,36 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("node:fs");
 
-import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+// logger mock
+vi.mock("../../src/worker/logger.js", () => ({
+  createLogger: vi.fn(() => ({
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  })),
+}));
+
+// paths mock
+vi.mock("../../src/utils/paths.js", () => ({
+  getUserPromptsDir: vi.fn(() => "/mock/user/prompts"),
+  getDefaultPromptsDir: vi.fn(() => "/mock/default/prompts"),
+}));
+
+import { existsSync, readFileSync, statSync } from "node:fs";
 import {
   buildPrompt,
   PromptTemplateError,
 } from "../../src/worker/prompt.js";
 import { Phase, Priority } from "../../src/worker/models.js";
 import type { Issue, RepositoryConfig } from "../../src/worker/models.js";
+import { getUserPromptsDir, getDefaultPromptsDir } from "../../src/utils/paths.js";
 
 const mockedReadFileSync = vi.mocked(readFileSync);
 const mockedExistsSync = vi.mocked(existsSync);
+const mockedStatSync = vi.mocked(statSync);
+const mockedGetUserPromptsDir = vi.mocked(getUserPromptsDir);
+const mockedGetDefaultPromptsDir = vi.mocked(getDefaultPromptsDir);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -41,6 +60,7 @@ function makeRepoConfig(
       },
     },
     priorityLabels: ["priority:high", "priority:low"],
+    autoImplAfterPlan: false,
   };
 }
 
@@ -51,6 +71,7 @@ function makeIssue(overrides?: Partial<Issue>): Issue {
     body: "This is the issue body.",
     labels: ["claude/plan"],
     url: "https://github.com/testowner/testrepo/issues/42",
+    authorAssociation: "OWNER",
     phase: Phase.PLAN,
     priority: Priority.NONE,
     ...overrides,
@@ -77,37 +98,49 @@ const MINIMAL_IMPL_TEMPLATE = [
   "{boundary_close}",
 ].join("\n") + "\n";
 
-/** UUID v4 の形式にマッチする正規表現 */
+/** UUID v4 pattern */
 const UUID_PATTERN = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 
-/** バウンダリ開始マーカーの正規表現 */
 const BOUNDARY_OPEN_PATTERN = new RegExp(
   `<!-- BOUNDARY-${UUID_PATTERN} DATA START -->`,
 );
 
-/** バウンダリ終了マーカーの正規表現 */
 const BOUNDARY_CLOSE_PATTERN = new RegExp(
   `<!-- BOUNDARY-${UUID_PATTERN} DATA END -->`,
 );
 
+const USER_DIR = "/mock/user/prompts";
+const DEFAULT_DIR = "/mock/default/prompts";
+
 // ---------------------------------------------------------------------------
-// 正常系テスト
+// Helper: default dir mock (user dir not found, default dir found)
 // ---------------------------------------------------------------------------
 
-describe("buildPrompt - 正常系", () => {
+function setupDefaultDirMocks(): void {
+  mockedExistsSync.mockImplementation((p) => {
+    const path = String(p);
+    if (path.startsWith(USER_DIR)) return false;
+    return true; // default dir exists
+  });
+  mockedStatSync.mockReturnValue({ size: 1024, isFile: () => true } as unknown as ReturnType<typeof statSync>);
+}
+
+// ---------------------------------------------------------------------------
+// Normal cases
+// ---------------------------------------------------------------------------
+
+describe("buildPrompt - normal cases", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    mockedGetUserPromptsDir.mockReturnValue(USER_DIR);
+    mockedGetDefaultPromptsDir.mockReturnValue(DEFAULT_DIR);
   });
 
-  it("Plan フェーズで指定ディレクトリからテンプレートを読み込む", () => {
-    mockedExistsSync.mockReturnValue(true);
+  it("Plan phase loads template from default directory", () => {
+    setupDefaultDirMocks();
     mockedReadFileSync.mockReturnValue(MINIMAL_PLAN_TEMPLATE);
 
-    const result = buildPrompt(
-      makeIssue(),
-      makeRepoConfig(),
-      "/tmp/prompts",
-    );
+    const result = buildPrompt(makeIssue(), makeRepoConfig(), "ja");
 
     expect(result).toContain("Repo: testowner/testrepo");
     expect(result).toContain("Owner: testowner");
@@ -117,17 +150,10 @@ describe("buildPrompt - 正常系", () => {
     expect(result).toContain("This is the issue body.");
     expect(result).toMatch(BOUNDARY_OPEN_PATTERN);
     expect(result).toMatch(BOUNDARY_CLOSE_PATTERN);
-    expect(mockedExistsSync).toHaveBeenCalledWith(
-      resolve("/tmp/prompts", "plan.md"),
-    );
-    expect(mockedReadFileSync).toHaveBeenCalledWith(
-      resolve("/tmp/prompts", "plan.md"),
-      "utf-8",
-    );
   });
 
-  it("Impl フェーズでプロンプトが正しく生成される", () => {
-    mockedExistsSync.mockReturnValue(true);
+  it("Impl phase generates prompt correctly", () => {
+    setupDefaultDirMocks();
     mockedReadFileSync.mockReturnValue(MINIMAL_IMPL_TEMPLATE);
 
     const result = buildPrompt(
@@ -137,63 +163,50 @@ describe("buildPrompt - 正常系", () => {
         title: "Implement feature",
       }),
       makeRepoConfig("myorg", "myapp"),
-      "/tmp/prompts",
+      "ja",
     );
 
     expect(result).toContain("Implement for myorg/myapp");
     expect(result).toContain("Issue #99: Implement feature");
-    expect(mockedReadFileSync).toHaveBeenCalledWith(
-      resolve("/tmp/prompts", "impl.md"),
-      "utf-8",
-    );
   });
 
-  it("issue.body が null の場合、空文字列に変換される", () => {
-    mockedExistsSync.mockReturnValue(true);
+  it("issue.body null is converted to empty string", () => {
+    setupDefaultDirMocks();
     mockedReadFileSync.mockReturnValue("{boundary_open}\n{issue_body}\n{boundary_close}");
 
-    const result = buildPrompt(
-      makeIssue({ body: null }),
-      makeRepoConfig(),
-      "/tmp/prompts",
-    );
+    const result = buildPrompt(makeIssue({ body: null }), makeRepoConfig(), "ja");
 
     expect(result).toMatch(BOUNDARY_OPEN_PATTERN);
     expect(result).toMatch(BOUNDARY_CLOSE_PATTERN);
-    // バウンダリの間が空行（空文字列に変換されている）
     const lines = result.split("\n");
     expect(lines[1]).toBe("");
   });
 
-  it("テンプレートに含まれない変数があっても問題なく動作する", () => {
-    mockedExistsSync.mockReturnValue(true);
+  it("Works fine when template doesn't use all variables", () => {
+    setupDefaultDirMocks();
     mockedReadFileSync.mockReturnValue("Only title: {issue_title}");
 
-    const result = buildPrompt(
-      makeIssue(),
-      makeRepoConfig(),
-      "/tmp/prompts",
-    );
+    const result = buildPrompt(makeIssue(), makeRepoConfig(), "ja");
 
     expect(result).toContain("Only title: Test Issue Title");
   });
 
-  it("Issue 本文に { や } が含まれていてもエラーにならない", () => {
-    mockedExistsSync.mockReturnValue(true);
+  it("Issue body with { or } does not cause error", () => {
+    setupDefaultDirMocks();
     mockedReadFileSync.mockReturnValue("{boundary_open}\n{issue_body}\n{boundary_close}");
     const bodyWithBraces = "function() { return {key: value}; }";
 
     const result = buildPrompt(
       makeIssue({ body: bodyWithBraces }),
       makeRepoConfig(),
-      "/tmp/prompts",
+      "ja",
     );
 
     expect(result).toContain(bodyWithBraces);
   });
 
-  it("Issue 本文にプレースホルダ風文字列が含まれていても二重展開されない", () => {
-    mockedExistsSync.mockReturnValue(true);
+  it("Placeholder-like strings in issue body are not double-expanded", () => {
+    setupDefaultDirMocks();
     mockedReadFileSync.mockReturnValue(
       "{boundary_open}\n{issue_body}\n{boundary_close}\nURL: {issue_url}",
     );
@@ -202,7 +215,7 @@ describe("buildPrompt - 正常系", () => {
     const result = buildPrompt(
       makeIssue({ body: maliciousBody }),
       makeRepoConfig(),
-      "/tmp/prompts",
+      "ja",
     );
 
     expect(result).toContain("See {issue_url} for details");
@@ -211,15 +224,15 @@ describe("buildPrompt - 正常系", () => {
     );
   });
 
-  it("Issue 本文に $& や $' を含む場合でも安全に展開される", () => {
-    mockedExistsSync.mockReturnValue(true);
+  it("Issue body with $& or $' is safely expanded", () => {
+    setupDefaultDirMocks();
     mockedReadFileSync.mockReturnValue("{boundary_open}\n{issue_body}\n{boundary_close}");
     const bodyWithDollar = "price is $& and $' and $` and $$";
 
     const result = buildPrompt(
       makeIssue({ body: bodyWithDollar }),
       makeRepoConfig(),
-      "/tmp/prompts",
+      "ja",
     );
 
     expect(result).toContain(bodyWithDollar);
@@ -227,94 +240,99 @@ describe("buildPrompt - 正常系", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 異常系テスト
+// Error cases
 // ---------------------------------------------------------------------------
 
-describe("buildPrompt - 異常系", () => {
+describe("buildPrompt - error cases", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    mockedGetUserPromptsDir.mockReturnValue(USER_DIR);
+    mockedGetDefaultPromptsDir.mockReturnValue(DEFAULT_DIR);
   });
 
-  it("テンプレートファイルが存在しない場合、PromptTemplateError が発生する", () => {
+  it("PromptTemplateError when template file not found in any tier", () => {
     mockedExistsSync.mockReturnValue(false);
 
-    expect(() =>
-      buildPrompt(makeIssue(), makeRepoConfig(), "/tmp/prompts"),
-    ).toThrow(PromptTemplateError);
-    expect(() =>
-      buildPrompt(makeIssue(), makeRepoConfig(), "/tmp/prompts"),
-    ).toThrow("Template file not found: plan.md");
+    expect(() => buildPrompt(makeIssue(), makeRepoConfig(), "ja")).toThrow(
+      PromptTemplateError,
+    );
+    expect(() => buildPrompt(makeIssue(), makeRepoConfig(), "ja")).toThrow(
+      "Template file not found: plan.md",
+    );
   });
 
-  it("ファイルが存在するが読み込みに失敗した場合、PromptTemplateError が発生する", () => {
-    mockedExistsSync.mockReturnValue(true);
-    const permError = new Error("EACCES") as NodeJS.ErrnoException;
-    permError.code = "EACCES";
-    mockedReadFileSync.mockImplementation(() => {
-      throw permError;
+  it("PromptTemplateError when file exists but read fails", () => {
+    setupDefaultDirMocks();
+    mockedStatSync.mockImplementation(() => {
+      throw new Error("EACCES");
     });
 
-    expect(() =>
-      buildPrompt(makeIssue(), makeRepoConfig(), "/tmp/prompts"),
-    ).toThrow(PromptTemplateError);
-    expect(() =>
-      buildPrompt(makeIssue(), makeRepoConfig(), "/tmp/prompts"),
-    ).toThrow("Failed to read template file: plan.md");
+    expect(() => buildPrompt(makeIssue(), makeRepoConfig(), "ja")).toThrow(
+      PromptTemplateError,
+    );
+    expect(() => buildPrompt(makeIssue(), makeRepoConfig(), "ja")).toThrow(
+      "Failed to read template file: plan.md",
+    );
+  });
+
+  it("PromptTemplateError when template file exceeds size limit", () => {
+    setupDefaultDirMocks();
+    mockedStatSync.mockReturnValue({
+      size: 200 * 1024,
+      isFile: () => true,
+    } as unknown as ReturnType<typeof statSync>);
+
+    expect(() => buildPrompt(makeIssue(), makeRepoConfig(), "ja")).toThrow(
+      PromptTemplateError,
+    );
+    expect(() => buildPrompt(makeIssue(), makeRepoConfig(), "ja")).toThrow(
+      /Template file too large/,
+    );
   });
 });
 
 // ---------------------------------------------------------------------------
-// ランダムバウンダリテスト
+// Random boundary tests
 // ---------------------------------------------------------------------------
 
-describe("buildPrompt - ランダムバウンダリ", () => {
+describe("buildPrompt - random boundary", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    mockedGetUserPromptsDir.mockReturnValue(USER_DIR);
+    mockedGetDefaultPromptsDir.mockReturnValue(DEFAULT_DIR);
   });
 
-  it("レンダリング結果にランダムバウンダリが含まれる", () => {
-    mockedExistsSync.mockReturnValue(true);
+  it("Rendered result contains random boundary", () => {
+    setupDefaultDirMocks();
     mockedReadFileSync.mockReturnValue(
       "{boundary_open}\n{issue_body}\n{boundary_close}",
     );
 
-    const result = buildPrompt(
-      makeIssue(),
-      makeRepoConfig(),
-      "/tmp/prompts",
-    );
+    const result = buildPrompt(makeIssue(), makeRepoConfig(), "ja");
 
     expect(result).toMatch(BOUNDARY_OPEN_PATTERN);
     expect(result).toMatch(BOUNDARY_CLOSE_PATTERN);
   });
 
-  it("固定の <issue-body> タグが結果に含まれない", () => {
-    mockedExistsSync.mockReturnValue(true);
+  it("Fixed <issue-body> tag is not in result", () => {
+    setupDefaultDirMocks();
     mockedReadFileSync.mockReturnValue(
       "{boundary_open}\n{issue_body}\n{boundary_close}",
     );
 
-    const result = buildPrompt(
-      makeIssue(),
-      makeRepoConfig(),
-      "/tmp/prompts",
-    );
+    const result = buildPrompt(makeIssue(), makeRepoConfig(), "ja");
 
     expect(result).not.toContain("<issue-body>");
     expect(result).not.toContain("</issue-body>");
   });
 
-  it("バウンダリの形式が <!-- BOUNDARY- で始まる", () => {
-    mockedExistsSync.mockReturnValue(true);
+  it("Boundary starts with <!-- BOUNDARY-", () => {
+    setupDefaultDirMocks();
     mockedReadFileSync.mockReturnValue(
       "{boundary_open}\n{issue_body}\n{boundary_close}",
     );
 
-    const result = buildPrompt(
-      makeIssue(),
-      makeRepoConfig(),
-      "/tmp/prompts",
-    );
+    const result = buildPrompt(makeIssue(), makeRepoConfig(), "ja");
 
     const lines = result.split("\n");
     expect(lines[0]).toMatch(/^<!-- BOUNDARY-/);
@@ -323,17 +341,13 @@ describe("buildPrompt - ランダムバウンダリ", () => {
     expect(lines[2]).toMatch(/ DATA END -->$/);
   });
 
-  it("バウンダリの開始と終了に同一のトークンが使われる", () => {
-    mockedExistsSync.mockReturnValue(true);
+  it("Same token is used for boundary open and close", () => {
+    setupDefaultDirMocks();
     mockedReadFileSync.mockReturnValue(
       "{boundary_open}\n{issue_body}\n{boundary_close}",
     );
 
-    const result = buildPrompt(
-      makeIssue(),
-      makeRepoConfig(),
-      "/tmp/prompts",
-    );
+    const result = buildPrompt(makeIssue(), makeRepoConfig(), "ja");
 
     const openMatch = result.match(
       /<!-- BOUNDARY-([0-9a-f-]+) DATA START -->/,
@@ -346,22 +360,14 @@ describe("buildPrompt - ランダムバウンダリ", () => {
     expect(openMatch![1]).toBe(closeMatch![1]);
   });
 
-  it("呼び出しごとに異なるトークンが生成される", () => {
-    mockedExistsSync.mockReturnValue(true);
+  it("Different tokens are generated per call", () => {
+    setupDefaultDirMocks();
     mockedReadFileSync.mockReturnValue(
       "{boundary_open}\n{issue_body}\n{boundary_close}",
     );
 
-    const result1 = buildPrompt(
-      makeIssue(),
-      makeRepoConfig(),
-      "/tmp/prompts",
-    );
-    const result2 = buildPrompt(
-      makeIssue(),
-      makeRepoConfig(),
-      "/tmp/prompts",
-    );
+    const result1 = buildPrompt(makeIssue(), makeRepoConfig(), "ja");
+    const result2 = buildPrompt(makeIssue(), makeRepoConfig(), "ja");
 
     const token1 = result1.match(
       /<!-- BOUNDARY-([0-9a-f-]+) DATA START -->/,
@@ -374,10 +380,10 @@ describe("buildPrompt - ランダムバウンダリ", () => {
 });
 
 // ---------------------------------------------------------------------------
-// インテグレーションテスト（実際のテンプレートファイルを使用）
+// Integration tests (actual template files)
 // ---------------------------------------------------------------------------
 
-describe("buildPrompt - インテグレーション", () => {
+describe("buildPrompt - integration", () => {
   const KNOWN_PLACEHOLDERS = [
     "repo_full_name",
     "repo_owner",
@@ -401,15 +407,20 @@ describe("buildPrompt - インテグレーション", () => {
     return unexpanded;
   }
 
-  // インテグレーションテストでは実際のファイルを読むためモックに実実装を設定する
   beforeEach(async () => {
     vi.restoreAllMocks();
     const actualFs = await vi.importActual<typeof import("node:fs")>("node:fs");
     mockedReadFileSync.mockImplementation(actualFs.readFileSync as typeof readFileSync);
     mockedExistsSync.mockImplementation(actualFs.existsSync as typeof existsSync);
+    mockedStatSync.mockImplementation(actualFs.statSync as typeof statSync);
+    // getUserPromptsDir returns a non-existent path so it falls through to package default
+    mockedGetUserPromptsDir.mockReturnValue("/nonexistent/user/prompts");
+    // getDefaultPromptsDir returns the real package prompts dir
+    const actualPaths = await vi.importActual<typeof import("../../src/utils/paths.js")>("../../src/utils/paths.js");
+    mockedGetDefaultPromptsDir.mockReturnValue(actualPaths.getDefaultPromptsDir());
   });
 
-  it("実際の plan.md テンプレートで全プレースホルダが展開される", () => {
+  it("All placeholders expanded in actual plan.md template", () => {
     const result = buildPrompt(
       makeIssue({
         phase: Phase.PLAN,
@@ -419,6 +430,7 @@ describe("buildPrompt - インテグレーション", () => {
         url: "https://github.com/testowner/testrepo/issues/101",
       }),
       makeRepoConfig(),
+      "ja",
     );
 
     const unexpanded = findUnexpandedPlaceholders(result);
@@ -432,7 +444,7 @@ describe("buildPrompt - インテグレーション", () => {
     expect(result).not.toContain("</issue-body>");
   });
 
-  it("実際の impl.md テンプレートで全プレースホルダが展開される", () => {
+  it("All placeholders expanded in actual impl.md template", () => {
     const result = buildPrompt(
       makeIssue({
         phase: Phase.IMPL,
@@ -442,6 +454,7 @@ describe("buildPrompt - インテグレーション", () => {
         url: "https://github.com/testowner/testrepo/issues/202",
       }),
       makeRepoConfig(),
+      "ja",
     );
 
     const unexpanded = findUnexpandedPlaceholders(result);
@@ -455,7 +468,7 @@ describe("buildPrompt - インテグレーション", () => {
     expect(result).not.toContain("</issue-body>");
   });
 
-  it("impl.md のプロンプトに close {issue_url} の展開結果が含まれる", () => {
+  it("impl.md prompt contains expanded close {issue_url}", () => {
     const result = buildPrompt(
       makeIssue({
         phase: Phase.IMPL,
@@ -465,10 +478,118 @@ describe("buildPrompt - インテグレーション", () => {
         url: "https://github.com/testowner/testrepo/issues/202",
       }),
       makeRepoConfig(),
+      "ja",
     );
 
     expect(result).toContain(
       "close https://github.com/testowner/testrepo/issues/202",
     );
+  });
+
+  it("language=en uses prompts/en/ directory", () => {
+    const result = buildPrompt(
+      makeIssue({
+        phase: Phase.PLAN,
+        number: 101,
+        title: "Add new feature",
+        body: "Please add a search feature.",
+        url: "https://github.com/testowner/testrepo/issues/101",
+      }),
+      makeRepoConfig(),
+      "en",
+    );
+
+    const unexpanded = findUnexpandedPlaceholders(result);
+    expect(unexpanded).toEqual([]);
+    expect(result).toContain("testowner/testrepo");
+    expect(result).toContain("#101");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// User prompt directory tests
+// ---------------------------------------------------------------------------
+
+describe("buildPrompt - user prompt directory", () => {
+  const USER_TEMPLATE = "{boundary_open}\nUser: {issue_title}\n{boundary_close}";
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    mockedGetUserPromptsDir.mockReturnValue(USER_DIR);
+    mockedGetDefaultPromptsDir.mockReturnValue(DEFAULT_DIR);
+  });
+
+  function setupUserDirMocks(userExists: boolean): void {
+    mockedExistsSync.mockImplementation((p) => {
+      const path = String(p);
+      if (path.startsWith(USER_DIR)) return userExists;
+      return true; // default dir always exists
+    });
+    mockedStatSync.mockReturnValue({ size: 1024, isFile: () => true } as unknown as ReturnType<typeof statSync>);
+  }
+
+  it("Uses user directory template when it exists", () => {
+    setupUserDirMocks(true);
+    mockedReadFileSync.mockReturnValue(USER_TEMPLATE);
+
+    const result = buildPrompt(makeIssue(), makeRepoConfig(), "ja");
+
+    expect(result).toContain("User: Test Issue Title");
+    expect(result).toMatch(BOUNDARY_OPEN_PATTERN);
+    expect(result).toMatch(BOUNDARY_CLOSE_PATTERN);
+  });
+
+  it("Falls back to package default when user directory is empty", () => {
+    setupUserDirMocks(false);
+    mockedReadFileSync.mockReturnValue(MINIMAL_PLAN_TEMPLATE);
+
+    const result = buildPrompt(makeIssue(), makeRepoConfig(), "ja");
+
+    expect(result).toContain("Repo: testowner/testrepo");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 2-tier priority tests
+// ---------------------------------------------------------------------------
+
+describe("buildPrompt - 2-tier priority", () => {
+  const USER_TEMPLATE = "{boundary_open}\nUser: {issue_title}\n{boundary_close}";
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    mockedGetUserPromptsDir.mockReturnValue(USER_DIR);
+    mockedGetDefaultPromptsDir.mockReturnValue(DEFAULT_DIR);
+    mockedStatSync.mockReturnValue({ size: 1024, isFile: () => true } as unknown as ReturnType<typeof statSync>);
+  });
+
+  it("Tier 1 (user) wins when both tiers have templates", () => {
+    mockedExistsSync.mockReturnValue(true);
+    mockedReadFileSync.mockReturnValue(USER_TEMPLATE);
+
+    const result = buildPrompt(
+      makeIssue(),
+      makeRepoConfig(),
+      "ja",
+    );
+
+    expect(result).toContain("User: Test Issue Title");
+  });
+
+  it("Tier 2 (default) wins when tier 1 is empty", () => {
+    mockedExistsSync.mockImplementation((p) => {
+      const path = String(p);
+      if (path.startsWith(USER_DIR)) return false;
+      return true; // default dir exists
+    });
+    mockedReadFileSync.mockReturnValue(MINIMAL_PLAN_TEMPLATE);
+
+    const result = buildPrompt(
+      makeIssue(),
+      makeRepoConfig(),
+      "ja",
+    );
+
+    expect(result).toContain("Repo: testowner/testrepo");
   });
 });
