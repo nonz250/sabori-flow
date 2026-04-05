@@ -11,85 +11,64 @@ vi.mock("node:os", async (importOriginal) => {
   };
 });
 
-// XDG 準拠パス関数のテストでは、モジュールキャッシュを回避するため
-// 各テストで動的 import を使用する。
+// paths.ts のモジュールキャッシュを回避するため、各テストで動的 import を使用する。
 // paths.ts のモジュールレベル定数（PACKAGE_ROOT 等）は import.meta.url から決定されるため、
 // テストでは実際の PACKAGE_ROOT 値を取得して期待値に使用する。
 
-describe("getConfigDir", () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
+describe("getBaseDir", () => {
+  it("~/.sabori-flow を返す", async () => {
+    const { getBaseDir } = await import("../../src/utils/paths.js");
+    expect(getBaseDir()).toBe(path.join("/mock/home", ".sabori-flow"));
+  });
+});
+
+describe("getConfigDir (deprecated)", () => {
+  it("getBaseDir() と同じ値を返す", async () => {
+    const { getConfigDir, getBaseDir } = await import(
+      "../../src/utils/paths.js"
+    );
+    expect(getConfigDir()).toBe(getBaseDir());
   });
 
-  it("XDG_CONFIG_HOME 未設定時は ~/.config/sabori-flow を返す", async () => {
-    vi.stubEnv("XDG_CONFIG_HOME", "");
-    // 空文字は falsy なので未設定と同じ扱い
+  it("~/.sabori-flow を返す", async () => {
     const { getConfigDir } = await import("../../src/utils/paths.js");
-    expect(getConfigDir()).toBe(
-      path.join("/mock/home", ".config", "sabori-flow"),
-    );
-  });
-
-  it("XDG_CONFIG_HOME 設定時はその値が使われる", async () => {
-    vi.stubEnv("XDG_CONFIG_HOME", "/custom/config");
-    const { getConfigDir } = await import("../../src/utils/paths.js");
-    expect(getConfigDir()).toBe(
-      path.join("/custom/config", "sabori-flow"),
-    );
-  });
-
-  it("XDG_CONFIG_HOME に相対パスが設定された場合は path.resolve で絶対パスになる", async () => {
-    vi.stubEnv("XDG_CONFIG_HOME", "relative/config");
-    const { getConfigDir } = await import("../../src/utils/paths.js");
-    const expected = path.join(
-      path.resolve("relative/config"),
-      "sabori-flow",
-    );
-    expect(getConfigDir()).toBe(expected);
+    expect(getConfigDir()).toBe(path.join("/mock/home", ".sabori-flow"));
   });
 });
 
 describe("getConfigPath", () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
-  it("getConfigDir()/config.yml を返す", async () => {
-    vi.stubEnv("XDG_CONFIG_HOME", "");
+  it("~/.sabori-flow/config.yml を返す", async () => {
     const { getConfigPath } = await import("../../src/utils/paths.js");
     expect(getConfigPath()).toBe(
-      path.join("/mock/home", ".config", "sabori-flow", "config.yml"),
+      path.join("/mock/home", ".sabori-flow", "config.yml"),
     );
   });
 });
 
-describe("getDataDir", () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
-  it("XDG_DATA_HOME 未設定時は ~/.local/share/sabori-flow を返す", async () => {
-    vi.stubEnv("XDG_DATA_HOME", "");
-    const { getDataDir } = await import("../../src/utils/paths.js");
-    expect(getDataDir()).toBe(
-      path.join("/mock/home", ".local", "share", "sabori-flow"),
+describe("getUserPromptsDir", () => {
+  it("~/.sabori-flow/prompts を返す", async () => {
+    const { getUserPromptsDir } = await import("../../src/utils/paths.js");
+    expect(getUserPromptsDir()).toBe(
+      path.join("/mock/home", ".sabori-flow", "prompts"),
     );
   });
+});
 
-  it("XDG_DATA_HOME 設定時はその値が使われる", async () => {
-    vi.stubEnv("XDG_DATA_HOME", "/custom/data");
-    const { getDataDir } = await import("../../src/utils/paths.js");
-    expect(getDataDir()).toBe(
-      path.join("/custom/data", "sabori-flow"),
+describe("getDataDir (deprecated)", () => {
+  it("getBaseDir() と同じ値を返す", async () => {
+    const { getDataDir, getBaseDir } = await import(
+      "../../src/utils/paths.js"
     );
+    expect(getDataDir()).toBe(getBaseDir());
+  });
+
+  it("~/.sabori-flow を返す", async () => {
+    const { getDataDir } = await import("../../src/utils/paths.js");
+    expect(getDataDir()).toBe(path.join("/mock/home", ".sabori-flow"));
   });
 });
 
 describe("getLogsDir", () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
   it("~/.sabori-flow/logs を返す", async () => {
     const { getLogsDir } = await import("../../src/utils/paths.js");
     expect(getLogsDir()).toBe(
@@ -99,23 +78,12 @@ describe("getLogsDir", () => {
 });
 
 describe("getPlistGeneratedPath", () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
-  it("getDataDir()/{PLIST_LABEL}.plist を返す", async () => {
-    vi.stubEnv("XDG_DATA_HOME", "");
+  it("~/.sabori-flow/{PLIST_LABEL}.plist を返す", async () => {
     const { getPlistGeneratedPath, PLIST_LABEL } = await import(
       "../../src/utils/paths.js"
     );
     expect(getPlistGeneratedPath()).toBe(
-      path.join(
-        "/mock/home",
-        ".local",
-        "share",
-        "sabori-flow",
-        `${PLIST_LABEL}.plist`,
-      ),
+      path.join("/mock/home", ".sabori-flow", `${PLIST_LABEL}.plist`),
     );
   });
 });

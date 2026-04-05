@@ -46,20 +46,25 @@ export const PLIST_TEMPLATE_PATH = path.join(
   `${PLIST_LABEL}.plist.template`,
 );
 
-// ---------- XDG Base Directory 準拠パス（関数） ----------
+// ---------- ユーザーデータ統合ディレクトリ ----------
 
-/** $XDG_CONFIG_HOME/sabori-flow（デフォルト: ~/.config/sabori-flow） */
-export function getConfigDir(): string {
-  const xdgConfigHome = process.env.XDG_CONFIG_HOME;
-  const base = xdgConfigHome
-    ? path.resolve(xdgConfigHome)
-    : path.join(homedir(), ".config");
-  return path.join(base, APP_NAME);
+/** ~/.sabori-flow — 全ユーザーデータの基底ディレクトリ */
+export function getBaseDir(): string {
+  return path.join(homedir(), ".sabori-flow");
 }
 
-/** getConfigDir()/config.yml */
+// ---------- 派生パス ----------
+
+/**
+ * @deprecated Use getBaseDir() directly. Will be removed in a future version.
+ */
+export function getConfigDir(): string {
+  return getBaseDir();
+}
+
+/** ~/.sabori-flow/config.yml */
 export function getConfigPath(): string {
-  return path.join(getConfigDir(), "config.yml");
+  return path.join(getBaseDir(), "config.yml");
 }
 
 /** パッケージ同梱の config.yml.example（CONFIG_EXAMPLE_PATH と同値） */
@@ -72,23 +77,26 @@ export function getDefaultPromptsDir(): string {
   return DEFAULT_PROMPTS_DIR;
 }
 
-/** $XDG_DATA_HOME/sabori-flow（デフォルト: ~/.local/share/sabori-flow） */
+/** ~/.sabori-flow/prompts — ユーザーカスタムプロンプトディレクトリ */
+export function getUserPromptsDir(): string {
+  return path.join(getBaseDir(), "prompts");
+}
+
+/**
+ * @deprecated Use getBaseDir() directly. Will be removed in a future version.
+ */
 export function getDataDir(): string {
-  const xdgDataHome = process.env.XDG_DATA_HOME;
-  const base = xdgDataHome
-    ? path.resolve(xdgDataHome)
-    : path.join(homedir(), ".local", "share");
-  return path.join(base, APP_NAME);
+  return getBaseDir();
 }
 
 /** ~/.sabori-flow/logs */
 export function getLogsDir(): string {
-  return path.join(homedir(), ".sabori-flow", "logs");
+  return path.join(getBaseDir(), "logs");
 }
 
-/** getDataDir()/{PLIST_LABEL}.plist — 生成済み plist の保存先 */
+/** ~/.sabori-flow/{PLIST_LABEL}.plist — 生成済み plist の保存先 */
 export function getPlistGeneratedPath(): string {
-  return path.join(getDataDir(), `${PLIST_LABEL}.plist`);
+  return path.join(getBaseDir(), `${PLIST_LABEL}.plist`);
 }
 
 /** plist テンプレートのパス（PLIST_TEMPLATE_PATH と同値） */
