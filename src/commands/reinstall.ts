@@ -4,6 +4,6 @@ import { installCommand } from "./install.js";
 export async function reinstallCommand(
   options: { local?: boolean } = {},
 ): Promise<void> {
-  await uninstallCommand();
+  await uninstallCommand({ interactive: false });
   await installCommand(options);
 }
