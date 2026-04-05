@@ -20,20 +20,14 @@ import { TEMPLATE_FILES } from "../worker/prompt.js";
 function buildConfigData(repos: RepositoryInput[], language: string) {
   return {
     language,
-    repositories: repos.map((r) => {
-      const entry: Record<string, unknown> = {
-        owner: r.owner,
-        repo: r.repo,
-        local_path: r.local_path,
-        auto_impl_after_plan: r.auto_impl_after_plan,
-      };
-      if (r.prompts_dir !== null) {
-        entry.prompts_dir = r.prompts_dir;
-      }
-      entry.labels = getDefaultLabels();
-      entry.priority_labels = getDefaultPriorityLabels();
-      return entry;
-    }),
+    repositories: repos.map((r) => ({
+      owner: r.owner,
+      repo: r.repo,
+      local_path: r.local_path,
+      auto_impl_after_plan: r.auto_impl_after_plan,
+      labels: getDefaultLabels(),
+      priority_labels: getDefaultPriorityLabels(),
+    })),
     execution: getDefaultExecution(),
   };
 }

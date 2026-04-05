@@ -51,7 +51,6 @@ export interface MessageKeys {
   "prompt.validationAlphanumeric": string;
   "prompt.validationAbsolutePath": string;
   "prompt.autoImplConfirm": string;
-  "prompt.enterPromptsDir": string;
 
   // cli descriptions
   "cli.descriptionAdd": string;

@@ -45,10 +45,9 @@ const USER_INPUT_KEYS: ReadonlySet<string> = new Set([
  * Issue とリポジトリ設定からプロンプト文字列を組み立てる。
  *
  * テンプレートファイルを読み込み、プレースホルダを展開して返す。
- * 3 段階のフォールバックでテンプレートを解決する:
- *   1. リポジトリ固有のカスタムディレクトリ (`repoConfig.promptsDir`)
- *   2. ユーザー共通ディレクトリ (`~/.sabori-flow/prompts/`)
- *   3. パッケージ同梱のデフォルトテンプレート (`prompts/<language>/`)
+ * 2 段階のフォールバックでテンプレートを解決する:
+ *   1. ユーザー共通ディレクトリ (`~/.sabori-flow/prompts/`) — untrusted
+ *   2. パッケージ同梱のデフォルトテンプレート (`prompts/<language>/`) — trusted
  *
  * @throws {PromptTemplateError} テンプレートの読み込みまたは展開に失敗した場合
  */
@@ -57,10 +56,9 @@ export function buildPrompt(
   repoConfig: RepositoryConfig,
   language: Language,
 ): string {
-  const customDir = repoConfig.promptsDir;
   const userDir = getUserPromptsDir();
   const defaultDir = join(getDefaultPromptsDir(), language);
-  const template = loadTemplate(issue.phase, customDir, userDir, defaultDir);
+  const template = loadTemplate(issue.phase, userDir, defaultDir);
   const variables = buildVariables(issue, repoConfig);
   return render(template, variables);
 }
@@ -94,11 +92,10 @@ function loadFromDir(
 }
 
 /**
- * 3 段階フォールバックでテンプレートファイルを読み込む。
+ * 2 段階フォールバックでテンプレートファイルを読み込む。
  *
- *   1. リポジトリ固有のカスタムディレクトリ（untrusted: パス検証 + バウンダリ検証）
- *   2. ユーザー共通ディレクトリ（untrusted: パス検証 + バウンダリ検証）
- *   3. パッケージ同梱のデフォルトディレクトリ（trusted: 検証なし）
+ *   1. ユーザー共通ディレクトリ（untrusted: パス検証 + バウンダリ検証）
+ *   2. パッケージ同梱のデフォルトディレクトリ（trusted: 検証なし）
  *
  * ファイルが存在するが読み込めない/検証に失敗する場合はエラーとする（フォールバックしない）。
  *
@@ -107,7 +104,6 @@ function loadFromDir(
  */
 function loadTemplate(
   phase: Phase,
-  customDir: string | null,
   userDir: string,
   defaultDir: string,
 ): string {
@@ -116,20 +112,7 @@ function loadTemplate(
     throw new PromptTemplateError(`Unknown phase: ${phase}`);
   }
 
-  // Tier 1: per-repo custom directory
-  if (customDir !== null) {
-    const content = loadFromDir(customDir, filename, "untrusted");
-    if (content !== null) {
-      logger.info("Loaded template from custom directory: %s", customDir);
-      return content;
-    }
-    logger.info(
-      "Custom template not found in %s (falling back to user prompts)",
-      customDir,
-    );
-  }
-
-  // Tier 2: user common prompts (~/.sabori-flow/prompts/)
+  // Tier 1: user common prompts (~/.sabori-flow/prompts/)
   const userContent = loadFromDir(userDir, filename, "untrusted");
   if (userContent !== null) {
     logger.info("Loaded template from user directory: %s", userDir);
@@ -140,7 +123,7 @@ function loadTemplate(
     userDir,
   );
 
-  // Tier 3: package-bundled default
+  // Tier 2: package-bundled default
   const defaultContent = loadFromDir(defaultDir, filename, "trusted");
   if (defaultContent !== null) {
     return defaultContent;

@@ -40,7 +40,6 @@ export function makeRepoConfig(
     owner: "testowner",
     repo: "testrepo",
     localPath: "/tmp/testowner/testrepo",
-    promptsDir: null,
     labels: DEFAULT_LABELS_CONFIG,
     priorityLabels: ["priority:high", "priority:low"],
     autoImplAfterPlan: false,
