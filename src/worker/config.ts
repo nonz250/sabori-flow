@@ -375,7 +375,11 @@ function parseExecution(raw: unknown): ExecutionConfig {
     );
   }
 
-  return { maxParallel: rawMaxParallel, maxIssuesPerRepo: rawMaxIssuesPerRepo, skipPermissions: rawSkipPermissions };
+  return {
+    maxParallel: rawMaxParallel,
+    maxIssuesPerRepo: rawMaxIssuesPerRepo,
+    skipPermissions: rawSkipPermissions,
+  };
 }
 
 // ---------- Helpers ----------

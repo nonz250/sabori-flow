@@ -37,7 +37,8 @@ export async function runClaude(
   const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
   const args = ["-p"];
-  if (options?.skipPermissions !== false) {
+  const skipPermissions = options?.skipPermissions ?? true;
+  if (skipPermissions) {
     args.push("--dangerously-skip-permissions");
   }
 
