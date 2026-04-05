@@ -68,7 +68,7 @@ describe("runClaude", () => {
       expect(mockedRunCommand).toHaveBeenCalledOnce();
       expect(mockedRunCommand).toHaveBeenCalledWith(
         "claude",
-        ["-p", "--dangerously-skip-permissions"],
+        ["-p"],
         {
           input: "Fix the bug in module Y",
           cwd: undefined,
@@ -187,8 +187,8 @@ describe("runClaude", () => {
     });
   });
 
-  describe("skipPermissions オプション", () => {
-    it("skipPermissions 未指定時は --dangerously-skip-permissions が含まれる", async () => {
+  describe("autonomy オプション", () => {
+    it("autonomy 未指定時は --dangerously-skip-permissions が含まれない", async () => {
       mockedRunCommand.mockResolvedValue({
         success: true,
         stdout: "",
@@ -198,30 +198,45 @@ describe("runClaude", () => {
       await runClaude("prompt text");
 
       const args = mockedRunCommand.mock.calls[0][1];
-      expect(args).toContain("--dangerously-skip-permissions");
+      expect(args).toEqual(["-p"]);
+      expect(args).not.toContain("--dangerously-skip-permissions");
     });
 
-    it("skipPermissions が true の場合 --dangerously-skip-permissions が含まれる", async () => {
+    it("autonomy が full の場合 --dangerously-skip-permissions が含まれる", async () => {
       mockedRunCommand.mockResolvedValue({
         success: true,
         stdout: "",
         stderr: "",
       });
 
-      await runClaude("prompt text", { skipPermissions: true });
+      await runClaude("prompt text", { autonomy: "full" });
 
       const args = mockedRunCommand.mock.calls[0][1];
       expect(args).toContain("--dangerously-skip-permissions");
     });
 
-    it("skipPermissions が false の場合 --dangerously-skip-permissions が含まれない", async () => {
+    it("autonomy が sandboxed の場合 --dangerously-skip-permissions が含まれない", async () => {
       mockedRunCommand.mockResolvedValue({
         success: true,
         stdout: "",
         stderr: "",
       });
 
-      await runClaude("prompt text", { skipPermissions: false });
+      await runClaude("prompt text", { autonomy: "sandboxed" });
+
+      const args = mockedRunCommand.mock.calls[0][1];
+      expect(args).toEqual(["-p"]);
+      expect(args).not.toContain("--dangerously-skip-permissions");
+    });
+
+    it("autonomy が interactive の場合 --dangerously-skip-permissions が含まれない", async () => {
+      mockedRunCommand.mockResolvedValue({
+        success: true,
+        stdout: "",
+        stderr: "",
+      });
+
+      await runClaude("prompt text", { autonomy: "interactive" });
 
       const args = mockedRunCommand.mock.calls[0][1];
       expect(args).toEqual(["-p"]);

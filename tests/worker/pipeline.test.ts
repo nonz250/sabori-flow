@@ -16,7 +16,7 @@ import type { PipelineDeps } from "../../src/worker/pipeline.js";
 const DEFAULT_EXECUTION_CONFIG: ExecutionConfig = {
   maxParallel: 1,
   maxIssuesPerRepo: 10,
-  skipPermissions: true,
+  autonomy: "interactive",
 };
 
 // logger 出力を抑制
@@ -114,13 +114,13 @@ describe("processIssue", () => {
       );
     });
 
-    it("runClaude に executionConfig.skipPermissions が渡される", async () => {
+    it("runClaude に executionConfig.autonomy が渡される", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       const executionConfig: ExecutionConfig = {
         maxParallel: 1,
         maxIssuesPerRepo: 10,
-        skipPermissions: false,
+        autonomy: "full",
       };
 
       await processIssue(issue, repoConfig, executionConfig, deps);
@@ -128,11 +128,11 @@ describe("processIssue", () => {
       expect(deps.runClaude).toHaveBeenCalledOnce();
       expect(deps.runClaude).toHaveBeenCalledWith(
         "generated prompt",
-        { cwd: "/tmp/worktrees/issue-mock", skipPermissions: false },
+        { cwd: "/tmp/worktrees/issue-mock", autonomy: "full" },
       );
     });
 
-    it("skipPermissions が true の場合も runClaude に正しく渡される", async () => {
+    it("autonomy が interactive の場合も runClaude に正しく渡される", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
 
@@ -141,7 +141,7 @@ describe("processIssue", () => {
       expect(deps.runClaude).toHaveBeenCalledOnce();
       expect(deps.runClaude).toHaveBeenCalledWith(
         "generated prompt",
-        { cwd: "/tmp/worktrees/issue-mock", skipPermissions: true },
+        { cwd: "/tmp/worktrees/issue-mock", autonomy: "interactive" },
       );
     });
 
