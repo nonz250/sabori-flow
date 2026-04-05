@@ -1,5 +1,5 @@
 import type { AppConfig, ExecutionConfig, Issue, Phase, RepositoryConfig } from "./models.js";
-import { Autonomy, repoFullName } from "./models.js";
+import { Autonomy, Engine, repoFullName } from "./models.js";
 import { Phase as PhaseEnum } from "./models.js";
 import { loadConfig } from "./config.js";
 import { fetchIssues } from "./fetcher.js";
@@ -184,13 +184,19 @@ export async function workerMain(
   rotateOldLogs();
 
   logger.info(
-    "config.yml を読み込みました (リポジトリ数: %s)",
+    "config.yml を読み込みました (リポジトリ数: %s, engine: %s)",
     appConfig.repositories.length,
+    appConfig.execution.engine,
   );
 
   if (appConfig.execution.autonomy === Autonomy.FULL) {
+    const flagName = appConfig.execution.engine === Engine.COPILOT
+      ? "--yolo"
+      : "--dangerously-skip-permissions";
     logger.warn(
-      "autonomy is set to 'full'. Claude Code CLI will run with --dangerously-skip-permissions.",
+      "autonomy is set to 'full'. %s CLI will run with %s.",
+      appConfig.execution.engine,
+      flagName,
     );
   }
 
