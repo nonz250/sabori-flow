@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 import { workerMain } from "../../src/worker/main.js";
-import { Phase, Priority, Autonomy } from "../../src/worker/models.js";
+import { Phase, Priority, Autonomy, Engine } from "../../src/worker/models.js";
 import {
   makeRepoConfig,
   makeIssue,
@@ -534,7 +534,8 @@ describe("workerMain", () => {
       await workerMain("/path/to/config.yml", deps);
 
       expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
-        "autonomy is set to 'full'. Claude Code CLI will run with --dangerously-skip-permissions.",
+        "autonomy is set to 'full'. %s.",
+        "Claude Code CLI will run with --dangerously-skip-permissions",
       );
     });
 
@@ -562,6 +563,38 @@ describe("workerMain", () => {
       await workerMain("/path/to/config.yml", deps);
 
       expect(mockLoggerInstance.warn).not.toHaveBeenCalled();
+    });
+
+    it("engine が codex かつ autonomy が full の場合 WARN ログに Codex CLI のフラグが含まれる", async () => {
+      vi.mocked(deps.loadConfig).mockReturnValue(
+        makeAppConfig({ execution: { engine: Engine.CODEX, autonomy: Autonomy.FULL } }),
+      );
+      vi.mocked(deps.fetchIssues).mockResolvedValue([]);
+
+      mockLoggerInstance.warn.mockClear();
+
+      await workerMain("/path/to/config.yml", deps);
+
+      expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
+        "autonomy is set to 'full'. %s.",
+        "Codex CLI will run with --dangerously-bypass-approvals-and-sandbox",
+      );
+    });
+
+    it("engine が claude かつ autonomy が full の場合 WARN ログに Claude Code CLI のフラグが含まれる", async () => {
+      vi.mocked(deps.loadConfig).mockReturnValue(
+        makeAppConfig({ execution: { engine: Engine.CLAUDE, autonomy: Autonomy.FULL } }),
+      );
+      vi.mocked(deps.fetchIssues).mockResolvedValue([]);
+
+      mockLoggerInstance.warn.mockClear();
+
+      await workerMain("/path/to/config.yml", deps);
+
+      expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
+        "autonomy is set to 'full'. %s.",
+        "Claude Code CLI will run with --dangerously-skip-permissions",
+      );
     });
   });
 });
