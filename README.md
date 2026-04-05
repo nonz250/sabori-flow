@@ -24,20 +24,35 @@ The name "sabori" comes from the Japanese word "サボり" (sabori), meaning to 
 
 Just add a label to a GitHub Issue, and sabori-flow takes care of the rest: it reads the issue, creates a plan, implements the code, and opens a pull request -- all running quietly in the background on your machine. It is a **set-and-forget** workflow for the boring stuff.
 
-## sabori-flow vs Claude App
+## sabori-flow vs Claude Scheduled Tasks
 
-sabori-flow and [Claude](https://claude.ai/) (the chat interface) are both powered by the same AI, but they serve very different purposes:
+Claude now offers [Scheduled Tasks](https://code.claude.com/docs/en/scheduled-tasks) -- cron-based automation that runs prompts on a schedule (Cloud or Desktop). sabori-flow takes a fundamentally different approach: **Issue-driven**, not prompt-driven.
 
-| | sabori-flow | Claude App |
-|---|---|---|
-| **Execution** | Background, automated (launchd) | Manual chat |
-| **Trigger** | GitHub Issue label | User prompt |
-| **Code access** | Direct access to local repository | Copy-paste or file upload |
-| **Output** | Pull request + Issue comment | Chat response |
-| **Best for** | Routine tasks, well-defined Issues | Interactive design, research, discussion |
-| **Human involvement** | Label + plan review only | Continuous conversation |
+| | sabori-flow | Claude Scheduled Tasks (Cloud) | Claude Scheduled Tasks (Desktop) |
+|---|---|---|---|
+| **Trigger** | GitHub Issue label | Cron schedule + fixed prompt | Cron schedule + fixed prompt |
+| **Workflow** | Automatic state machine (label transitions: plan → in-progress → done/failed) | Stateless -- each run starts fresh | Stateless -- each run starts fresh |
+| **Code access** | Local repository via git worktree (fast, no clone overhead) | Fresh clone every run | Local checkout or worktree |
+| **Multi-repo** | Built-in (`config.yml` manages multiple repos with parallel execution) | One task per repo | One task per repo |
+| **Output** | Pull request + Issue comment with status tracking | Session log, manual PR creation | Session log, manual PR creation |
+| **Security** | Secret masking on output, Issue author permission check, shell-free execution | Anthropic sandbox | Desktop permission settings |
+| **Customization** | Full TypeScript pipeline, Markdown prompt templates | Prompt only | Prompt only |
+| **Dependency** | Claude Code CLI + `gh` CLI (no app required) | claude.ai account + paid plan | Desktop app must be running |
+| **Runs while PC is off** | No | Yes | No |
 
-**Use sabori-flow** when the task is clear enough to describe in an Issue and you do not need a back-and-forth conversation. **Use Claude App** when you want to explore ideas, ask follow-up questions, or work through ambiguous problems interactively.
+### Why sabori-flow?
+
+- **Issue = task.** No need to write cron prompts that describe what to do -- just write a GitHub Issue and add a label. The Issue itself is the specification.
+- **Stateful pipeline.** Label transitions (`claude/plan` → `claude/plan:in-progress` → `claude/plan:done`) give you visibility into what is happening and what has been processed. Claude Scheduled Tasks are stateless -- they have no built-in concept of "which issues have been handled."
+- **Safe parallel execution.** git worktree isolates each Issue into its own working copy without touching your current branch. No interference with your ongoing work.
+- **Output you can trust.** Secrets are automatically masked before posting comments to Issues. Error handling has three levels to ensure no Issue gets stuck in a broken state.
+- **Fully hackable.** The entire pipeline is TypeScript -- swap out the prompt templates, adjust the label scheme, add custom post-processing. Claude Scheduled Tasks only let you change the prompt.
+
+### When to use Claude Scheduled Tasks instead
+
+- You need tasks to run **even when your machine is off** (Cloud tasks).
+- Your automation is **not Issue-driven** -- e.g., daily code review summaries, periodic dependency checks, Slack notifications.
+- You prefer a **zero-code setup** where a single prompt is enough.
 
 ## Prerequisites
 
