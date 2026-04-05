@@ -55,7 +55,7 @@ const USER_INPUT_KEYS: ReadonlySet<string> = new Set([
 export function buildPrompt(
   issue: Issue,
   repoConfig: RepositoryConfig,
-  language: Language = "ja",
+  language: Language,
 ): string {
   const customDir = repoConfig.promptsDir;
   const userDir = getUserPromptsDir();

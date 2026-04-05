@@ -69,6 +69,7 @@ export interface ExecutionConfig {
   readonly maxParallel: number;
   readonly maxIssuesPerRepo: number;
   readonly autonomy: Autonomy;
+  readonly language: Language;
 }
 
 /** アプリケーション全体の設定 */
