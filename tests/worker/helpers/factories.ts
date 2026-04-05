@@ -87,6 +87,7 @@ export function makeAppConfig(
   const defaultExecution: ExecutionConfig = {
     maxParallel: 1,
     maxIssuesPerRepo: 10,
+    engine: "claude",
     autonomy: "interactive",
     intervalMinutes: 60,
     language: overrides?.language ?? "ja",
