@@ -178,7 +178,7 @@ launchctl list | grep sabori-flow
 ```
 
 ```
--	0	com.github.nonz250.sabori-flow
+-	0	com.github.sabori-flow
 ```
 
 The columns are: PID (`-` if not running), last exit code, and label name.
@@ -186,7 +186,7 @@ The columns are: PID (`-` if not running), last exit code, and label name.
 **Run immediately without waiting for schedule:**
 
 ```bash
-launchctl start com.github.nonz250.sabori-flow
+launchctl start com.github.sabori-flow
 ```
 
 **Log locations:**

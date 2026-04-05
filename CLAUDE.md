@@ -145,7 +145,7 @@ src/
 | 設定ファイル | `~/.sabori-flow/config.yml` |
 | プロンプトテンプレート | `~/.sabori-flow/prompts/` |
 | ログ | `~/.sabori-flow/logs/` |
-| plist バックアップ | `~/.sabori-flow/com.github.nonz250.sabori-flow.plist` |
+| plist バックアップ | `~/.sabori-flow/com.github.sabori-flow.plist` |
 
 ### プロンプトテンプレート
 

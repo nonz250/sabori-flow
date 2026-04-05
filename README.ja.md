@@ -178,7 +178,7 @@ launchctl list | grep sabori-flow
 ```
 
 ```
--	0	com.github.nonz250.sabori-flow
+-	0	com.github.sabori-flow
 ```
 
 左から PID（未実行なら `-`）、最後の終了コード、ラベル名。
@@ -186,7 +186,7 @@ launchctl list | grep sabori-flow
 **スケジュールを待たず即時実行:**
 
 ```bash
-launchctl start com.github.nonz250.sabori-flow
+launchctl start com.github.sabori-flow
 ```
 
 **ログの場所:**

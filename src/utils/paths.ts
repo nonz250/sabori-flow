@@ -16,7 +16,7 @@ export const PACKAGE_ROOT = path.resolve(__dirname, "..", "..");
 /** アプリケーション名（XDG ディレクトリのサブフォルダ名） */
 export const APP_NAME = "sabori-flow";
 
-export const PLIST_LABEL = "com.github.nonz250.sabori-flow";
+export const PLIST_LABEL = "com.github.sabori-flow";
 
 export const PLIST_DEST_DIR = path.join(
   process.env.HOME || "",
