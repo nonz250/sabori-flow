@@ -3,6 +3,7 @@ import YAML from "yaml";
 
 import {
   Autonomy,
+  Engine,
   type AppConfig,
   type ExecutionConfig,
   type RepositoryConfig,
@@ -412,6 +413,7 @@ function parseExecution(raw: unknown): Omit<ExecutionConfig, "language"> {
     return {
       maxParallel: 1,
       maxIssuesPerRepo: 1,
+      engine: Engine.CLAUDE,
       autonomy: Autonomy.INTERACTIVE,
       intervalMinutes: 10,
       timeoutMinutes: TIMEOUT_MINUTES_DEFAULT,
@@ -465,6 +467,23 @@ function parseExecution(raw: unknown): Omit<ExecutionConfig, "language"> {
   if (rawMaxIssuesPerRepo > 20) {
     throw new ConfigValidationError(
       `execution.max_issues_per_repo: must be <= 20, got ${rawMaxIssuesPerRepo}`,
+    );
+  }
+
+  // engine
+  const rawEngine =
+    "engine" in record ? record["engine"] : Engine.CLAUDE;
+
+  if (typeof rawEngine !== "string") {
+    throw new ConfigValidationError(
+      `execution.engine: must be a string, got ${typeof rawEngine}`,
+    );
+  }
+
+  const validEngineValues = Object.values(Engine) as string[];
+  if (!validEngineValues.includes(rawEngine)) {
+    throw new ConfigValidationError(
+      `execution.engine: must be one of: ${validEngineValues.join(", ")}; got '${rawEngine}'`,
     );
   }
 
@@ -532,6 +551,7 @@ function parseExecution(raw: unknown): Omit<ExecutionConfig, "language"> {
   return {
     maxParallel: rawMaxParallel,
     maxIssuesPerRepo: rawMaxIssuesPerRepo,
+    engine: rawEngine as Engine,
     autonomy: rawAutonomy as Autonomy,
     intervalMinutes: rawIntervalMinutes,
     timeoutMinutes: rawTimeoutMinutes,
