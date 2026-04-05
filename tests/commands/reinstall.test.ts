@@ -52,10 +52,18 @@ describe("reinstallCommand - call order", () => {
     await runReinstallCommand();
 
     expect(callOrder).toEqual(["uninstall", "install"]);
+    expect(mockedUninstallCommand).toHaveBeenCalledWith({ interactive: false });
   });
 });
 
 describe("reinstallCommand - options passthrough", () => {
+  it("passes { interactive: false } to uninstallCommand", async () => {
+    await runReinstallCommand();
+
+    expect(mockedUninstallCommand).toHaveBeenCalledTimes(1);
+    expect(mockedUninstallCommand).toHaveBeenCalledWith({ interactive: false });
+  });
+
   it("passes { local: true } to installCommand when called with --local", async () => {
     await runReinstallCommand({ local: true });
 
