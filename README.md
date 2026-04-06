@@ -40,7 +40,7 @@ sabori-flow separates orchestration (TypeScript) from problem-solving (AI).
 | Fetch Issues, filter by label, sort by priority | Read the Issue, understand the requirement |
 | Transition labels (plan → in-progress → done) | Plan the approach, write code |
 | Create / clean up git worktrees | Create commits, push branches |
-| Post comments, mask secrets in output | -- |
+| Post comments with output sanitization | -- |
 | Error handling and recovery | -- |
 
 Issue operations and label management are mechanical. A deterministic script handles them just fine. Having the AI do it wastes tokens and introduces hallucination risk.
@@ -82,7 +82,7 @@ Claude offers [Scheduled Tasks](https://code.claude.com/docs/en/scheduled-tasks)
 | **Code access** | Local repo via git worktree (fast, no clone) | Cloud: fresh clone / Desktop: local checkout |
 | **Multi-repo** | Built-in parallel execution via `config.yml` | One task per repo |
 | **Output** | PR + Issue comment with status tracking | Session log |
-| **Security** | Secret masking, author permission check | Anthropic sandbox / Desktop permissions |
+| **Security** | Multi-layered defenses (input validation, output sanitization, process isolation) | Anthropic sandbox / Desktop permissions |
 | **Customization** | Full TypeScript pipeline + prompt templates | Prompt text only |
 | **Runs while PC is off** | No | Cloud: Yes |
 
@@ -253,12 +253,7 @@ By default, this tool runs Claude Code CLI in `interactive` mode, which requires
 
 By default, the `npx` installation fetches packages from the npm registry at runtime. If the npm package were compromised, malicious code could be executed automatically by the scheduler.
 
-Additionally, the following defenses are built in.
-
-- **Author permission check** -- Only issues created by users with OWNER, MEMBER, or COLLABORATOR association are processed; others are automatically skipped.
-- **Secret masking** -- Before posting a success comment, output is scanned and secrets are automatically masked.
-- **Random boundary tokens** -- Prompts use randomized boundary tokens to mitigate prompt injection.
-- **Template file validation** -- Template files are checked for regular file type and size limits (100KB).
+Additionally, multiple layers of security defenses are built in, including input validation, output sanitization, and process isolation.
 
 To mitigate this risk, use the `--local` flag to run from a locally built copy you can audit.
 
