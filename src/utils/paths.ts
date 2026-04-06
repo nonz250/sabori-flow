@@ -16,19 +16,10 @@ export const PACKAGE_ROOT = path.resolve(__dirname, "..", "..");
 /** アプリケーション名（XDG ディレクトリのサブフォルダ名） */
 export const APP_NAME = "sabori-flow";
 
-export const PLIST_LABEL = "com.github.sabori-flow";
-
-export const PLIST_DEST_DIR = path.join(
-  process.env.HOME || "",
-  "Library",
-  "LaunchAgents",
-);
-export const PLIST_DEST_PATH = path.join(
-  PLIST_DEST_DIR,
-  `${PLIST_LABEL}.plist`,
-);
-
 // ---------- パッケージ内部リソース（定数） ----------
+
+/** plist label identifier used in template path resolution */
+const PLIST_LABEL = "com.github.sabori-flow";
 
 /** config.yml.example のパス（パッケージ同梱） */
 export const CONFIG_EXAMPLE_PATH = path.join(
@@ -78,11 +69,6 @@ export function getUserPromptsDir(): string {
 /** ~/.sabori-flow/logs */
 export function getLogsDir(): string {
   return path.join(getBaseDir(), "logs");
-}
-
-/** ~/.sabori-flow/{PLIST_LABEL}.plist — 生成済み plist の保存先 */
-export function getPlistGeneratedPath(): string {
-  return path.join(getBaseDir(), `${PLIST_LABEL}.plist`);
 }
 
 /** plist テンプレートのパス（PLIST_TEMPLATE_PATH と同値） */

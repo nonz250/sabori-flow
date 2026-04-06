@@ -33,8 +33,9 @@ export function exec(
 }
 
 export function commandExists(command: string): boolean {
+  const checker = process.platform === "win32" ? "where.exe" : "which";
   try {
-    execFileSync("which", [command], { stdio: "pipe" });
+    execFileSync(checker, [command], { stdio: "pipe" });
     return true;
   } catch {
     return false;
