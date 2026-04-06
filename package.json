@@ -1,7 +1,27 @@
 {
   "name": "sabori-flow",
   "version": "0.2.0",
+  "description": "Automated GitHub Issue resolver powered by Claude Code CLI",
   "type": "module",
+  "license": "MIT",
+  "author": "nonz250",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nonz250/sabori-flow.git"
+  },
+  "homepage": "https://github.com/nonz250/sabori-flow#readme",
+  "bugs": {
+    "url": "https://github.com/nonz250/sabori-flow/issues"
+  },
+  "keywords": [
+    "github",
+    "issue",
+    "automation",
+    "claude",
+    "ai",
+    "workflow",
+    "launchd"
+  ],
   "engines": {
     "node": ">=20.0.0"
   },

@@ -77,6 +77,9 @@ const jaMessages: MessageKeys = {
   "cli.descriptionInstall": "plist 生成 + launchd 登録を行います",
   "cli.optionLocal": "ローカルビルドのワーカーを登録します",
   "cli.descriptionUninstall": "launchd の登録を解除します",
+  "cli.descriptionReinstall":
+    "launchd の登録を再インストールします（解除 + plist 再生成 + 登録）",
+  "cli.optionReinstallLocal": "ローカルビルドのワーカーを登録します",
   "cli.descriptionWorker":
     "ワーカーを実行します（通常は launchd から自動的に呼び出されます）",
 };
@@ -150,6 +153,9 @@ const enMessages: MessageKeys = {
   "cli.descriptionInstall": "Generate plist and register with launchd",
   "cli.optionLocal": "Register local build worker",
   "cli.descriptionUninstall": "Unregister from launchd",
+  "cli.descriptionReinstall":
+    "Reinstall launchd registration (unregister + regenerate plist + register)",
+  "cli.optionReinstallLocal": "Register local build worker",
   "cli.descriptionWorker":
     "Run the worker (normally called automatically by launchd)",
 };

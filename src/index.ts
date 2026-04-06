@@ -44,8 +44,8 @@ program
 
 program
   .command("reinstall")
-  .description("launchd の登録を再インストールします（解除 + plist 再生成 + 登録）")
-  .option("--local", "ローカルビルドのワーカーを登録します")
+  .description(t("cli.descriptionReinstall"))
+  .option("--local", t("cli.optionReinstallLocal"))
   .action((options) => reinstallCommand(options));
 
 program

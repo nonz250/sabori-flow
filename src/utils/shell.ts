@@ -26,7 +26,7 @@ export function exec(
   } catch (error: unknown) {
     const e = error as { stderr?: string; message?: string };
     throw new ShellError(
-      `コマンドの実行に失敗しました: ${file} ${args.join(" ")}`,
+      `Failed to execute command: ${file} ${args.join(" ")}`,
       (e.stderr as string) || e.message || "",
     );
   }

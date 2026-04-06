@@ -1,6 +1,6 @@
-# 対象リポジトリ
+# Target repositories
 repositories:
-  - owner: nonz250
+  - owner: your-org
     repo: example-app
     local_path: /Users/you/projects/example-app
     labels:
@@ -18,12 +18,12 @@ repositories:
       - priority:high
       - priority:low
 
-# 実行設定
+# Execution settings
 execution:
   max_parallel: 1
-  # max_issues_per_repo: 1  # リポジトリあたりの Issue 処理上限（省略時は 1）
-  # autonomy: interactive    # full / sandboxed / interactive（省略時は interactive）
-  # interval_minutes: 60  # スケジュール実行間隔（分、10-1440、省略時は 60）
+  # max_issues_per_repo: 1  # Max issues per repository (default: 1)
+  # autonomy: interactive    # full / sandboxed / interactive (default: interactive)
+  # interval_minutes: 60  # Scheduled execution interval in minutes (10-1440, default: 60)
 
-# 表示言語
-# language: ja  # ja / en（省略時は ja）
+# Display language
+# language: ja  # ja / en (default: ja)
