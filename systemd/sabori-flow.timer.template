@@ -1,0 +1,10 @@
+[Unit]
+Description=sabori-flow scheduled execution
+
+[Timer]
+OnBootSec=__ON_BOOT_SEC__
+OnUnitActiveSec=__ON_UNIT_ACTIVE_SEC__
+Persistent=true
+
+[Install]
+WantedBy=timers.target
