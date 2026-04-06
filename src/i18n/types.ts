@@ -32,8 +32,8 @@ export interface MessageKeys {
   "install.npxNotFound": string;
   "install.nodeNotFound": string;
   "install.pathResolveFailed": string;
-  "install.generatingPlist": string;
-  "install.registeringLaunchd": string;
+  "install.generatingConfig": string;
+  "install.registeringScheduler": string;
   "install.localComplete": string;
   "install.complete": string;
   "install.configValidationError": string;
@@ -42,6 +42,7 @@ export interface MessageKeys {
   // uninstall command
   "uninstall.deleted": string;
   "uninstall.notRegistered": string;
+  "uninstall.unregistered": string;
   "uninstall.complete": string;
   "uninstall.confirmDeleteAll": string;
   "uninstall.deletedAll": string;
