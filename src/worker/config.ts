@@ -3,6 +3,7 @@ import YAML from "yaml";
 
 import {
   Autonomy,
+  Engine,
   type AppConfig,
   type ExecutionConfig,
   type RepositoryConfig,
@@ -317,7 +318,7 @@ function parsePhaseLabels(raw: unknown, phaseName: string): PhaseLabels {
 
 function parseExecution(raw: unknown): Omit<ExecutionConfig, "language"> {
   if (raw === undefined || raw === null) {
-    return { maxParallel: 1, maxIssuesPerRepo: 1, autonomy: Autonomy.INTERACTIVE, intervalMinutes: 60 };
+    return { engine: Engine.CLAUDE, maxParallel: 1, maxIssuesPerRepo: 1, autonomy: Autonomy.INTERACTIVE, intervalMinutes: 60 };
   }
 
   if (typeof raw !== "object" || Array.isArray(raw)) {
@@ -325,6 +326,23 @@ function parseExecution(raw: unknown): Omit<ExecutionConfig, "language"> {
   }
 
   const record = raw as Record<string, unknown>;
+
+  // engine
+  const rawEngine =
+    "engine" in record ? record["engine"] : Engine.CLAUDE;
+
+  if (typeof rawEngine !== "string") {
+    throw new ConfigValidationError(
+      `execution.engine: must be a string, got ${typeof rawEngine}`,
+    );
+  }
+
+  const validEngineValues = Object.values(Engine) as string[];
+  if (!validEngineValues.includes(rawEngine)) {
+    throw new ConfigValidationError(
+      `execution.engine: must be one of: ${validEngineValues.join(", ")}; got '${rawEngine}'`,
+    );
+  }
 
   // max_parallel
   const rawMaxParallel =
@@ -410,6 +428,7 @@ function parseExecution(raw: unknown): Omit<ExecutionConfig, "language"> {
   }
 
   return {
+    engine: rawEngine as Engine,
     maxParallel: rawMaxParallel,
     maxIssuesPerRepo: rawMaxIssuesPerRepo,
     autonomy: rawAutonomy as Autonomy,

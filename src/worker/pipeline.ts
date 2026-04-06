@@ -1,9 +1,10 @@
 import type { Language } from "../i18n/types.js";
 import type { Issue, PhaseLabels, RepositoryConfig, ExecutionConfig } from "./models.js";
-import { Autonomy, Phase, repoFullName } from "./models.js";
+import { Autonomy, Engine, Phase, repoFullName } from "./models.js";
 import type { ProcessResult } from "./process.js";
 import { buildPrompt } from "./prompt.js";
-import { runClaude } from "./executor.js";
+import { createExecutor } from "./executor.js";
+import type { RunEngine } from "./executor.js";
 import {
   transitionToInProgress,
   transitionToDone,
@@ -24,7 +25,7 @@ const logger = createLogger("pipeline");
 
 export interface PipelineDeps {
   buildPrompt: (issue: Issue, repoConfig: RepositoryConfig, language: Language) => string;
-  runClaude: (
+  runEngine: (
     prompt: string,
     options: { cwd: string; autonomy?: Autonomy },
   ) => Promise<ProcessResult>;
@@ -65,17 +66,20 @@ export interface PipelineDeps {
   ) => Promise<T>;
 }
 
-export const defaultDeps: PipelineDeps = {
-  buildPrompt,
-  runClaude: (prompt, options) => runClaude(prompt, options),
-  transitionToInProgress,
-  transitionToDone,
-  transitionToFailed,
-  addImplTriggerLabel,
-  postSuccessComment,
-  postFailureComment,
-  withWorktree,
-};
+export function createDefaultDeps(engine: Engine = Engine.CLAUDE): PipelineDeps {
+  const executor = createExecutor(engine);
+  return {
+    buildPrompt,
+    runEngine: executor,
+    transitionToInProgress,
+    transitionToDone,
+    transitionToFailed,
+    addImplTriggerLabel,
+    postSuccessComment,
+    postFailureComment,
+    withWorktree,
+  };
+}
 
 // ---------- Pipeline ----------
 
@@ -85,7 +89,7 @@ export const defaultDeps: PipelineDeps = {
  * 処理フロー:
  *   1. PhaseLabels 解決: issue.phase から plan/impl のラベル定義を取得
  *   2. ラベル遷移 trigger -> in-progress
- *   3. worktree 作成 -> プロンプト生成 -> Claude CLI 実行 -> worktree 削除
+ *   3. worktree 作成 -> プロンプト生成 -> エンジン CLI 実行 -> worktree 削除
  *   4-A. 成功: done 遷移 + 成功コメント
  *   4-B. 失敗: failed 遷移 + 失敗コメント
  *
@@ -98,9 +102,10 @@ export async function processIssue(
   issue: Issue,
   repoConfig: RepositoryConfig,
   executionConfig: ExecutionConfig,
-  deps: PipelineDeps = defaultDeps,
+  deps: PipelineDeps = createDefaultDeps(executionConfig.engine),
 ): Promise<boolean> {
   const repo = repoFullName(repoConfig);
+  const engineName = executionConfig.engine === Engine.COPILOT ? "Copilot" : "Claude Code";
 
   // 1. PhaseLabels 解決
   const phaseLabels: PhaseLabels =
@@ -148,28 +153,30 @@ export async function processIssue(
           return false;
         }
 
-        // 3-2. Claude CLI 実行（レベル 2）
+        // 3-2. エンジン CLI 実行（レベル 2）
         let result: ProcessResult;
         try {
-          result = await deps.runClaude(prompt, { cwd: worktreePath, autonomy: executionConfig.autonomy });
+          result = await deps.runEngine(prompt, { cwd: worktreePath, autonomy: executionConfig.autonomy });
         } catch (error: unknown) {
           logger.error(
-            "Issue #%s: Claude CLI の実行に失敗しました [repo=%s]: %s",
+            "Issue #%s: %s CLI の実行に失敗しました [repo=%s]: %s",
             issue.number,
+            engineName,
             repo,
             error,
           );
-          handleFailure(deps, repo, issue.number, phaseLabels, "Claude Code CLI の実行に失敗しました");
+          handleFailure(deps, repo, issue.number, phaseLabels, `${engineName} CLI の実行に失敗しました`);
           return false;
         }
 
         if (!result.success) {
           logger.error(
-            "Issue #%s: Claude CLI が失敗ステータスを返しました [repo=%s]",
+            "Issue #%s: %s CLI が失敗ステータスを返しました [repo=%s]",
             issue.number,
+            engineName,
             repo,
           );
-          handleFailure(deps, repo, issue.number, phaseLabels, "Claude Code CLI がエラーを返しました");
+          handleFailure(deps, repo, issue.number, phaseLabels, `${engineName} CLI がエラーを返しました`);
           return false;
         }
 

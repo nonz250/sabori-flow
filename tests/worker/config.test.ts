@@ -586,6 +586,85 @@ describe("loadConfig - execution validation", () => {
     );
   });
 
+  it("engine: 'claude' が正しくパースされる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      'max_parallel: 4\n  engine: "claude"',
+    );
+    mockYaml(yaml);
+
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.engine).toBe("claude");
+  });
+
+  it("engine: 'copilot' が正しくパースされる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      'max_parallel: 4\n  engine: "copilot"',
+    );
+    mockYaml(yaml);
+
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.engine).toBe("copilot");
+  });
+
+  it("engine デフォルト値 (execution あり、engine 省略)", () => {
+    mockYaml(VALID_YAML);
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.engine).toBe("claude");
+  });
+
+  it("engine デフォルト値 (execution 省略)", () => {
+    mockYaml(VALID_YAML_NO_EXECUTION);
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.engine).toBe("claude");
+  });
+
+  it("engine に不正な文字列を指定するとエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      'max_parallel: 4\n  engine: "invalid"',
+    );
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /execution.engine: must be one of: claude, copilot/,
+    );
+  });
+
+  it("engine に boolean を指定するとエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  engine: true",
+    );
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /execution.engine: must be a string, got boolean/,
+    );
+  });
+
+  it("engine に数値を指定するとエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  engine: 1",
+    );
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /execution.engine: must be a string, got number/,
+    );
+  });
+
   it("interval_minutes の指定値が正しくパースされる", () => {
     const yaml = VALID_YAML.replace(
       "max_parallel: 4",

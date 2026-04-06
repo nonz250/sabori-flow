@@ -17,13 +17,20 @@ export const Priority = {
 } as const;
 export type Priority = (typeof Priority)[keyof typeof Priority];
 
-/** Claude Code CLI の自律性レベル */
+/** CLI の自律性レベル */
 export const Autonomy = {
   FULL: "full",
   SANDBOXED: "sandboxed",
   INTERACTIVE: "interactive",
 } as const;
 export type Autonomy = (typeof Autonomy)[keyof typeof Autonomy];
+
+/** 実行エンジン */
+export const Engine = {
+  CLAUDE: "claude",
+  COPILOT: "copilot",
+} as const;
+export type Engine = (typeof Engine)[keyof typeof Engine];
 
 // ---------- Data structures ----------
 
@@ -65,6 +72,7 @@ export interface RepositoryConfig {
 
 /** 実行設定 */
 export interface ExecutionConfig {
+  readonly engine: Engine;
   readonly maxParallel: number;
   readonly maxIssuesPerRepo: number;
   readonly autonomy: Autonomy;

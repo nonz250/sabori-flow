@@ -22,7 +22,7 @@ vi.mock("../../src/worker/logger.js", () => ({
   createLogger: vi.fn(() => mockLoggerInstance),
 }));
 
-import { runClaude, ExecutorError, resolveClaudeAutonomyFlags } from "../../src/worker/executor.js";
+import { runClaude, runCopilot, ExecutorError, resolveClaudeAutonomyFlags, resolveCopilotAutonomyFlags, createExecutor } from "../../src/worker/executor.js";
 import {
   runCommand,
   ProcessTimeoutError,
@@ -299,5 +299,290 @@ describe("resolveClaudeAutonomyFlags", () => {
 
   it("interactive の場合 空配列を返す", () => {
     expect(resolveClaudeAutonomyFlags("interactive")).toEqual([]);
+  });
+});
+
+describe("runCopilot", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe("成功時", () => {
+    it("終了コード 0 の場合 success=true を返す", async () => {
+      mockedRunCommand.mockResolvedValue({
+        success: true,
+        stdout: "Copilot output text",
+        stderr: "",
+      });
+
+      const result = await runCopilot("Implement feature X");
+
+      expect(result.success).toBe(true);
+      expect(result.stdout).toBe("Copilot output text");
+      expect(result.stderr).toBe("");
+    });
+  });
+
+  describe("失敗時", () => {
+    it("非0終了コードの場合 success=false を返す", async () => {
+      mockedRunCommand.mockResolvedValue({
+        success: false,
+        stdout: "",
+        stderr: "Error occurred",
+      });
+
+      const result = await runCopilot("Implement feature X");
+
+      expect(result.success).toBe(false);
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toBe("Error occurred");
+    });
+  });
+
+  describe("stdin 経由のプロンプト渡し", () => {
+    it("プロンプトが input オプションで runCommand に渡される", async () => {
+      mockedRunCommand.mockResolvedValue({
+        success: true,
+        stdout: "",
+        stderr: "",
+      });
+
+      await runCopilot("Fix the bug in module Y");
+
+      expect(mockedRunCommand).toHaveBeenCalledOnce();
+      expect(mockedRunCommand).toHaveBeenCalledWith(
+        "copilot",
+        ["-p"],
+        {
+          input: "Fix the bug in module Y",
+          cwd: undefined,
+          timeoutMs: 1_800_000,
+        },
+      );
+    });
+  });
+
+  describe("タイムアウト", () => {
+    it("ProcessTimeoutError 発生時に ExecutorError が throw される", async () => {
+      mockedRunCommand.mockRejectedValue(
+        new ProcessTimeoutError(1_800_000),
+      );
+
+      await expect(runCopilot("Long running task")).rejects.toThrow(
+        ExecutorError,
+      );
+    });
+
+    it("タイムアウトのエラーメッセージにタイムアウト値が含まれる", async () => {
+      mockedRunCommand.mockRejectedValue(
+        new ProcessTimeoutError(1_800_000),
+      );
+
+      await expect(runCopilot("Long running task")).rejects.toThrow(
+        "Copilot CLI timed out after 1800000ms",
+      );
+    });
+
+    it("ExecutorError は instanceof で判別できる", async () => {
+      mockedRunCommand.mockRejectedValue(
+        new ProcessTimeoutError(1_800_000),
+      );
+
+      try {
+        await runCopilot("Long running task");
+        expect.fail("should have thrown");
+      } catch (error: unknown) {
+        expect(error).toBeInstanceOf(ExecutorError);
+      }
+    });
+  });
+
+  describe("バイナリ未検出", () => {
+    it("ProcessExecutionError 発生時に ExecutorError が throw される", async () => {
+      mockedRunCommand.mockRejectedValue(
+        new ProcessExecutionError("spawn copilot ENOENT"),
+      );
+
+      try {
+        await runCopilot("Some prompt");
+        expect.fail("should have thrown");
+      } catch (error: unknown) {
+        expect(error).toBeInstanceOf(ExecutorError);
+        expect((error as Error).message).toBe("spawn copilot ENOENT");
+      }
+    });
+
+    it("ExecutorError は instanceof で判別できる", async () => {
+      mockedRunCommand.mockRejectedValue(
+        new ProcessExecutionError("spawn copilot ENOENT"),
+      );
+
+      try {
+        await runCopilot("Some prompt");
+        expect.fail("should have thrown");
+      } catch (error: unknown) {
+        expect(error).toBeInstanceOf(ExecutorError);
+      }
+    });
+  });
+
+  describe("デフォルトタイムアウト", () => {
+    it("タイムアウト未指定時にデフォルト値 1800000ms が渡される", async () => {
+      mockedRunCommand.mockResolvedValue({
+        success: true,
+        stdout: "",
+        stderr: "",
+      });
+
+      await runCopilot("prompt text");
+
+      const callOptions = mockedRunCommand.mock.calls[0][2];
+      expect(callOptions?.timeoutMs).toBe(1_800_000);
+    });
+  });
+
+  describe("カスタムタイムアウト", () => {
+    it("指定したタイムアウト値が runCommand に渡される", async () => {
+      mockedRunCommand.mockResolvedValue({
+        success: true,
+        stdout: "",
+        stderr: "",
+      });
+
+      await runCopilot("prompt text", { timeoutMs: 600_000 });
+
+      const callOptions = mockedRunCommand.mock.calls[0][2];
+      expect(callOptions?.timeoutMs).toBe(600_000);
+    });
+  });
+
+  describe("cwd オプション", () => {
+    it("cwd が runCommand に渡される", async () => {
+      mockedRunCommand.mockResolvedValue({
+        success: true,
+        stdout: "",
+        stderr: "",
+      });
+
+      await runCopilot("prompt text", { cwd: "/work/dir" });
+
+      const callOptions = mockedRunCommand.mock.calls[0][2];
+      expect(callOptions?.cwd).toBe("/work/dir");
+    });
+  });
+
+  describe("autonomy オプション", () => {
+    it("autonomy 未指定時は --yolo が含まれない", async () => {
+      mockedRunCommand.mockResolvedValue({
+        success: true,
+        stdout: "",
+        stderr: "",
+      });
+
+      await runCopilot("prompt text");
+
+      const args = mockedRunCommand.mock.calls[0][1];
+      expect(args).toEqual(["-p"]);
+      expect(args).not.toContain("--yolo");
+    });
+
+    it("autonomy が full の場合 --yolo が含まれる", async () => {
+      mockedRunCommand.mockResolvedValue({
+        success: true,
+        stdout: "",
+        stderr: "",
+      });
+
+      await runCopilot("prompt text", { autonomy: "full" });
+
+      const args = mockedRunCommand.mock.calls[0][1];
+      expect(args).toContain("--yolo");
+    });
+
+    it("autonomy が sandboxed の場合 --yolo が含まれない", async () => {
+      mockedRunCommand.mockResolvedValue({
+        success: true,
+        stdout: "",
+        stderr: "",
+      });
+
+      await runCopilot("prompt text", { autonomy: "sandboxed" });
+
+      const args = mockedRunCommand.mock.calls[0][1];
+      expect(args).toEqual(["-p"]);
+      expect(args).not.toContain("--yolo");
+    });
+
+    it("autonomy が interactive の場合 --yolo が含まれない", async () => {
+      mockedRunCommand.mockResolvedValue({
+        success: true,
+        stdout: "",
+        stderr: "",
+      });
+
+      await runCopilot("prompt text", { autonomy: "interactive" });
+
+      const args = mockedRunCommand.mock.calls[0][1];
+      expect(args).toEqual(["-p"]);
+      expect(args).not.toContain("--yolo");
+    });
+
+    it("autonomy が sandboxed の場合 WARN ログが出力される", async () => {
+      mockedRunCommand.mockResolvedValue({
+        success: true,
+        stdout: "",
+        stderr: "",
+      });
+
+      mockLoggerInstance.warn.mockClear();
+
+      await runCopilot("prompt text", { autonomy: "sandboxed" });
+
+      expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
+        "Copilot CLI does not support 'sandboxed' autonomy; falling back to 'interactive'",
+      );
+    });
+
+    it("autonomy が full の場合 sandboxed WARN ログが出力されない", async () => {
+      mockedRunCommand.mockResolvedValue({
+        success: true,
+        stdout: "",
+        stderr: "",
+      });
+
+      mockLoggerInstance.warn.mockClear();
+
+      await runCopilot("prompt text", { autonomy: "full" });
+
+      expect(mockLoggerInstance.warn).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe("resolveCopilotAutonomyFlags", () => {
+  it("full の場合 --yolo を返す", () => {
+    expect(resolveCopilotAutonomyFlags("full")).toEqual(["--yolo"]);
+  });
+
+  it("sandboxed の場合 空配列を返す", () => {
+    expect(resolveCopilotAutonomyFlags("sandboxed")).toEqual([]);
+  });
+
+  it("interactive の場合 空配列を返す", () => {
+    expect(resolveCopilotAutonomyFlags("interactive")).toEqual([]);
+  });
+});
+
+describe("createExecutor", () => {
+  it("claude の場合 runClaude を返す", () => {
+    const executor = createExecutor("claude");
+
+    expect(executor).toBe(runClaude);
+  });
+
+  it("copilot の場合 runCopilot を返す", () => {
+    const executor = createExecutor("copilot");
+
+    expect(executor).toBe(runCopilot);
   });
 });
