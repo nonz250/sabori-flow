@@ -48,6 +48,7 @@ describe("runCommand", () => {
       success: true,
       stdout: "hello world",
       stderr: "some warning",
+      exitCode: 0,
     });
     expect(mockedSpawn).toHaveBeenCalledWith("echo", ["hello"], {
       cwd: undefined,
@@ -71,6 +72,7 @@ describe("runCommand", () => {
       success: false,
       stdout: "partial output",
       stderr: "error details",
+      exitCode: 1,
     });
   });
 

@@ -73,6 +73,7 @@ export function makeProcessResult(
     success: true,
     stdout: "Claude output",
     stderr: "",
+    exitCode: overrides?.success === false ? 1 : 0,
     ...overrides,
   };
 }

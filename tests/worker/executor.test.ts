@@ -22,7 +22,7 @@ vi.mock("../../src/worker/logger.js", () => ({
   createLogger: vi.fn(() => mockLoggerInstance),
 }));
 
-import { runClaude, ExecutorError, resolveClaudeAutonomyFlags } from "../../src/worker/executor.js";
+import { runClaude, ExecutorError, ExecutorTimeoutError, resolveClaudeAutonomyFlags } from "../../src/worker/executor.js";
 import {
   runCommand,
   ProcessTimeoutError,
@@ -122,6 +122,49 @@ describe("runClaude", () => {
         expect.fail("should have thrown");
       } catch (error: unknown) {
         expect(error).toBeInstanceOf(ExecutorError);
+      }
+    });
+
+    it("ExecutorTimeoutError は ExecutorError と ExecutorTimeoutError 両方の instanceof で判別できる", async () => {
+      mockedRunCommand.mockRejectedValue(
+        new ProcessTimeoutError(1_800_000),
+      );
+
+      try {
+        await runClaude("Long running task");
+        expect.fail("should have thrown");
+      } catch (error: unknown) {
+        expect(error).toBeInstanceOf(ExecutorTimeoutError);
+        expect(error).toBeInstanceOf(ExecutorError);
+      }
+    });
+
+    it("ExecutorTimeoutError の timeoutMs プロパティにタイムアウト値が設定される", async () => {
+      mockedRunCommand.mockRejectedValue(
+        new ProcessTimeoutError(1_800_000),
+      );
+
+      try {
+        await runClaude("Long running task");
+        expect.fail("should have thrown");
+      } catch (error: unknown) {
+        expect(error).toBeInstanceOf(ExecutorTimeoutError);
+        expect((error as ExecutorTimeoutError).timeoutMs).toBe(1_800_000);
+      }
+    });
+
+    it("カスタムタイムアウト指定時に ExecutorTimeoutError の timeoutMs に指定値が設定される", async () => {
+      const customTimeoutMs = 600_000;
+      mockedRunCommand.mockRejectedValue(
+        new ProcessTimeoutError(customTimeoutMs),
+      );
+
+      try {
+        await runClaude("Long running task", { timeoutMs: customTimeoutMs });
+        expect.fail("should have thrown");
+      } catch (error: unknown) {
+        expect(error).toBeInstanceOf(ExecutorTimeoutError);
+        expect((error as ExecutorTimeoutError).timeoutMs).toBe(customTimeoutMs);
       }
     });
   });

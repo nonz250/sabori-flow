@@ -16,6 +16,7 @@ export function createMockPipelineDeps(
       success: true,
       stdout: "Claude output",
       stderr: "",
+      exitCode: 0,
     }),
     transitionToInProgress: vi.fn().mockResolvedValue(undefined),
     transitionToDone: vi.fn().mockResolvedValue(undefined),

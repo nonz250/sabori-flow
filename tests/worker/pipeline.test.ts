@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { processIssue } from "../../src/worker/pipeline.js";
 import { Phase } from "../../src/worker/models.js";
 import type { ExecutionConfig } from "../../src/worker/models.js";
+import { ExecutorTimeoutError } from "../../src/worker/executor.js";
 import {
   makeRepoConfig,
   makeIssue,
@@ -218,11 +219,10 @@ describe("processIssue", () => {
         PLAN_LABELS,
       );
       expect(deps.postFailureComment).toHaveBeenCalledOnce();
-      expect(deps.postFailureComment).toHaveBeenCalledWith(
-        "testowner/testrepo",
-        42,
-        "プロンプトの生成に失敗しました",
-      );
+      const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
+      expect(failureMessage).toContain("Prompt Generation Error");
+      expect(failureMessage).toContain("Prompt generation failed");
+      expect(failureMessage).toContain("template not found");
     });
 
     it("runClaude が例外を投げると failed 遷移 + 失敗コメントが呼ばれ false が返る", async () => {
@@ -230,7 +230,7 @@ describe("processIssue", () => {
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
       vi.mocked(deps.runClaude).mockRejectedValue(
-        new Error("timeout after 1800 seconds"),
+        new Error("execution failed unexpectedly"),
       );
 
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, deps);
@@ -245,11 +245,30 @@ describe("processIssue", () => {
         PLAN_LABELS,
       );
       expect(deps.postFailureComment).toHaveBeenCalledOnce();
-      expect(deps.postFailureComment).toHaveBeenCalledWith(
-        "testowner/testrepo",
-        42,
-        "Claude Code CLI の実行に失敗しました",
+      const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
+      expect(failureMessage).toContain("CLI Execution Error");
+      expect(failureMessage).toContain("Claude Code CLI execution failed");
+      expect(failureMessage).toContain("execution failed unexpectedly");
+    });
+
+    it("runClaude が ExecutorTimeoutError を投げるとタイムアウト診断情報が含まれる", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      const timeoutMs = 1_800_000;
+      vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
+      vi.mocked(deps.runClaude).mockRejectedValue(
+        new ExecutorTimeoutError(`Claude Code CLI timed out after ${timeoutMs}ms`, timeoutMs),
       );
+
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, deps);
+
+      expect(result).toBe(false);
+      expect(deps.transitionToFailed).toHaveBeenCalledOnce();
+      expect(deps.postFailureComment).toHaveBeenCalledOnce();
+      const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
+      expect(failureMessage).toContain("CLI Timeout");
+      expect(failureMessage).toContain("Claude Code CLI timed out");
+      expect(failureMessage).toContain("1800s");
     });
 
     it("runClaude が success=false を返すと failed 遷移 + 失敗コメントが呼ばれ false が返る", async () => {
@@ -272,14 +291,14 @@ describe("processIssue", () => {
         PLAN_LABELS,
       );
       expect(deps.postFailureComment).toHaveBeenCalledOnce();
-      expect(deps.postFailureComment).toHaveBeenCalledWith(
-        "testowner/testrepo",
-        42,
-        "Claude Code CLI がエラーを返しました",
-      );
+      const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
+      expect(failureMessage).toContain("CLI Non-zero Exit");
+      expect(failureMessage).toContain("Claude Code CLI returned a non-zero exit code");
+      expect(failureMessage).toContain("Exit Code:");
+      expect(failureMessage).toContain("CLI error output");
     });
 
-    it("runClaude が success=false かつ stderr が空の場合もデフォルトのエラーメッセージが使われる", async () => {
+    it("runClaude が success=false かつ stderr が空の場合も診断情報が含まれる", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
@@ -290,14 +309,13 @@ describe("processIssue", () => {
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, deps);
 
       expect(result).toBe(false);
-      expect(deps.postFailureComment).toHaveBeenCalledWith(
-        "testowner/testrepo",
-        42,
-        "Claude Code CLI がエラーを返しました",
-      );
+      const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
+      expect(failureMessage).toContain("CLI Non-zero Exit");
+      expect(failureMessage).toContain("Claude Code CLI returned a non-zero exit code");
+      expect(failureMessage).toContain("stdout error");
     });
 
-    it("runClaude が success=false かつ stderr/stdout ともに空の場合もデフォルトのエラーメッセージが使われる", async () => {
+    it("runClaude が success=false かつ stderr/stdout ともに空の場合も診断情報が含まれる", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
@@ -308,11 +326,9 @@ describe("processIssue", () => {
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, deps);
 
       expect(result).toBe(false);
-      expect(deps.postFailureComment).toHaveBeenCalledWith(
-        "testowner/testrepo",
-        42,
-        "Claude Code CLI がエラーを返しました",
-      );
+      const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
+      expect(failureMessage).toContain("CLI Non-zero Exit");
+      expect(failureMessage).toContain("Claude Code CLI returned a non-zero exit code");
     });
 
     it("worktree 作成失敗時に failed 遷移 + 失敗コメントが呼ばれ false が返る", async () => {
@@ -332,11 +348,10 @@ describe("processIssue", () => {
         PLAN_LABELS,
       );
       expect(deps.postFailureComment).toHaveBeenCalledOnce();
-      expect(deps.postFailureComment).toHaveBeenCalledWith(
-        "testowner/testrepo",
-        42,
-        "作業ディレクトリの作成に失敗しました",
-      );
+      const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
+      expect(failureMessage).toContain("Worktree Creation Error");
+      expect(failureMessage).toContain("Worktree creation failed");
+      expect(failureMessage).toContain("worktree creation failed");
     });
   });
 
