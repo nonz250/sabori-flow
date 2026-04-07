@@ -1,9 +1,9 @@
 import type { Language } from "../i18n/types.js";
-import type { Issue, PhaseLabels, RepositoryConfig, ExecutionConfig } from "./models.js";
-import { Autonomy, Phase, repoFullName } from "./models.js";
+import type { Issue, PhaseLabels, RepositoryConfig, ExecutionConfig, FailureDiagnostics } from "./models.js";
+import { Autonomy, Phase, FailureCategory, repoFullName } from "./models.js";
 import type { ProcessResult } from "./process.js";
 import { buildPrompt } from "./prompt.js";
-import { runClaude } from "./executor.js";
+import { runClaude, ExecutorTimeoutError } from "./executor.js";
 import {
   transitionToInProgress,
   transitionToDone,
@@ -13,6 +13,7 @@ import {
 import {
   postSuccessComment,
   postFailureComment,
+  formatFailureDiagnostics,
   sanitizeOutput,
 } from "./comment.js";
 import { withWorktree } from "./worktree.js";
@@ -144,7 +145,12 @@ export async function processIssue(
             repo,
             error,
           );
-          handleFailure(deps, repo, issue.number, phaseLabels, "プロンプトの生成に失敗しました");
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          handleFailure(deps, repo, issue.number, phaseLabels, {
+            category: FailureCategory.PROMPT_GENERATION,
+            summary: "Prompt generation failed",
+            errorMessage,
+          });
           return false;
         }
 
@@ -159,7 +165,21 @@ export async function processIssue(
             repo,
             error,
           );
-          handleFailure(deps, repo, issue.number, phaseLabels, "Claude Code CLI の実行に失敗しました");
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          if (error instanceof ExecutorTimeoutError) {
+            handleFailure(deps, repo, issue.number, phaseLabels, {
+              category: FailureCategory.CLI_TIMEOUT,
+              summary: "Claude Code CLI timed out",
+              timeoutMs: error.timeoutMs,
+              errorMessage,
+            });
+          } else {
+            handleFailure(deps, repo, issue.number, phaseLabels, {
+              category: FailureCategory.CLI_EXECUTION_ERROR,
+              summary: "Claude Code CLI execution failed",
+              errorMessage,
+            });
+          }
           return false;
         }
 
@@ -169,7 +189,13 @@ export async function processIssue(
             issue.number,
             repo,
           );
-          handleFailure(deps, repo, issue.number, phaseLabels, "Claude Code CLI がエラーを返しました");
+          handleFailure(deps, repo, issue.number, phaseLabels, {
+            category: FailureCategory.CLI_NON_ZERO_EXIT,
+            summary: "Claude Code CLI returned a non-zero exit code",
+            stderr: result.stderr,
+            stdout: result.stdout,
+            exitCode: result.exitCode,
+          });
           return false;
         }
 
@@ -228,7 +254,12 @@ export async function processIssue(
       repo,
       error,
     );
-    handleFailure(deps, repo, issue.number, phaseLabels, "作業ディレクトリの作成に失敗しました");
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    handleFailure(deps, repo, issue.number, phaseLabels, {
+      category: FailureCategory.WORKTREE_CREATION,
+      summary: "Worktree creation failed",
+      errorMessage,
+    });
     return false;
   }
 }
@@ -247,7 +278,7 @@ function handleFailure(
   repo: string,
   issueNumber: number,
   phaseLabels: PhaseLabels,
-  errorMessage: string,
+  diagnostics: FailureDiagnostics,
 ): void {
   deps.transitionToFailed(repo, issueNumber, phaseLabels).catch(
     (error: unknown) => {
@@ -260,7 +291,8 @@ function handleFailure(
     },
   );
 
-  deps.postFailureComment(repo, issueNumber, errorMessage).catch(
+  const formattedMessage = formatFailureDiagnostics(diagnostics);
+  deps.postFailureComment(repo, issueNumber, formattedMessage).catch(
     (error: unknown) => {
       logger.warn(
         "Issue #%s: 失敗コメントの投稿に失敗しました [repo=%s]: %s",
