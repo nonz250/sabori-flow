@@ -16,6 +16,16 @@ export class ExecutorError extends Error {
   }
 }
 
+export class ExecutorTimeoutError extends ExecutorError {
+  constructor(
+    message: string,
+    public readonly timeoutMs: number,
+  ) {
+    super(message);
+    Object.setPrototypeOf(this, ExecutorTimeoutError.prototype);
+  }
+}
+
 const DEFAULT_TIMEOUT_MS = 3_600_000; // 60 minutes
 
 export interface RunClaudeOptions {
@@ -61,8 +71,9 @@ export async function runClaude(
     );
   } catch (error: unknown) {
     if (error instanceof ProcessTimeoutError) {
-      throw new ExecutorError(
+      throw new ExecutorTimeoutError(
         `Claude Code CLI timed out after ${timeoutMs}ms`,
+        timeoutMs,
       );
     }
     if (error instanceof ProcessExecutionError) {

@@ -23,6 +23,7 @@ export interface ProcessResult {
   success: boolean;
   stdout: string;
   stderr: string;
+  exitCode: number | null;
 }
 
 export interface RunCommandOptions {
@@ -126,6 +127,7 @@ export async function runCommand(
         success: code === 0,
         stdout,
         stderr,
+        exitCode: code,
       });
     });
 
