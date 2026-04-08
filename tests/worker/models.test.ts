@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   Phase,
   Priority,
-  Engine,
+  Agent,
   Autonomy,
   FailureCategory,
   repoFullName,
@@ -40,13 +40,13 @@ describe("Priority", () => {
   });
 });
 
-describe("Engine", () => {
+describe("Agent", () => {
   it("CLAUDE の値が 'claude' である", () => {
-    expect(Engine.CLAUDE).toBe("claude");
+    expect(Agent.CLAUDE).toBe("claude");
   });
 
   it("CODEX の値が 'codex' である", () => {
-    expect(Engine.CODEX).toBe("codex");
+    expect(Agent.CODEX).toBe("codex");
   });
 });
 
@@ -199,7 +199,7 @@ describe("型の構造テスト", () => {
     const executionConfig: ExecutionConfig = {
       maxParallel: 4,
       maxIssuesPerRepo: 5,
-      engine: Engine.CLAUDE,
+      agent: Agent.CLAUDE,
       autonomy: Autonomy.FULL,
       intervalMinutes: 60,
       language: "ja",

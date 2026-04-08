@@ -4,7 +4,7 @@ import {
   ProcessExecutionError,
 } from "./process.js";
 import type { ProcessResult, RunCommandOptions } from "./process.js";
-import { Autonomy, Engine } from "./models.js";
+import { Autonomy, Agent } from "./models.js";
 
 export class ExecutorError extends Error {
   constructor(message: string) {
@@ -28,7 +28,7 @@ export class ExecutorTimeoutError extends ExecutorError {
 const DEFAULT_TIMEOUT_MS = 3_600_000; // 60 minutes
 const BG_WAIT_CEILING_MS = 3_600_000; // 60 minutes
 
-export interface RunEngineOptions {
+export interface RunAgentOptions {
   readonly cwd?: string;
   readonly timeoutMs?: number;
   readonly autonomy?: Autonomy;
@@ -48,7 +48,7 @@ export interface RunEngineOptions {
  */
 export async function runClaude(
   prompt: string,
-  options?: RunEngineOptions,
+  options?: RunAgentOptions,
 ): Promise<ProcessResult> {
   const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
@@ -173,7 +173,7 @@ export function resolveAutonomyLogMessage(
  */
 export async function runCodex(
   prompt: string,
-  options?: RunEngineOptions,
+  options?: RunAgentOptions,
 ): Promise<ProcessResult> {
   const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
@@ -229,19 +229,19 @@ export function resolveCodexAutonomyFlags(autonomy: Autonomy): readonly string[]
 /**
  * エンジンに応じた CLI を実行するディスパッチ関数。
  */
-export async function runEngine(
-  engine: Engine,
+export async function runAgent(
+  agent: Agent,
   prompt: string,
-  options?: RunEngineOptions,
+  options?: RunAgentOptions,
 ): Promise<ProcessResult> {
-  switch (engine) {
-    case Engine.CLAUDE:
+  switch (agent) {
+    case Agent.CLAUDE:
       return runClaude(prompt, options);
-    case Engine.CODEX:
+    case Agent.CODEX:
       return runCodex(prompt, options);
     default: {
-      const _exhaustive: never = engine;
-      throw new Error(`Unknown engine: ${_exhaustive}`);
+      const _exhaustive: never = agent;
+      throw new Error(`Unknown agent: ${_exhaustive}`);
     }
   }
 }

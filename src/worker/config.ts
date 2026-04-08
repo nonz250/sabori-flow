@@ -3,7 +3,7 @@ import YAML from "yaml";
 
 import {
   Autonomy,
-  Engine,
+  Agent,
   type AppConfig,
   type ExecutionConfig,
   type RepositoryConfig,
@@ -413,7 +413,7 @@ function parseExecution(raw: unknown): Omit<ExecutionConfig, "language"> {
     return {
       maxParallel: 1,
       maxIssuesPerRepo: 1,
-      engine: Engine.CLAUDE,
+      agent: Agent.CLAUDE,
       autonomy: Autonomy.INTERACTIVE,
       intervalMinutes: 10,
       timeoutMinutes: TIMEOUT_MINUTES_DEFAULT,
@@ -470,20 +470,20 @@ function parseExecution(raw: unknown): Omit<ExecutionConfig, "language"> {
     );
   }
 
-  // engine
-  const rawEngine =
-    "engine" in record ? record["engine"] : Engine.CLAUDE;
+  // agent
+  const rawAgent =
+    "agent" in record ? record["agent"] : Agent.CLAUDE;
 
-  if (typeof rawEngine !== "string") {
+  if (typeof rawAgent !== "string") {
     throw new ConfigValidationError(
-      `execution.engine: must be a string, got ${typeof rawEngine}`,
+      `execution.agent: must be a string, got ${typeof rawAgent}`,
     );
   }
 
-  const validEngineValues = Object.values(Engine) as string[];
-  if (!validEngineValues.includes(rawEngine)) {
+  const validAgentValues = Object.values(Agent) as string[];
+  if (!validAgentValues.includes(rawAgent)) {
     throw new ConfigValidationError(
-      `execution.engine: must be one of: ${validEngineValues.join(", ")}; got '${rawEngine}'`,
+      `execution.agent: must be one of: ${validAgentValues.join(", ")}; got '${rawAgent}'`,
     );
   }
 
@@ -551,7 +551,7 @@ function parseExecution(raw: unknown): Omit<ExecutionConfig, "language"> {
   return {
     maxParallel: rawMaxParallel,
     maxIssuesPerRepo: rawMaxIssuesPerRepo,
-    engine: rawEngine as Engine,
+    agent: rawAgent as Agent,
     autonomy: rawAutonomy as Autonomy,
     intervalMinutes: rawIntervalMinutes,
     timeoutMinutes: rawTimeoutMinutes,

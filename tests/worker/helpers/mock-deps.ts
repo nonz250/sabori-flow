@@ -13,7 +13,7 @@ export function createMockPipelineDeps(
 ): PipelineDeps {
   return {
     buildPrompt: vi.fn().mockReturnValue("generated prompt"),
-    runEngine: vi.fn().mockResolvedValue({
+    runAgent: vi.fn().mockResolvedValue({
       success: true,
       stdout: "Claude output",
       stderr: "",

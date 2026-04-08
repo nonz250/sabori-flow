@@ -1,9 +1,9 @@
 import type { Language } from "../i18n/types.js";
 import type { Issue, IssueComment, PhaseLabels, RepositoryConfig, ExecutionConfig, FailureDiagnostics, StepResult, SpecPhaseLabels } from "./models.js";
-import { Autonomy, Engine, Phase, FailureCategory, repoFullName } from "./models.js";
+import { Autonomy, Agent, Phase, FailureCategory, repoFullName } from "./models.js";
 import type { ProcessResult } from "./process.js";
 import { buildPrompt, IMPL_NO_CHANGE_MARKER, IMPL_RESUME_PROMPTS } from "./prompt.js";
-import { runEngine, ExecutorTimeoutError } from "./executor.js";
+import { runAgent, ExecutorTimeoutError } from "./executor.js";
 import { applyLabelTransition } from "./label.js";
 import type { LabelTransition } from "./label.js";
 import {
@@ -37,9 +37,9 @@ const RESUME_OUTPUT_SEPARATOR = "\n\n--- resumed session ---\n\n";
 
 export interface PipelineDeps {
   buildPrompt: (issue: Issue, repoConfig: RepositoryConfig, language: Language, specContext?: string | null) => string;
-  runEngine: (
+  runAgent: (
     prompt: string,
-    options: { cwd: string; engine?: Engine; autonomy?: Autonomy; timeoutMs?: number; authToken?: string; continueSession?: boolean },
+    options: { cwd: string; agent?: Agent; autonomy?: Autonomy; timeoutMs?: number; authToken?: string; continueSession?: boolean },
   ) => Promise<ProcessResult>;
   applyLabelTransition: (
     repo: string,
@@ -80,7 +80,7 @@ export interface PipelineDeps {
 
 export const defaultDeps: PipelineDeps = {
   buildPrompt,
-  runEngine: (prompt, options) => runEngine(options.engine ?? Engine.CLAUDE, prompt, options),
+  runAgent: (prompt, options) => runAgent(options.agent ?? Agent.CLAUDE, prompt, options),
   applyLabelTransition,
   postSuccessComment,
   postFailureComment,
@@ -188,9 +188,9 @@ export async function processIssue(
 
         let result: ProcessResult;
         try {
-          result = await deps.runEngine(prompt, {
+          result = await deps.runAgent(prompt, {
             cwd: worktreePath,
-            engine: executionConfig.engine,
+            agent: executionConfig.agent,
             autonomy: executionConfig.autonomy,
             timeoutMs: executionConfig.timeoutMinutes * MS_PER_MINUTE,
             authToken: authToken ?? undefined,
@@ -689,9 +689,9 @@ async function resolveImplCompletion(
     // --continue resolves the conversation by cwd, and worktreePath is
     // unique per issue run (issue-<number>-<timestamp>), so concurrent
     // issues under max_parallel > 1 can never resume each other's session.
-    resumeResult = await deps.runEngine(IMPL_RESUME_PROMPTS[executionConfig.language], {
+    resumeResult = await deps.runAgent(IMPL_RESUME_PROMPTS[executionConfig.language], {
       cwd: worktreePath,
-      engine: executionConfig.engine,
+      agent: executionConfig.agent,
       autonomy: executionConfig.autonomy,
       timeoutMs: remainingMs,
       authToken: authToken ?? undefined,

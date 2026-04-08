@@ -18,12 +18,12 @@ export const Priority = {
 } as const;
 export type Priority = (typeof Priority)[keyof typeof Priority];
 
-/** CLI execution engine */
-export const Engine = {
+/** CLI execution agent */
+export const Agent = {
   CLAUDE: "claude",
   CODEX: "codex",
 } as const;
-export type Engine = (typeof Engine)[keyof typeof Engine];
+export type Agent = (typeof Agent)[keyof typeof Agent];
 
 /**
  * Autonomy level passed to the AI CLI agent.
@@ -133,7 +133,7 @@ export interface RepositoryConfig {
 export interface ExecutionConfig {
   readonly maxParallel: number;
   readonly maxIssuesPerRepo: number;
-  readonly engine: Engine;
+  readonly agent: Agent;
   readonly autonomy: Autonomy;
   readonly intervalMinutes: number;
   readonly timeoutMinutes: number;
