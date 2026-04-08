@@ -684,32 +684,32 @@ describe("loadConfig - execution validation", () => {
     );
   });
 
-  it("engine デフォルト値は 'claude'", () => {
+  it("agent デフォルト値は 'claude'", () => {
     mockYaml(VALID_YAML);
     const result = loadConfig("/path/to/config.yml");
-    expect(result.execution.engine).toBe("claude");
+    expect(result.execution.agent).toBe("claude");
   });
 
-  it("engine デフォルト値 (execution 省略)", () => {
+  it("agent デフォルト値 (execution 省略)", () => {
     mockYaml(VALID_YAML_NO_EXECUTION);
     const result = loadConfig("/path/to/config.yml");
-    expect(result.execution.engine).toBe("claude");
+    expect(result.execution.agent).toBe("claude");
   });
 
-  it("engine: 'codex' が正しくパースされる", () => {
+  it("agent: 'codex' が正しくパースされる", () => {
     const yaml = VALID_YAML.replace(
       "max_parallel: 4",
-      'max_parallel: 4\n  engine: "codex"',
+      'max_parallel: 4\n  agent: "codex"',
     );
     mockYaml(yaml);
     const result = loadConfig("/path/to/config.yml");
-    expect(result.execution.engine).toBe("codex");
+    expect(result.execution.agent).toBe("codex");
   });
 
-  it("engine に不正な文字列を指定するとエラーになる", () => {
+  it("agent に不正な文字列を指定するとエラーになる", () => {
     const yaml = VALID_YAML.replace(
       "max_parallel: 4",
-      'max_parallel: 4\n  engine: "invalid"',
+      'max_parallel: 4\n  agent: "invalid"',
     );
     mockYaml(yaml);
 
@@ -717,14 +717,14 @@ describe("loadConfig - execution validation", () => {
       ConfigValidationError,
     );
     expect(() => loadConfig("/path/to/config.yml")).toThrow(
-      /execution.engine: must be one of: claude, codex/,
+      /execution.agent: must be one of: claude, codex/,
     );
   });
 
-  it("engine に数値を指定するとエラーになる", () => {
+  it("agent に数値を指定するとエラーになる", () => {
     const yaml = VALID_YAML.replace(
       "max_parallel: 4",
-      "max_parallel: 4\n  engine: 1",
+      "max_parallel: 4\n  agent: 1",
     );
     mockYaml(yaml);
 
@@ -732,7 +732,7 @@ describe("loadConfig - execution validation", () => {
       ConfigValidationError,
     );
     expect(() => loadConfig("/path/to/config.yml")).toThrow(
-      /execution.engine: must be a string, got number/,
+      /execution.agent: must be a string, got number/,
     );
   });
 });

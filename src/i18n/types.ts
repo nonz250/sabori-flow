@@ -53,7 +53,7 @@ export interface MessageKeys {
   "prompt.validationAlphanumeric": string;
   "prompt.validationAbsolutePath": string;
   "prompt.autoImplConfirm": string;
-  "prompt.selectEngine": string;
+  "prompt.selectAgent": string;
   "prompt.intervalMinutes": string;
   "prompt.intervalMinutesValidation": string;
 

@@ -1,9 +1,9 @@
 import type { Language } from "../i18n/types.js";
 import type { Issue, PhaseLabels, RepositoryConfig, ExecutionConfig } from "./models.js";
-import { Autonomy, Engine, Phase, repoFullName } from "./models.js";
+import { Autonomy, Agent, Phase, repoFullName } from "./models.js";
 import type { ProcessResult } from "./process.js";
 import { buildPrompt } from "./prompt.js";
-import { runEngine } from "./executor.js";
+import { runAgent } from "./executor.js";
 import {
   transitionToInProgress,
   transitionToDone,
@@ -24,9 +24,9 @@ const logger = createLogger("pipeline");
 
 export interface PipelineDeps {
   buildPrompt: (issue: Issue, repoConfig: RepositoryConfig, language: Language) => string;
-  runEngine: (
+  runAgent: (
     prompt: string,
-    options: { cwd: string; engine?: Engine; autonomy?: Autonomy },
+    options: { cwd: string; agent?: Agent; autonomy?: Autonomy },
   ) => Promise<ProcessResult>;
   transitionToInProgress: (
     repo: string,
@@ -67,7 +67,7 @@ export interface PipelineDeps {
 
 export const defaultDeps: PipelineDeps = {
   buildPrompt,
-  runEngine: (prompt, options) => runEngine(options.engine ?? Engine.CLAUDE, prompt, options),
+  runAgent: (prompt, options) => runAgent(options.agent ?? Agent.CLAUDE, prompt, options),
   transitionToInProgress,
   transitionToDone,
   transitionToFailed,
@@ -149,23 +149,23 @@ export async function processIssue(
         }
 
         // 3-2. CLI execution (Level 2)
-        const engineName = executionConfig.engine === Engine.CODEX ? "Codex CLI" : "Claude Code CLI";
+        const agentName = executionConfig.agent === Agent.CODEX ? "Codex CLI" : "Claude Code CLI";
         let result: ProcessResult;
         try {
-          result = await deps.runEngine(prompt, {
+          result = await deps.runAgent(prompt, {
             cwd: worktreePath,
-            engine: executionConfig.engine,
+            agent: executionConfig.agent,
             autonomy: executionConfig.autonomy,
           });
         } catch (error: unknown) {
           logger.error(
             "Issue #%s: %s の実行に失敗しました [repo=%s]: %s",
             issue.number,
-            engineName,
+            agentName,
             repo,
             error,
           );
-          handleFailure(deps, repo, issue.number, phaseLabels, `${engineName} の実行に失敗しました`);
+          handleFailure(deps, repo, issue.number, phaseLabels, `${agentName} の実行に失敗しました`);
           return false;
         }
 
@@ -173,10 +173,10 @@ export async function processIssue(
           logger.error(
             "Issue #%s: %s が失敗ステータスを返しました [repo=%s]",
             issue.number,
-            engineName,
+            agentName,
             repo,
           );
-          handleFailure(deps, repo, issue.number, phaseLabels, `${engineName} がエラーを返しました`);
+          handleFailure(deps, repo, issue.number, phaseLabels, `${agentName} がエラーを返しました`);
           return false;
         }
 

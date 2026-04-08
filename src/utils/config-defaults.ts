@@ -20,5 +20,5 @@ export function getDefaultPriorityLabels(): string[] {
 }
 
 export function getDefaultExecution() {
-  return { max_parallel: 1, max_issues_per_repo: 1, engine: "claude", autonomy: "interactive", interval_minutes: 60 };
+  return { max_parallel: 1, max_issues_per_repo: 1, agent: "claude", autonomy: "interactive", interval_minutes: 60 };
 }

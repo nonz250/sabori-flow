@@ -14,10 +14,10 @@ import {
 } from "./helpers/repository-prompt.js";
 import { setLanguage, t } from "../i18n/index.js";
 import type { Language } from "../i18n/types.js";
-import type { Engine } from "../worker/models.js";
+import type { Agent } from "../worker/models.js";
 import { TEMPLATE_FILES } from "../worker/prompt.js";
 
-function buildConfigData(repos: RepositoryInput[], language: string, engine: string, intervalMinutes: number) {
+function buildConfigData(repos: RepositoryInput[], language: string, agent: string, intervalMinutes: number) {
   return {
     language,
     repositories: repos.map((r) => ({
@@ -28,7 +28,7 @@ function buildConfigData(repos: RepositoryInput[], language: string, engine: str
       labels: getDefaultLabels(),
       priority_labels: getDefaultPriorityLabels(),
     })),
-    execution: { ...getDefaultExecution(), engine, interval_minutes: intervalMinutes },
+    execution: { ...getDefaultExecution(), agent, interval_minutes: intervalMinutes },
   };
 }
 
@@ -97,9 +97,9 @@ export async function initCommand(): Promise<void> {
       })
     );
 
-    // engine 選択
-    const engine = await select<Engine>({
-      message: t("prompt.selectEngine"),
+    // agent 選択
+    const agent = await select<Agent>({
+      message: t("prompt.selectAgent"),
       choices: [
         { value: "claude", name: "Claude Code CLI" },
         { value: "codex", name: "OpenAI Codex CLI" },
@@ -121,7 +121,7 @@ export async function initCommand(): Promise<void> {
     const intervalMinutes = Number(intervalMinutesStr);
 
     // YAML 生成・書き込み
-    const config = buildConfigData(repos, language, engine, intervalMinutes);
+    const config = buildConfigData(repos, language, agent, intervalMinutes);
     const yamlStr = stringify(config);
     fs.writeFileSync(getConfigPath(), yamlStr, { encoding: "utf-8", mode: 0o600 });
 

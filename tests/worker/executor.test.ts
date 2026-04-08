@@ -22,7 +22,7 @@ vi.mock("../../src/worker/logger.js", () => ({
   createLogger: vi.fn(() => mockLoggerInstance),
 }));
 
-import { runClaude, runCodex, runEngine, ExecutorError, resolveClaudeAutonomyFlags, resolveCodexAutonomyFlags } from "../../src/worker/executor.js";
+import { runClaude, runCodex, runAgent, ExecutorError, resolveClaudeAutonomyFlags, resolveCodexAutonomyFlags } from "../../src/worker/executor.js";
 import {
   runCommand,
   ProcessTimeoutError,
@@ -473,22 +473,22 @@ describe("resolveCodexAutonomyFlags", () => {
 });
 
 // =========================================================================
-// runEngine
+// runAgent
 // =========================================================================
 
-describe("runEngine", () => {
+describe("runAgent", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("engine が 'claude' の場合 runClaude にディスパッチされる (stdin 経由)", async () => {
+  it("agent が 'claude' の場合 runClaude にディスパッチされる (stdin 経由)", async () => {
     mockedRunCommand.mockResolvedValue({
       success: true,
       stdout: "Claude output",
       stderr: "",
     });
 
-    const result = await runEngine("claude", "test prompt");
+    const result = await runAgent("claude", "test prompt");
 
     expect(result.success).toBe(true);
     expect(result.stdout).toBe("Claude output");
@@ -500,14 +500,14 @@ describe("runEngine", () => {
     );
   });
 
-  it("engine が 'codex' の場合 runCodex にディスパッチされる (位置引数)", async () => {
+  it("agent が 'codex' の場合 runCodex にディスパッチされる (位置引数)", async () => {
     mockedRunCommand.mockResolvedValue({
       success: true,
       stdout: "Codex output",
       stderr: "",
     });
 
-    const result = await runEngine("codex", "test prompt");
+    const result = await runAgent("codex", "test prompt");
 
     expect(result.success).toBe(true);
     expect(result.stdout).toBe("Codex output");
