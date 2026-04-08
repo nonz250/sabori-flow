@@ -9,7 +9,7 @@
 
 <p>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/Node.js-v20%2B-339933?logo=node.js&logoColor=white" alt="Node.js v20+">
+  <img src="https://img.shields.io/badge/Node.js-v24%2B-339933?logo=node.js&logoColor=white" alt="Node.js v24+">
   <img src="https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/Platform-macOS-000000?logo=apple&logoColor=white" alt="macOS">
 </p>
@@ -95,7 +95,7 @@ Claude には [Scheduled Tasks](https://code.claude.com/docs/en/scheduled-tasks)
 ## 前提条件
 
 - macOS
-- Node.js v20+
+- Node.js v24+
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (`claude`)
 - [GitHub CLI](https://cli.github.com/) (`gh`) -- 認証済みであること
 
