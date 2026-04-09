@@ -44,7 +44,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "commander": "^13.0.0",
+    "commander": "^14.0.3",
     "@inquirer/prompts": "^8.4.1",
     "yaml": "^2.7.0"
   },
