@@ -45,7 +45,7 @@
   },
   "dependencies": {
     "commander": "^13.0.0",
-    "@inquirer/prompts": "^7.0.0",
+    "@inquirer/prompts": "^8.4.1",
     "yaml": "^2.7.0"
   },
   "devDependencies": {
