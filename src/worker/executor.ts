@@ -16,7 +16,7 @@ export class ExecutorError extends Error {
   }
 }
 
-const DEFAULT_TIMEOUT_MS = 1_800_000; // 30 minutes
+const DEFAULT_TIMEOUT_MS = 3_600_000; // 60 minutes
 
 export interface RunClaudeOptions {
   readonly cwd?: string;

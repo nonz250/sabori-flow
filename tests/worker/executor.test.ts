@@ -85,7 +85,7 @@ describe("runClaude", () => {
         {
           input: "Fix the bug in module Y",
           cwd: undefined,
-          timeoutMs: 1_800_000,
+          timeoutMs: 3_600_000,
         },
       );
     });
@@ -94,7 +94,7 @@ describe("runClaude", () => {
   describe("タイムアウト", () => {
     it("ProcessTimeoutError 発生時に ExecutorError が throw される", async () => {
       mockedRunCommand.mockRejectedValue(
-        new ProcessTimeoutError(1_800_000),
+        new ProcessTimeoutError(3_600_000),
       );
 
       await expect(runClaude("Long running task")).rejects.toThrow(
@@ -104,17 +104,17 @@ describe("runClaude", () => {
 
     it("タイムアウトのエラーメッセージにタイムアウト値が含まれる", async () => {
       mockedRunCommand.mockRejectedValue(
-        new ProcessTimeoutError(1_800_000),
+        new ProcessTimeoutError(3_600_000),
       );
 
       await expect(runClaude("Long running task")).rejects.toThrow(
-        "timed out after 1800000ms",
+        "timed out after 3600000ms",
       );
     });
 
     it("ExecutorError は instanceof で判別できる", async () => {
       mockedRunCommand.mockRejectedValue(
-        new ProcessTimeoutError(1_800_000),
+        new ProcessTimeoutError(3_600_000),
       );
 
       try {
@@ -156,7 +156,7 @@ describe("runClaude", () => {
   });
 
   describe("デフォルトタイムアウト", () => {
-    it("タイムアウト未指定時にデフォルト値 1800000ms が渡される", async () => {
+    it("タイムアウト未指定時にデフォルト値 3600000ms が渡される", async () => {
       mockedRunCommand.mockResolvedValue({
         success: true,
         stdout: "",
@@ -166,7 +166,7 @@ describe("runClaude", () => {
       await runClaude("prompt text");
 
       const callOptions = mockedRunCommand.mock.calls[0][2];
-      expect(callOptions?.timeoutMs).toBe(1_800_000);
+      expect(callOptions?.timeoutMs).toBe(3_600_000);
     });
   });
 
