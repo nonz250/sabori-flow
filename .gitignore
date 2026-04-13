@@ -7,3 +7,4 @@ coverage/
 .sabori-flow-worktrees/
 config.yml
 .idea/
+.serena/
