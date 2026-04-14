@@ -2,19 +2,19 @@ import fs from "fs";
 import path from "path";
 import {
   PACKAGE_ROOT,
-  PLIST_TEMPLATE_PATH,
-  PLIST_DEST_DIR,
-  PLIST_DEST_PATH,
   getConfigPath,
   getLogsDir,
-  getBaseDir,
-  getPlistGeneratedPath,
 } from "../utils/paths.js";
 import { exec, commandExists, ShellError } from "../utils/shell.js";
-import { renderPlist } from "../utils/plist.js";
 import { setLanguage, t, loadLanguageFromConfig } from "../i18n/index.js";
 import { loadConfig, ConfigValidationError } from "../worker/config.js";
+import {
+  createScheduler,
+  UnsupportedPlatformError,
+  SystemdNotAvailableError,
+} from "../scheduler/index.js";
 
+const SECONDS_PER_MINUTE = 60;
 const STANDARD_PATHS = ["/usr/local/bin", "/usr/bin", "/bin"];
 const REQUIRED_COMMANDS = ["node", "git", "gh", "claude"];
 
@@ -27,7 +27,7 @@ function buildMinimalPath(): string {
         dirs.add(path.dirname(cmdPath));
       }
     } catch {
-      // コマンドが見つからない場合はスキップ
+      // skip if command not found
     }
   }
   return [...dirs].join(":");
@@ -49,7 +49,7 @@ export async function installCommand(
 ): Promise<void> {
   setLanguage(loadLanguageFromConfig(getConfigPath()));
 
-  // 1. config.yml チェック
+  // 1. config.yml check
   if (!fs.existsSync(getConfigPath())) {
     console.error(t("install.configNotFound"));
     console.error(
@@ -58,7 +58,7 @@ export async function installCommand(
     return;
   }
 
-  // 2. コマンド存在チェックと programArguments の構築
+  // 2. Command existence check and programArguments construction
   let programArguments: readonly string[];
 
   if (options.local) {
@@ -84,33 +84,28 @@ export async function installCommand(
   }
 
   try {
-    // 3. config.yml を読み込んで interval_minutes を取得
+    // 3. Create scheduler instance
+    const scheduler = createScheduler();
+
+    // 4. Load config and get interval_minutes
     const config = loadConfig(getConfigPath());
     const intervalMinutes = config.execution.intervalMinutes;
-    const startInterval = intervalMinutes * 60;
+    const intervalSeconds = intervalMinutes * SECONDS_PER_MINUTE;
 
-    // 4. logs ディレクトリ作成
+    // 5. Create logs directory
     const logDir = getLogsDir();
     fs.mkdirSync(logDir, { recursive: true, mode: 0o700 });
 
-    // 4. plist 生成
-    console.log(t("install.generatingPlist"));
-    fs.mkdirSync(getBaseDir(), { recursive: true, mode: 0o700 });
-    const template = fs.readFileSync(PLIST_TEMPLATE_PATH, "utf-8");
-    const plist = renderPlist(template, {
+    // 6. Generate configuration and register
+    console.log(t("install.generatingConfig", { scheduler: scheduler.name }));
+    console.log(t("install.registeringScheduler", { scheduler: scheduler.name }));
+
+    scheduler.install({
+      intervalSeconds,
       programArguments,
       path: buildMinimalPath(),
       logDir,
-      startInterval,
     });
-    fs.writeFileSync(getPlistGeneratedPath(), plist, { encoding: "utf-8", mode: 0o600 });
-
-    // 5. launchd 登録
-    console.log(t("install.registeringLaunchd"));
-    fs.mkdirSync(PLIST_DEST_DIR, { recursive: true });
-    fs.copyFileSync(getPlistGeneratedPath(), PLIST_DEST_PATH);
-    fs.chmodSync(PLIST_DEST_PATH, 0o600);
-    exec("launchctl", ["load", PLIST_DEST_PATH]);
 
     if (options.local) {
       console.log(
@@ -124,6 +119,10 @@ export async function installCommand(
   } catch (error) {
     if (error instanceof ConfigValidationError) {
       console.error(t("install.configValidationError", { message: error.message }));
+    } else if (error instanceof UnsupportedPlatformError) {
+      console.error(`Error: ${error.message}`);
+    } else if (error instanceof SystemdNotAvailableError) {
+      console.error(`Error: ${error.message}`);
     } else if (error instanceof ShellError) {
       console.error(`Error: ${error.message}`);
       if (error.stderr) console.error(error.stderr);

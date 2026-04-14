@@ -40,8 +40,8 @@ const jaMessages: MessageKeys = {
     "Error: node が見つかりません。Node.js をインストールしてください。",
   "install.pathResolveFailed":
     "Error: {label} のパスを正しく解決できませんでした。",
-  "install.generatingPlist": "plist を生成中...",
-  "install.registeringLaunchd": "launchd に登録中...",
+  "install.generatingConfig": "{scheduler} の設定を生成中...",
+  "install.registeringScheduler": "{scheduler} に登録中...",
   "install.localComplete":
     "\nローカルビルドのワーカーを登録しました。{minutes}分ごとにワーカーが実行されます。",
   "install.complete":
@@ -51,7 +51,8 @@ const jaMessages: MessageKeys = {
 
   // uninstall command
   "uninstall.deleted": "削除しました: {path}",
-  "uninstall.notRegistered": "LaunchAgent は登録されていません。",
+  "uninstall.notRegistered": "スケジューラは登録されていません。",
+  "uninstall.unregistered": "{scheduler} の登録を解除しました。",
   "uninstall.complete": "\nアンインストールが完了しました。",
   "uninstall.confirmDeleteAll":
     "{dir} を完全に削除しますか? (config.yml, プロンプト, ログを含む)",
@@ -74,14 +75,14 @@ const jaMessages: MessageKeys = {
   // cli descriptions
   "cli.descriptionAdd": "既存の config.yml にリポジトリを追加します",
   "cli.descriptionInit": "対話的に config.yml を作成します",
-  "cli.descriptionInstall": "plist 生成 + launchd 登録を行います",
+  "cli.descriptionInstall": "スケジューラの設定を生成し登録します",
   "cli.optionLocal": "ローカルビルドのワーカーを登録します",
-  "cli.descriptionUninstall": "launchd の登録を解除します",
+  "cli.descriptionUninstall": "スケジューラの登録を解除します",
   "cli.descriptionReinstall":
-    "launchd の登録を再インストールします（解除 + plist 再生成 + 登録）",
+    "スケジューラの登録を再インストールします（解除 + 再生成 + 登録）",
   "cli.optionReinstallLocal": "ローカルビルドのワーカーを登録します",
   "cli.descriptionWorker":
-    "ワーカーを実行します（通常は launchd から自動的に呼び出されます）",
+    "ワーカーを実行します（通常はスケジューラから自動的に呼び出されます）",
 };
 
 const enMessages: MessageKeys = {
@@ -117,8 +118,8 @@ const enMessages: MessageKeys = {
     "Error: node not found. Please install Node.js.",
   "install.pathResolveFailed":
     "Error: Failed to resolve path for {label}.",
-  "install.generatingPlist": "Generating plist...",
-  "install.registeringLaunchd": "Registering with launchd...",
+  "install.generatingConfig": "Generating {scheduler} configuration...",
+  "install.registeringScheduler": "Registering with {scheduler}...",
   "install.localComplete":
     "\nLocal build worker registered. The worker will run every {minutes} minutes.",
   "install.complete":
@@ -128,7 +129,8 @@ const enMessages: MessageKeys = {
 
   // uninstall command
   "uninstall.deleted": "Deleted: {path}",
-  "uninstall.notRegistered": "LaunchAgent is not registered.",
+  "uninstall.notRegistered": "Scheduler is not registered.",
+  "uninstall.unregistered": "Unregistered from {scheduler}.",
   "uninstall.complete": "\nUninstall complete.",
   "uninstall.confirmDeleteAll":
     "Delete {dir} completely? (includes config.yml, prompts, and logs)",
@@ -150,14 +152,14 @@ const enMessages: MessageKeys = {
   // cli descriptions
   "cli.descriptionAdd": "Add a repository to existing config.yml",
   "cli.descriptionInit": "Create config.yml interactively",
-  "cli.descriptionInstall": "Generate plist and register with launchd",
+  "cli.descriptionInstall": "Generate scheduler configuration and register",
   "cli.optionLocal": "Register local build worker",
-  "cli.descriptionUninstall": "Unregister from launchd",
+  "cli.descriptionUninstall": "Unregister from scheduler",
   "cli.descriptionReinstall":
-    "Reinstall launchd registration (unregister + regenerate plist + register)",
+    "Reinstall scheduler registration (unregister + regenerate + register)",
   "cli.optionReinstallLocal": "Register local build worker",
   "cli.descriptionWorker":
-    "Run the worker (normally called automatically by launchd)",
+    "Run the worker (normally called automatically by the scheduler)",
 };
 
 export const messages: Record<Language, MessageKeys> = {

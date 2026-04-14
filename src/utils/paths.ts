@@ -46,6 +46,20 @@ export const PLIST_TEMPLATE_PATH = path.join(
   `${PLIST_LABEL}.plist.template`,
 );
 
+/** systemd service テンプレートのパス（パッケージ同梱） */
+export const SYSTEMD_SERVICE_TEMPLATE_PATH = path.join(
+  PACKAGE_ROOT,
+  "systemd",
+  "sabori-flow.service.template",
+);
+
+/** systemd timer テンプレートのパス（パッケージ同梱） */
+export const SYSTEMD_TIMER_TEMPLATE_PATH = path.join(
+  PACKAGE_ROOT,
+  "systemd",
+  "sabori-flow.timer.template",
+);
+
 // ---------- ユーザーデータ統合ディレクトリ ----------
 
 /** ~/.sabori-flow — 全ユーザーデータの基底ディレクトリ */
