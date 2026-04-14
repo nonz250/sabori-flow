@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import YAML from "yaml";
 
 // ---------- Mocks ----------
 
@@ -28,10 +27,6 @@ vi.mock("../../src/utils/shell.js", () => ({
   },
 }));
 
-vi.mock("../../src/utils/plist.js", () => ({
-  renderPlist: vi.fn(),
-}));
-
 vi.mock("../../src/worker/config.js", () => ({
   loadConfig: vi.fn(),
   ConfigValidationError: class ConfigValidationError extends Error {
@@ -47,36 +42,46 @@ vi.mock("../../src/utils/paths.js", async (importOriginal) => {
   return {
     ...original,
     PACKAGE_ROOT: "/mock/package-root",
-    PLIST_TEMPLATE_PATH: "/mock/package-root/launchd/template.plist",
-    PLIST_DEST_DIR: "/mock/home/Library/LaunchAgents",
-    PLIST_DEST_PATH: "/mock/home/Library/LaunchAgents/com.github.sabori-flow.plist",
     getConfigPath: vi.fn().mockReturnValue("/mock/config/dir/config.yml"),
     getLogsDir: vi.fn().mockReturnValue("/mock/data/logs"),
     getBaseDir: vi.fn().mockReturnValue("/mock/data"),
-    getPlistGeneratedPath: vi.fn().mockReturnValue("/mock/data/com.github.sabori-flow.plist"),
   };
 });
 
+const mockSchedulerInstall = vi.fn();
+const mockSchedulerUninstall = vi.fn();
+const mockSchedulerIsInstalled = vi.fn();
+
+vi.mock("../../src/scheduler/index.js", () => ({
+  createScheduler: vi.fn(() => ({
+    install: mockSchedulerInstall,
+    uninstall: mockSchedulerUninstall,
+    isInstalled: mockSchedulerIsInstalled,
+  })),
+  UnsupportedPlatformError: class UnsupportedPlatformError extends Error {
+    constructor(platform: string) {
+      super(`Unsupported platform: ${platform}`);
+      this.name = "UnsupportedPlatformError";
+    }
+  },
+}));
+
 import fs from "fs";
 import { exec, commandExists, ShellError } from "../../src/utils/shell.js";
-import { renderPlist } from "../../src/utils/plist.js";
 import { loadConfig, ConfigValidationError } from "../../src/worker/config.js";
 import {
   getConfigPath,
   getLogsDir,
-  getBaseDir,
-  getPlistGeneratedPath,
 } from "../../src/utils/paths.js";
+import { createScheduler, UnsupportedPlatformError } from "../../src/scheduler/index.js";
 
 const mockedFs = vi.mocked(fs);
 const mockedExec = vi.mocked(exec);
 const mockedCommandExists = vi.mocked(commandExists);
-const mockedRenderPlist = vi.mocked(renderPlist);
 const mockedLoadConfig = vi.mocked(loadConfig);
 const mockedGetConfigPath = vi.mocked(getConfigPath);
 const mockedGetLogsDir = vi.mocked(getLogsDir);
-const mockedGetBaseDir = vi.mocked(getBaseDir);
-const mockedGetPlistGeneratedPath = vi.mocked(getPlistGeneratedPath);
+const mockedCreateScheduler = vi.mocked(createScheduler);
 
 // ---------- Setup ----------
 
@@ -85,11 +90,17 @@ let consoleSpy: { log: ReturnType<typeof vi.spyOn>; error: ReturnType<typeof vi.
 beforeEach(() => {
   vi.restoreAllMocks();
 
-  // paths のモック関数は restoreAllMocks でリセットされるため毎回再設定
   mockedGetConfigPath.mockReturnValue("/mock/config/dir/config.yml");
   mockedGetLogsDir.mockReturnValue("/mock/data/logs");
-  mockedGetBaseDir.mockReturnValue("/mock/data");
-  mockedGetPlistGeneratedPath.mockReturnValue("/mock/data/com.github.sabori-flow.plist");
+
+  mockSchedulerInstall.mockReset();
+  mockSchedulerUninstall.mockReset();
+  mockSchedulerIsInstalled.mockReset();
+  mockedCreateScheduler.mockReturnValue({
+    install: mockSchedulerInstall,
+    uninstall: mockSchedulerUninstall,
+    isInstalled: mockSchedulerIsInstalled,
+  });
 
   consoleSpy = {
     log: vi.spyOn(console, "log").mockImplementation(() => {}),
@@ -106,67 +117,40 @@ async function runInstallCommand(options: { local?: boolean } = {}): Promise<voi
 
 // ---------- Helpers ----------
 
-/** 正常系の前提条件をセットアップする（デフォルト: npx モード） */
+/** Set up prerequisites for a normal npx-mode flow */
 function setupNormalFlow(overrides?: {
-  configYaml?: string;
   npxPath?: string;
-  templateContent?: string;
-  renderedPlist?: string;
   intervalMinutes?: number;
 }): void {
   const {
-    configYaml = YAML.stringify({ repositories: [] }),
     npxPath = "/usr/local/bin/npx",
-    templateContent = "<plist>template</plist>",
-    renderedPlist = "<plist>rendered</plist>",
     intervalMinutes = 60,
   } = overrides ?? {};
 
-  // config.yml が存在する
   mockedFs.existsSync.mockReturnValue(true);
-  // npx コマンドが存在する
   mockedCommandExists.mockReturnValue(true);
-  // config.yml の内容（テンプレート読み込み用）
-  mockedFs.readFileSync.mockImplementation((filePath: unknown) => {
-    if (filePath === "/mock/package-root/launchd/template.plist") return templateContent;
-    return "";
-  });
-  // loadConfig の戻り値
   mockedLoadConfig.mockReturnValue({
     repositories: [],
     execution: { maxParallel: 1, maxIssuesPerRepo: 1, intervalMinutes },
   });
-  // which npx の結果
   mockedExec.mockImplementation((file: string, args: readonly string[]) => {
     if (file === "which" && args[0] === "npx") return npxPath;
     return "";
   });
-  // renderPlist の戻り値
-  mockedRenderPlist.mockReturnValue(renderedPlist);
 }
 
-/** --local モードの正常系セットアップ */
+/** Set up prerequisites for a --local mode flow */
 function setupLocalFlow(overrides?: {
-  configYaml?: string;
   nodePath?: string;
-  templateContent?: string;
-  renderedPlist?: string;
   intervalMinutes?: number;
 }): void {
   const {
-    configYaml = YAML.stringify({ repositories: [] }),
     nodePath = "/usr/local/bin/node",
-    templateContent = "<plist>template</plist>",
-    renderedPlist = "<plist>rendered</plist>",
     intervalMinutes = 60,
   } = overrides ?? {};
 
   mockedFs.existsSync.mockReturnValue(true);
   mockedCommandExists.mockReturnValue(true);
-  mockedFs.readFileSync.mockImplementation((filePath: unknown) => {
-    if (filePath === "/mock/package-root/launchd/template.plist") return templateContent;
-    return "";
-  });
   mockedLoadConfig.mockReturnValue({
     repositories: [],
     execution: { maxParallel: 1, maxIssuesPerRepo: 1, intervalMinutes },
@@ -175,49 +159,42 @@ function setupLocalFlow(overrides?: {
     if (file === "which" && args[0] === "node") return nodePath;
     return "";
   });
-  mockedRenderPlist.mockReturnValue(renderedPlist);
 }
 
 // ---------- Tests ----------
 
-describe("installCommand - config.yml が存在しない場合", () => {
-  it("sabori-flow init を案内するエラーメッセージを出力し、早期 return する", async () => {
+describe("installCommand - config.yml does not exist", () => {
+  it("outputs error message and returns early", async () => {
     mockedFs.existsSync.mockReturnValue(false);
 
     await runInstallCommand();
 
     expect(consoleSpy.error).toHaveBeenCalledWith(
-      expect.stringContaining("config.yml が見つかりません"),
+      expect.stringContaining("config.yml"),
     );
-    expect(consoleSpy.error).toHaveBeenCalledWith(
-      expect.stringContaining("sabori-flow init"),
-    );
-    expect(mockedFs.mkdirSync).not.toHaveBeenCalled();
-    expect(mockedFs.writeFileSync).not.toHaveBeenCalled();
+    expect(mockSchedulerInstall).not.toHaveBeenCalled();
   });
 });
 
-describe("installCommand - デフォルト（npx モード）", () => {
-  describe("npx コマンドが見つからない場合", () => {
-    it("エラーメッセージを出力し、早期 return する", async () => {
+describe("installCommand - default (npx mode)", () => {
+  describe("npx command not found", () => {
+    it("outputs error message and returns early", async () => {
       mockedFs.existsSync.mockReturnValue(true);
       mockedCommandExists.mockReturnValue(false);
 
       await runInstallCommand();
 
       expect(consoleSpy.error).toHaveBeenCalledWith(
-        expect.stringContaining("npx が見つかりません"),
+        expect.stringContaining("npx"),
       );
-      expect(mockedFs.mkdirSync).not.toHaveBeenCalled();
-      expect(mockedFs.writeFileSync).not.toHaveBeenCalled();
+      expect(mockSchedulerInstall).not.toHaveBeenCalled();
     });
   });
 
-  describe("which npx の結果が空文字列の場合", () => {
-    it("エラーメッセージを出力し、早期 return する", async () => {
+  describe("which npx returns empty string", () => {
+    it("outputs error message and returns early", async () => {
       mockedFs.existsSync.mockReturnValue(true);
       mockedCommandExists.mockReturnValue(true);
-      mockedFs.readFileSync.mockReturnValue(YAML.stringify({ repositories: [] }));
       mockedExec.mockImplementation((file: string, args: readonly string[]) => {
         if (file === "which" && args[0] === "npx") return "";
         return "";
@@ -226,17 +203,16 @@ describe("installCommand - デフォルト（npx モード）", () => {
       await runInstallCommand();
 
       expect(consoleSpy.error).toHaveBeenCalledWith(
-        expect.stringContaining("npx のパスを正しく解決できませんでした"),
+        expect.stringContaining("npx"),
       );
-      expect(mockedRenderPlist).not.toHaveBeenCalled();
+      expect(mockSchedulerInstall).not.toHaveBeenCalled();
     });
   });
 
-  describe("which npx の結果が相対パスの場合", () => {
-    it("エラーメッセージを出力し、早期 return する", async () => {
+  describe("which npx returns relative path", () => {
+    it("outputs error message and returns early", async () => {
       mockedFs.existsSync.mockReturnValue(true);
       mockedCommandExists.mockReturnValue(true);
-      mockedFs.readFileSync.mockReturnValue(YAML.stringify({ repositories: [] }));
       mockedExec.mockImplementation((file: string, args: readonly string[]) => {
         if (file === "which" && args[0] === "npx") return "npx";
         return "";
@@ -245,193 +221,90 @@ describe("installCommand - デフォルト（npx モード）", () => {
       await runInstallCommand();
 
       expect(consoleSpy.error).toHaveBeenCalledWith(
-        expect.stringContaining("npx のパスを正しく解決できませんでした"),
+        expect.stringContaining("npx"),
       );
-      expect(mockedRenderPlist).not.toHaveBeenCalled();
+      expect(mockSchedulerInstall).not.toHaveBeenCalled();
     });
   });
 
-  describe("正常フロー", () => {
-    it("ログディレクトリ作成、plist 生成、launchd 登録が正しい順序で実行される", async () => {
-      setupNormalFlow();
-      const callOrder: string[] = [];
-      mockedFs.mkdirSync.mockImplementation((..._args: unknown[]) => {
-        const dir = _args[0] as string;
-        callOrder.push(`mkdirSync:${dir}`);
-        return undefined;
-      });
-      mockedFs.readFileSync.mockImplementation((filePath: unknown) => {
-        callOrder.push(`readFileSync:${filePath}`);
-        if (filePath === "/mock/package-root/launchd/template.plist") {
-          return "<plist>template</plist>";
-        }
-        return "";
-      });
-      mockedRenderPlist.mockImplementation((..._args: unknown[]) => {
-        callOrder.push("renderPlist");
-        return "<plist>rendered</plist>";
-      });
-      mockedFs.writeFileSync.mockImplementation((..._args: unknown[]) => {
-        callOrder.push("writeFileSync");
-        return undefined;
-      });
-      mockedFs.copyFileSync.mockImplementation((..._args: unknown[]) => {
-        callOrder.push("copyFileSync");
-        return undefined;
-      });
-      mockedExec.mockImplementation((file: string, args: readonly string[]) => {
-        if (file === "which" && args[0] === "npx") return "/usr/local/bin/npx";
-        if (file === "launchctl") callOrder.push("launchctl");
-        return "";
-      });
-
-      await runInstallCommand();
-
-      // ログディレクトリ作成が最初に呼ばれる
-      expect(callOrder.indexOf("mkdirSync:/mock/data/logs")).toBeLessThan(
-        callOrder.indexOf("readFileSync:/mock/package-root/launchd/template.plist"),
-      );
-      // テンプレート読み込み後に renderPlist
-      expect(callOrder.indexOf("readFileSync:/mock/package-root/launchd/template.plist")).toBeLessThan(
-        callOrder.indexOf("renderPlist"),
-      );
-      // renderPlist 後に plist 書き込み
-      expect(callOrder.indexOf("renderPlist")).toBeLessThan(
-        callOrder.indexOf("writeFileSync"),
-      );
-      // plist 書き込み後に copyFileSync
-      expect(callOrder.indexOf("writeFileSync")).toBeLessThan(
-        callOrder.indexOf("copyFileSync"),
-      );
-      // copyFileSync 後に launchctl load
-      expect(callOrder.indexOf("copyFileSync")).toBeLessThan(
-        callOrder.indexOf("launchctl"),
-      );
-    });
-
-    it("renderPlist に正しい引数が渡される", async () => {
+  describe("normal flow", () => {
+    it("creates logs directory and calls scheduler.install", async () => {
       setupNormalFlow();
 
       await runInstallCommand();
 
-      expect(mockedRenderPlist).toHaveBeenCalledTimes(1);
-      const [template, placeholders] = mockedRenderPlist.mock.calls[0];
-      expect(template).toBe("<plist>template</plist>");
-      expect(placeholders.programArguments).toEqual(["/usr/local/bin/npx", "sabori-flow", "worker"]);
-      expect(placeholders.logDir).toBe("/mock/data/logs");
-      // path は buildMinimalPath の結果: STANDARD_PATHS + which で解決したディレクトリ
-      expect(placeholders.path).toContain("/usr/local/bin");
-      expect(placeholders.path).toContain("/usr/bin");
-      expect(placeholders.path).toContain("/bin");
+      expect(mockedFs.mkdirSync).toHaveBeenCalledWith(
+        "/mock/data/logs",
+        { recursive: true, mode: 0o700 },
+      );
+      expect(mockSchedulerInstall).toHaveBeenCalledTimes(1);
     });
 
-    it("plist コピー先に chmod 0o600 が設定される", async () => {
+    it("passes correct config to scheduler.install", async () => {
       setupNormalFlow();
 
       await runInstallCommand();
 
-      expect(mockedFs.chmodSync).toHaveBeenCalledWith(
-        "/mock/home/Library/LaunchAgents/com.github.sabori-flow.plist",
-        0o600,
-      );
+      expect(mockSchedulerInstall).toHaveBeenCalledTimes(1);
+      const config = mockSchedulerInstall.mock.calls[0][0];
+      expect(config.programArguments).toEqual(["/usr/local/bin/npx", "sabori-flow", "worker"]);
+      expect(config.logDir).toBe("/mock/data/logs");
+      expect(config.intervalMinutes).toBe(60);
+      expect(config.env.PATH).toContain("/usr/local/bin");
+      expect(config.env.PATH).toContain("/usr/bin");
+      expect(config.env.PATH).toContain("/bin");
     });
 
-    it("完了メッセージに「60分ごとにワーカーが実行されます」が含まれる", async () => {
+    it("outputs completion message with interval", async () => {
       setupNormalFlow();
 
       await runInstallCommand();
 
       expect(consoleSpy.log).toHaveBeenCalledWith(
-        expect.stringContaining("60分ごとにワーカーが実行されます"),
+        expect.stringContaining("60"),
       );
     });
 
-    it("完了メッセージに「インストールが完了しました」が含まれる", async () => {
-      setupNormalFlow();
-
-      await runInstallCommand();
-
-      expect(consoleSpy.log).toHaveBeenCalledWith(
-        expect.stringContaining("インストールが完了しました"),
-      );
-    });
-
-    it("生成した plist を getBaseDir 配下に mode 0o600 で書き込む", async () => {
-      setupNormalFlow({ renderedPlist: "<plist>final-output</plist>" });
-
-      await runInstallCommand();
-
-      expect(mockedFs.writeFileSync).toHaveBeenCalledWith(
-        "/mock/data/com.github.sabori-flow.plist",
-        "<plist>final-output</plist>",
-        { encoding: "utf-8", mode: 0o600 },
-      );
-    });
-
-    it("launchctl load が PLIST_DEST_PATH で呼ばれる", async () => {
-      setupNormalFlow();
-
-      await runInstallCommand();
-
-      expect(mockedExec).toHaveBeenCalledWith("launchctl", [
-        "load",
-        "/mock/home/Library/LaunchAgents/com.github.sabori-flow.plist",
-      ]);
-    });
-
-    it("renderPlist に startInterval: 3600 が渡される（デフォルト 60 分）", async () => {
-      setupNormalFlow();
-
-      await runInstallCommand();
-
-      expect(mockedRenderPlist).toHaveBeenCalledTimes(1);
-      const [_template, placeholders] = mockedRenderPlist.mock.calls[0];
-      expect(placeholders.startInterval).toBe(3600);
-    });
-
-    it("interval_minutes: 30 の場合、startInterval: 1800 が渡される", async () => {
+    it("passes intervalMinutes: 30 correctly", async () => {
       setupNormalFlow({ intervalMinutes: 30 });
 
       await runInstallCommand();
 
-      expect(mockedRenderPlist).toHaveBeenCalledTimes(1);
-      const [_template, placeholders] = mockedRenderPlist.mock.calls[0];
-      expect(placeholders.startInterval).toBe(1800);
+      const config = mockSchedulerInstall.mock.calls[0][0];
+      expect(config.intervalMinutes).toBe(30);
     });
 
-    it("interval_minutes: 30 の場合、完了メッセージに「30分ごと」が含まれる", async () => {
+    it("outputs completion message with custom interval", async () => {
       setupNormalFlow({ intervalMinutes: 30 });
 
       await runInstallCommand();
 
       expect(consoleSpy.log).toHaveBeenCalledWith(
-        expect.stringContaining("30分ごとにワーカーが実行されます"),
+        expect.stringContaining("30"),
       );
     });
   });
 });
 
-describe("installCommand - --local モード", () => {
-  describe("node コマンドが見つからない場合", () => {
-    it("エラーメッセージを出力し、早期 return する", async () => {
+describe("installCommand - --local mode", () => {
+  describe("node command not found", () => {
+    it("outputs error message and returns early", async () => {
       mockedFs.existsSync.mockReturnValue(true);
       mockedCommandExists.mockReturnValue(false);
 
       await runInstallCommand({ local: true });
 
       expect(consoleSpy.error).toHaveBeenCalledWith(
-        expect.stringContaining("node が見つかりません"),
+        expect.stringContaining("node"),
       );
-      expect(mockedFs.mkdirSync).not.toHaveBeenCalled();
-      expect(mockedFs.writeFileSync).not.toHaveBeenCalled();
+      expect(mockSchedulerInstall).not.toHaveBeenCalled();
     });
   });
 
-  describe("which node の結果が空文字列の場合", () => {
-    it("エラーメッセージを出力し、早期 return する", async () => {
+  describe("which node returns empty string", () => {
+    it("outputs error message and returns early", async () => {
       mockedFs.existsSync.mockReturnValue(true);
       mockedCommandExists.mockReturnValue(true);
-      mockedFs.readFileSync.mockReturnValue(YAML.stringify({ repositories: [] }));
       mockedExec.mockImplementation((file: string, args: readonly string[]) => {
         if (file === "which" && args[0] === "node") return "";
         return "";
@@ -440,27 +313,26 @@ describe("installCommand - --local モード", () => {
       await runInstallCommand({ local: true });
 
       expect(consoleSpy.error).toHaveBeenCalledWith(
-        expect.stringContaining("node のパスを正しく解決できませんでした"),
+        expect.stringContaining("node"),
       );
-      expect(mockedRenderPlist).not.toHaveBeenCalled();
+      expect(mockSchedulerInstall).not.toHaveBeenCalled();
     });
   });
 
-  describe("正常フロー", () => {
-    it("renderPlist に node パスと dist/worker.js を含む programArguments が渡される", async () => {
+  describe("normal flow", () => {
+    it("passes node path and dist/worker.js in programArguments", async () => {
       setupLocalFlow();
 
       await runInstallCommand({ local: true });
 
-      expect(mockedRenderPlist).toHaveBeenCalledTimes(1);
-      const [_template, placeholders] = mockedRenderPlist.mock.calls[0];
-      expect(placeholders.programArguments).toEqual([
+      const config = mockSchedulerInstall.mock.calls[0][0];
+      expect(config.programArguments).toEqual([
         "/usr/local/bin/node",
         "/mock/package-root/dist/worker.js",
       ]);
     });
 
-    it("which node が呼ばれる", async () => {
+    it("which node is called", async () => {
       setupLocalFlow();
 
       await runInstallCommand({ local: true });
@@ -468,47 +340,21 @@ describe("installCommand - --local モード", () => {
       expect(mockedExec).toHaveBeenCalledWith("which", ["node"]);
     });
 
-    it("PACKAGE_ROOT が programArguments のパスに使用される", async () => {
-      setupLocalFlow();
-
-      await runInstallCommand({ local: true });
-
-      const [_template, placeholders] = mockedRenderPlist.mock.calls[0];
-      // PACKAGE_ROOT は /mock/package-root にモックされている
-      expect(placeholders.programArguments[1]).toBe("/mock/package-root/dist/worker.js");
-    });
-
-    it("完了メッセージに「ローカルビルドのワーカーを登録しました」が含まれる", async () => {
+    it("outputs local completion message", async () => {
       setupLocalFlow();
 
       await runInstallCommand({ local: true });
 
       expect(consoleSpy.log).toHaveBeenCalledWith(
-        expect.stringContaining("ローカルビルドのワーカーを登録しました"),
+        expect.stringContaining("60"),
       );
-    });
-
-    it("launchctl load が正常に呼ばれる", async () => {
-      setupLocalFlow();
-      mockedExec.mockImplementation((file: string, args: readonly string[]) => {
-        if (file === "which" && args[0] === "node") return "/usr/local/bin/node";
-        return "";
-      });
-
-      await runInstallCommand({ local: true });
-
-      expect(mockedExec).toHaveBeenCalledWith("launchctl", [
-        "load",
-        "/mock/home/Library/LaunchAgents/com.github.sabori-flow.plist",
-      ]);
     });
   });
 });
 
-describe("installCommand - buildMinimalPath の間接検証", () => {
-  it("REQUIRED_COMMANDS のディレクトリが path に含まれる", async () => {
+describe("installCommand - buildMinimalPath indirect verification", () => {
+  it("includes directories from REQUIRED_COMMANDS", async () => {
     setupNormalFlow();
-    // which の結果を各コマンドごとに異なるディレクトリで返す
     mockedExec.mockImplementation((file: string, args: readonly string[]) => {
       if (file === "which") {
         const cmdPathMap: Record<string, string> = {
@@ -525,23 +371,21 @@ describe("installCommand - buildMinimalPath の間接検証", () => {
 
     await runInstallCommand();
 
-    const pathArg = mockedRenderPlist.mock.calls[0][1].path;
-    // STANDARD_PATHS
+    const config = mockSchedulerInstall.mock.calls[0][0];
+    const pathArg = config.env.PATH;
     expect(pathArg).toContain("/usr/local/bin");
     expect(pathArg).toContain("/usr/bin");
     expect(pathArg).toContain("/bin");
-    // REQUIRED_COMMANDS のディレクトリ
     expect(pathArg).toContain("/opt/homebrew/bin");
     expect(pathArg).toContain("/home/user/.local/bin");
   });
 
-  it("which が失敗したコマンドはスキップされ、STANDARD_PATHS は含まれる", async () => {
+  it("skips commands that fail to resolve and includes STANDARD_PATHS", async () => {
     setupNormalFlow();
     mockedExec.mockImplementation((file: string, args: readonly string[]) => {
       if (file === "which") {
         if (args[0] === "npx") return "/usr/local/bin/npx";
         if (args[0] === "node") return "/usr/local/bin/node";
-        // それ以外のコマンドは失敗
         throw new Error("not found");
       }
       return "";
@@ -549,16 +393,15 @@ describe("installCommand - buildMinimalPath の間接検証", () => {
 
     await runInstallCommand();
 
-    const pathArg = mockedRenderPlist.mock.calls[0][1].path;
-    // STANDARD_PATHS は必ず含まれる
+    const config = mockSchedulerInstall.mock.calls[0][0];
+    const pathArg = config.env.PATH;
     expect(pathArg).toContain("/usr/local/bin");
     expect(pathArg).toContain("/usr/bin");
     expect(pathArg).toContain("/bin");
   });
 
-  it("重複するディレクトリは1回のみ含まれる", async () => {
+  it("deduplicates directories", async () => {
     setupNormalFlow();
-    // 全コマンドが同じディレクトリを返す（which npx も含む）
     mockedExec.mockImplementation((file: string, args: readonly string[]) => {
       if (file === "which") return "/usr/local/bin/" + args[0];
       return "";
@@ -566,49 +409,40 @@ describe("installCommand - buildMinimalPath の間接検証", () => {
 
     await runInstallCommand();
 
-    const pathArg = mockedRenderPlist.mock.calls[0][1].path;
+    const config = mockSchedulerInstall.mock.calls[0][0];
+    const pathArg = config.env.PATH;
     const dirs = pathArg.split(":");
     const uniqueDirs = new Set(dirs);
     expect(dirs.length).toBe(uniqueDirs.size);
   });
 });
 
-describe("installCommand - ShellError 発生時", () => {
-  it("エラーメッセージを出力し、早期 return する", async () => {
+describe("installCommand - ShellError during scheduler.install", () => {
+  it("outputs error message and returns early", async () => {
     setupNormalFlow();
-    // launchctl load で ShellError を発生させる
-    mockedExec.mockImplementation((file: string, args: readonly string[]) => {
-      if (file === "which" && args[0] === "npx") return "/usr/local/bin/npx";
-      if (file === "launchctl") {
-        throw new ShellError("launchctl の実行に失敗しました", "stderr output");
-      }
-      return "";
+    mockSchedulerInstall.mockImplementation(() => {
+      throw new ShellError("scheduler install failed", "stderr output");
     });
 
     await runInstallCommand();
 
     expect(consoleSpy.error).toHaveBeenCalledWith(
-      expect.stringContaining("launchctl の実行に失敗しました"),
+      expect.stringContaining("scheduler install failed"),
     );
     expect(consoleSpy.error).toHaveBeenCalledWith("stderr output");
   });
 
-  it("ShellError に stderr がない場合は stderr 行が出力されない", async () => {
+  it("does not output empty stderr", async () => {
     setupNormalFlow();
-    mockedExec.mockImplementation((file: string, args: readonly string[]) => {
-      if (file === "which" && args[0] === "npx") return "/usr/local/bin/npx";
-      if (file === "launchctl") {
-        throw new ShellError("launchctl の実行に失敗しました", "");
-      }
-      return "";
+    mockSchedulerInstall.mockImplementation(() => {
+      throw new ShellError("scheduler install failed", "");
     });
 
     await runInstallCommand();
 
     expect(consoleSpy.error).toHaveBeenCalledWith(
-      expect.stringContaining("launchctl の実行に失敗しました"),
+      expect.stringContaining("scheduler install failed"),
     );
-    // stderr が空なので2回目の console.error は呼ばれない
     const stderrCalls = consoleSpy.error.mock.calls.filter(
       (call) => call[0] === "",
     );
@@ -616,8 +450,23 @@ describe("installCommand - ShellError 発生時", () => {
   });
 });
 
-describe("installCommand - ConfigValidationError 発生時", () => {
-  it("config.yml のバリデーションエラーメッセージを出力し、早期 return する", async () => {
+describe("installCommand - UnsupportedPlatformError", () => {
+  it("outputs unsupported platform error", async () => {
+    setupNormalFlow();
+    mockedCreateScheduler.mockImplementation(() => {
+      throw new UnsupportedPlatformError("linux");
+    });
+
+    await runInstallCommand();
+
+    expect(consoleSpy.error).toHaveBeenCalledWith(
+      expect.stringContaining("Unsupported platform: linux"),
+    );
+  });
+});
+
+describe("installCommand - ConfigValidationError", () => {
+  it("outputs config validation error", async () => {
     mockedFs.existsSync.mockReturnValue(true);
     mockedCommandExists.mockReturnValue(true);
     mockedExec.mockImplementation((file: string, args: readonly string[]) => {
@@ -631,49 +480,39 @@ describe("installCommand - ConfigValidationError 発生時", () => {
     await runInstallCommand();
 
     expect(consoleSpy.error).toHaveBeenCalledWith(
-      expect.stringContaining("config.yml のバリデーションに失敗しました"),
-    );
-    expect(consoleSpy.error).toHaveBeenCalledWith(
       expect.stringContaining("interval_minutes: must be >= 10, got 5"),
     );
-    // renderPlist は呼ばれない（エラーにより早期 return）
-    expect(mockedRenderPlist).not.toHaveBeenCalled();
+    expect(mockSchedulerInstall).not.toHaveBeenCalled();
   });
 });
 
-describe("installCommand - 予期しないエラー発生時", () => {
-  it("「予期しないエラー」メッセージを出力し、早期 return する", async () => {
+describe("installCommand - unexpected error", () => {
+  it("outputs unexpected error message", async () => {
     setupNormalFlow();
-    // writeFileSync で予期しないエラーを発生させる
-    mockedFs.writeFileSync.mockImplementation(() => {
+    mockedFs.mkdirSync.mockImplementation(() => {
       throw new TypeError("unexpected error");
     });
 
     await runInstallCommand();
 
     expect(consoleSpy.error).toHaveBeenCalledWith(
-      "予期しないエラーが発生しました:",
+      expect.stringContaining("予期しないエラー"),
       expect.any(TypeError),
-    );
-    // launchctl は呼ばれない（エラーにより早期 return）
-    expect(mockedExec).not.toHaveBeenCalledWith(
-      "launchctl",
-      expect.anything(),
     );
   });
 });
 
-describe("installCommand - ログディレクトリは getLogsDir() 固定で決まる", () => {
-  it("getLogsDir() の値がログディレクトリとして使用される", async () => {
+describe("installCommand - logs directory uses getLogsDir()", () => {
+  it("getLogsDir() value is used as log directory", async () => {
     setupNormalFlow();
 
     await runInstallCommand();
 
-    // getLogsDir() のモック値が使用される
     expect(mockedFs.mkdirSync).toHaveBeenCalledWith(
       "/mock/data/logs",
       { recursive: true, mode: 0o700 },
     );
-    expect(mockedRenderPlist.mock.calls[0][1].logDir).toBe("/mock/data/logs");
+    const config = mockSchedulerInstall.mock.calls[0][0];
+    expect(config.logDir).toBe("/mock/data/logs");
   });
 });

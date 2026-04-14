@@ -49,17 +49,6 @@ describe("getLogsDir", () => {
   });
 });
 
-describe("getPlistGeneratedPath", () => {
-  it("~/.sabori-flow/{PLIST_LABEL}.plist を返す", async () => {
-    const { getPlistGeneratedPath, PLIST_LABEL } = await import(
-      "../../src/utils/paths.js"
-    );
-    expect(getPlistGeneratedPath()).toBe(
-      path.join("/mock/home", ".sabori-flow", `${PLIST_LABEL}.plist`),
-    );
-  });
-});
-
 describe("パッケージ内部リソースパス", () => {
   it("getConfigExamplePath は PACKAGE_ROOT/config.yml.example を返す", async () => {
     const { getConfigExamplePath, PACKAGE_ROOT } = await import(
@@ -77,12 +66,12 @@ describe("パッケージ内部リソースパス", () => {
     expect(getDefaultPromptsDir()).toBe(path.join(PACKAGE_ROOT, "prompts"));
   });
 
-  it("getPlistTemplatePath は PACKAGE_ROOT/launchd/{PLIST_LABEL}.plist.template を返す", async () => {
-    const { getPlistTemplatePath, PACKAGE_ROOT, PLIST_LABEL } = await import(
+  it("getPlistTemplatePath は PACKAGE_ROOT/launchd/com.github.sabori-flow.plist.template を返す", async () => {
+    const { getPlistTemplatePath, PACKAGE_ROOT } = await import(
       "../../src/utils/paths.js"
     );
     expect(getPlistTemplatePath()).toBe(
-      path.join(PACKAGE_ROOT, "launchd", `${PLIST_LABEL}.plist.template`),
+      path.join(PACKAGE_ROOT, "launchd", "com.github.sabori-flow.plist.template"),
     );
   });
 });
