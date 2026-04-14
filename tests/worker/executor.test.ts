@@ -149,7 +149,7 @@ describe("runClaude", () => {
         expect.fail("should have thrown");
       } catch (error: unknown) {
         expect(error).toBeInstanceOf(ExecutorTimeoutError);
-        expect((error as ExecutorTimeoutError).timeoutMs).toBe(1_800_000);
+        expect((error as ExecutorTimeoutError).timeoutMs).toBe(3_600_000);
       }
     });
 
