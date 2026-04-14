@@ -1,9 +1,9 @@
 import type { Language } from "../i18n/types.js";
 import type { Issue, PhaseLabels, RepositoryConfig, ExecutionConfig } from "./models.js";
-import { Autonomy, Phase, repoFullName } from "./models.js";
+import { Autonomy, Agent, Phase, repoFullName } from "./models.js";
 import type { ProcessResult } from "./process.js";
 import { buildPrompt } from "./prompt.js";
-import { runClaude } from "./executor.js";
+import { runAgent } from "./executor.js";
 import {
   transitionToInProgress,
   transitionToDone,
@@ -24,9 +24,9 @@ const logger = createLogger("pipeline");
 
 export interface PipelineDeps {
   buildPrompt: (issue: Issue, repoConfig: RepositoryConfig, language: Language) => string;
-  runClaude: (
+  runAgent: (
     prompt: string,
-    options: { cwd: string; autonomy?: Autonomy },
+    options: { cwd: string; agent?: Agent; autonomy?: Autonomy },
   ) => Promise<ProcessResult>;
   transitionToInProgress: (
     repo: string,
@@ -67,7 +67,7 @@ export interface PipelineDeps {
 
 export const defaultDeps: PipelineDeps = {
   buildPrompt,
-  runClaude: (prompt, options) => runClaude(prompt, options),
+  runAgent: (prompt, options) => runAgent(options.agent ?? Agent.CLAUDE, prompt, options),
   transitionToInProgress,
   transitionToDone,
   transitionToFailed,
@@ -148,28 +148,35 @@ export async function processIssue(
           return false;
         }
 
-        // 3-2. Claude CLI 実行（レベル 2）
+        // 3-2. CLI execution (Level 2)
+        const agentName = executionConfig.agent === Agent.CODEX ? "Codex CLI" : "Claude Code CLI";
         let result: ProcessResult;
         try {
-          result = await deps.runClaude(prompt, { cwd: worktreePath, autonomy: executionConfig.autonomy });
+          result = await deps.runAgent(prompt, {
+            cwd: worktreePath,
+            agent: executionConfig.agent,
+            autonomy: executionConfig.autonomy,
+          });
         } catch (error: unknown) {
           logger.error(
-            "Issue #%s: Claude CLI の実行に失敗しました [repo=%s]: %s",
+            "Issue #%s: %s の実行に失敗しました [repo=%s]: %s",
             issue.number,
+            agentName,
             repo,
             error,
           );
-          handleFailure(deps, repo, issue.number, phaseLabels, "Claude Code CLI の実行に失敗しました");
+          handleFailure(deps, repo, issue.number, phaseLabels, `${agentName} の実行に失敗しました`);
           return false;
         }
 
         if (!result.success) {
           logger.error(
-            "Issue #%s: Claude CLI が失敗ステータスを返しました [repo=%s]",
+            "Issue #%s: %s が失敗ステータスを返しました [repo=%s]",
             issue.number,
+            agentName,
             repo,
           );
-          handleFailure(deps, repo, issue.number, phaseLabels, "Claude Code CLI がエラーを返しました");
+          handleFailure(deps, repo, issue.number, phaseLabels, `${agentName} がエラーを返しました`);
           return false;
         }
 

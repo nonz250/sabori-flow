@@ -17,7 +17,14 @@ export const Priority = {
 } as const;
 export type Priority = (typeof Priority)[keyof typeof Priority];
 
-/** Claude Code CLI の自律性レベル */
+/** CLI execution agent */
+export const Agent = {
+  CLAUDE: "claude",
+  CODEX: "codex",
+} as const;
+export type Agent = (typeof Agent)[keyof typeof Agent];
+
+/** Autonomy level for CLI execution */
 export const Autonomy = {
   FULL: "full",
   SANDBOXED: "sandboxed",
@@ -67,6 +74,7 @@ export interface RepositoryConfig {
 export interface ExecutionConfig {
   readonly maxParallel: number;
   readonly maxIssuesPerRepo: number;
+  readonly agent: Agent;
   readonly autonomy: Autonomy;
   readonly intervalMinutes: number;
   readonly language: Language;

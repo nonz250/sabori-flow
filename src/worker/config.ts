@@ -3,6 +3,7 @@ import YAML from "yaml";
 
 import {
   Autonomy,
+  Agent,
   type AppConfig,
   type ExecutionConfig,
   type RepositoryConfig,
@@ -317,7 +318,7 @@ function parsePhaseLabels(raw: unknown, phaseName: string): PhaseLabels {
 
 function parseExecution(raw: unknown): Omit<ExecutionConfig, "language"> {
   if (raw === undefined || raw === null) {
-    return { maxParallel: 1, maxIssuesPerRepo: 1, autonomy: Autonomy.INTERACTIVE, intervalMinutes: 60 };
+    return { maxParallel: 1, maxIssuesPerRepo: 1, agent: Agent.CLAUDE, autonomy: Autonomy.INTERACTIVE, intervalMinutes: 60 };
   }
 
   if (typeof raw !== "object" || Array.isArray(raw)) {
@@ -370,6 +371,23 @@ function parseExecution(raw: unknown): Omit<ExecutionConfig, "language"> {
     );
   }
 
+  // agent
+  const rawAgent =
+    "agent" in record ? record["agent"] : Agent.CLAUDE;
+
+  if (typeof rawAgent !== "string") {
+    throw new ConfigValidationError(
+      `execution.agent: must be a string, got ${typeof rawAgent}`,
+    );
+  }
+
+  const validAgentValues = Object.values(Agent) as string[];
+  if (!validAgentValues.includes(rawAgent)) {
+    throw new ConfigValidationError(
+      `execution.agent: must be one of: ${validAgentValues.join(", ")}; got '${rawAgent}'`,
+    );
+  }
+
   // autonomy
   const rawAutonomy =
     "autonomy" in record ? record["autonomy"] : Autonomy.INTERACTIVE;
@@ -412,6 +430,7 @@ function parseExecution(raw: unknown): Omit<ExecutionConfig, "language"> {
   return {
     maxParallel: rawMaxParallel,
     maxIssuesPerRepo: rawMaxIssuesPerRepo,
+    agent: rawAgent as Agent,
     autonomy: rawAutonomy as Autonomy,
     intervalMinutes: rawIntervalMinutes,
   };

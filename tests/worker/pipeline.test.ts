@@ -16,7 +16,9 @@ import type { PipelineDeps } from "../../src/worker/pipeline.js";
 const DEFAULT_EXECUTION_CONFIG: ExecutionConfig = {
   maxParallel: 1,
   maxIssuesPerRepo: 10,
+  agent: "claude",
   autonomy: "interactive",
+  intervalMinutes: 60,
   language: "ja",
 };
 
@@ -47,7 +49,7 @@ describe("processIssue", () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
-      vi.mocked(deps.runClaude).mockResolvedValue(
+      vi.mocked(deps.runAgent).mockResolvedValue(
         makeProcessResult({ stdout: "Claude output" }),
       );
 
@@ -62,7 +64,7 @@ describe("processIssue", () => {
       );
       expect(deps.buildPrompt).toHaveBeenCalledOnce();
       expect(deps.buildPrompt).toHaveBeenCalledWith(issue, repoConfig, "ja");
-      expect(deps.runClaude).toHaveBeenCalledOnce();
+      expect(deps.runAgent).toHaveBeenCalledOnce();
       expect(deps.transitionToDone).toHaveBeenCalledOnce();
       expect(deps.transitionToDone).toHaveBeenCalledWith(
         "testowner/testrepo",
@@ -115,35 +117,37 @@ describe("processIssue", () => {
       );
     });
 
-    it("runClaude に executionConfig.autonomy が渡される", async () => {
+    it("runAgent に executionConfig.agent と autonomy が渡される", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       const executionConfig: ExecutionConfig = {
         maxParallel: 1,
         maxIssuesPerRepo: 10,
+        agent: "claude",
         autonomy: "full",
+        intervalMinutes: 60,
         language: "ja",
       };
 
       await processIssue(issue, repoConfig, executionConfig, deps);
 
-      expect(deps.runClaude).toHaveBeenCalledOnce();
-      expect(deps.runClaude).toHaveBeenCalledWith(
+      expect(deps.runAgent).toHaveBeenCalledOnce();
+      expect(deps.runAgent).toHaveBeenCalledWith(
         "generated prompt",
-        { cwd: "/tmp/worktrees/issue-mock", autonomy: "full" },
+        { cwd: "/tmp/worktrees/issue-mock", agent: "claude", autonomy: "full" },
       );
     });
 
-    it("autonomy が interactive の場合も runClaude に正しく渡される", async () => {
+    it("autonomy が interactive の場合も runAgent に正しく渡される", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
 
       await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, deps);
 
-      expect(deps.runClaude).toHaveBeenCalledOnce();
-      expect(deps.runClaude).toHaveBeenCalledWith(
+      expect(deps.runAgent).toHaveBeenCalledOnce();
+      expect(deps.runAgent).toHaveBeenCalledWith(
         "generated prompt",
-        { cwd: "/tmp/worktrees/issue-mock", autonomy: "interactive" },
+        { cwd: "/tmp/worktrees/issue-mock", agent: "claude", autonomy: "interactive" },
       );
     });
 
@@ -151,7 +155,7 @@ describe("processIssue", () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
-      vi.mocked(deps.runClaude).mockResolvedValue(
+      vi.mocked(deps.runAgent).mockResolvedValue(
         makeProcessResult({
           stdout: "Found token: ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijkl in output",
         }),
@@ -185,7 +189,7 @@ describe("processIssue", () => {
 
       expect(result).toBe(false);
       expect(deps.buildPrompt).not.toHaveBeenCalled();
-      expect(deps.runClaude).not.toHaveBeenCalled();
+      expect(deps.runAgent).not.toHaveBeenCalled();
       expect(deps.transitionToDone).not.toHaveBeenCalled();
       expect(deps.transitionToFailed).not.toHaveBeenCalled();
       expect(deps.postSuccessComment).not.toHaveBeenCalled();
@@ -208,7 +212,7 @@ describe("processIssue", () => {
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, deps);
 
       expect(result).toBe(false);
-      expect(deps.runClaude).not.toHaveBeenCalled();
+      expect(deps.runAgent).not.toHaveBeenCalled();
       expect(deps.transitionToDone).not.toHaveBeenCalled();
       expect(deps.postSuccessComment).not.toHaveBeenCalled();
       expect(deps.transitionToFailed).toHaveBeenCalledOnce();
@@ -225,11 +229,84 @@ describe("processIssue", () => {
       );
     });
 
-    it("runClaude が例外を投げると failed 遷移 + 失敗コメントが呼ばれ false が返る", async () => {
+    it("agent が codex の場合 runAgent に agent: 'codex' が渡される", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      const executionConfig: ExecutionConfig = {
+        maxParallel: 1,
+        maxIssuesPerRepo: 10,
+        agent: "codex",
+        autonomy: "interactive",
+        intervalMinutes: 60,
+        language: "ja",
+      };
+
+      await processIssue(issue, repoConfig, executionConfig, deps);
+
+      expect(deps.runAgent).toHaveBeenCalledOnce();
+      expect(deps.runAgent).toHaveBeenCalledWith(
+        "generated prompt",
+        { cwd: "/tmp/worktrees/issue-mock", agent: "codex", autonomy: "interactive" },
+      );
+    });
+
+    it("agent が codex の場合 CLI 実行例外時の失敗メッセージに 'Codex CLI' が含まれる", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      const executionConfig: ExecutionConfig = {
+        maxParallel: 1,
+        maxIssuesPerRepo: 10,
+        agent: "codex",
+        autonomy: "interactive",
+        intervalMinutes: 60,
+        language: "ja",
+      };
+      vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
+      vi.mocked(deps.runAgent).mockRejectedValue(
+        new Error("timeout"),
+      );
+
+      const result = await processIssue(issue, repoConfig, executionConfig, deps);
+
+      expect(result).toBe(false);
+      expect(deps.postFailureComment).toHaveBeenCalledWith(
+        "testowner/testrepo",
+        42,
+        "Codex CLI の実行に失敗しました",
+      );
+    });
+
+    it("agent が codex の場合 success=false 時の失敗メッセージに 'Codex CLI' が含まれる", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      const executionConfig: ExecutionConfig = {
+        maxParallel: 1,
+        maxIssuesPerRepo: 10,
+        agent: "codex",
+        autonomy: "interactive",
+        intervalMinutes: 60,
+        language: "ja",
+      };
+      vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
+      vi.mocked(deps.runAgent).mockResolvedValue(
+        makeProcessResult({ success: false, stderr: "error" }),
+      );
+
+      const result = await processIssue(issue, repoConfig, executionConfig, deps);
+
+      expect(result).toBe(false);
+      expect(deps.postFailureComment).toHaveBeenCalledWith(
+        "testowner/testrepo",
+        42,
+        "Codex CLI がエラーを返しました",
+      );
+    });
+
+    it("runAgent が例外を投げると failed 遷移 + 失敗コメントが呼ばれ false が返る", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
-      vi.mocked(deps.runClaude).mockRejectedValue(
+      vi.mocked(deps.runAgent).mockRejectedValue(
         new Error("timeout after 1800 seconds"),
       );
 
@@ -252,11 +329,11 @@ describe("processIssue", () => {
       );
     });
 
-    it("runClaude が success=false を返すと failed 遷移 + 失敗コメントが呼ばれ false が返る", async () => {
+    it("runAgent が success=false を返すと failed 遷移 + 失敗コメントが呼ばれ false が返る", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
-      vi.mocked(deps.runClaude).mockResolvedValue(
+      vi.mocked(deps.runAgent).mockResolvedValue(
         makeProcessResult({ success: false, stderr: "CLI error output" }),
       );
 
@@ -279,11 +356,11 @@ describe("processIssue", () => {
       );
     });
 
-    it("runClaude が success=false かつ stderr が空の場合もデフォルトのエラーメッセージが使われる", async () => {
+    it("runAgent が success=false かつ stderr が空の場合もデフォルトのエラーメッセージが使われる", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
-      vi.mocked(deps.runClaude).mockResolvedValue(
+      vi.mocked(deps.runAgent).mockResolvedValue(
         makeProcessResult({ success: false, stderr: "", stdout: "stdout error" }),
       );
 
@@ -297,11 +374,11 @@ describe("processIssue", () => {
       );
     });
 
-    it("runClaude が success=false かつ stderr/stdout ともに空の場合もデフォルトのエラーメッセージが使われる", async () => {
+    it("runAgent が success=false かつ stderr/stdout ともに空の場合もデフォルトのエラーメッセージが使われる", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
-      vi.mocked(deps.runClaude).mockResolvedValue(
+      vi.mocked(deps.runAgent).mockResolvedValue(
         makeProcessResult({ success: false, stderr: "", stdout: "" }),
       );
 
@@ -377,7 +454,7 @@ describe("processIssue", () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
-      vi.mocked(deps.runClaude).mockRejectedValue(
+      vi.mocked(deps.runAgent).mockRejectedValue(
         new Error("executor error"),
       );
       vi.mocked(deps.transitionToFailed).mockRejectedValue(
@@ -394,7 +471,7 @@ describe("processIssue", () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
-      vi.mocked(deps.runClaude).mockRejectedValue(
+      vi.mocked(deps.runAgent).mockRejectedValue(
         new Error("executor error"),
       );
       vi.mocked(deps.postFailureComment).mockRejectedValue(

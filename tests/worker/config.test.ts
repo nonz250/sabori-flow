@@ -683,6 +683,58 @@ describe("loadConfig - execution validation", () => {
       /interval_minutes: must be an integer/,
     );
   });
+
+  it("agent デフォルト値は 'claude'", () => {
+    mockYaml(VALID_YAML);
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.agent).toBe("claude");
+  });
+
+  it("agent デフォルト値 (execution 省略)", () => {
+    mockYaml(VALID_YAML_NO_EXECUTION);
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.agent).toBe("claude");
+  });
+
+  it("agent: 'codex' が正しくパースされる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      'max_parallel: 4\n  agent: "codex"',
+    );
+    mockYaml(yaml);
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.agent).toBe("codex");
+  });
+
+  it("agent に不正な文字列を指定するとエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      'max_parallel: 4\n  agent: "invalid"',
+    );
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /execution.agent: must be one of: claude, codex/,
+    );
+  });
+
+  it("agent に数値を指定するとエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  agent: 1",
+    );
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /execution.agent: must be a string, got number/,
+    );
+  });
 });
 
 describe("loadConfig - local_path validation", () => {

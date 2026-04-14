@@ -68,6 +68,7 @@ const jaMessages: MessageKeys = {
     "絶対パスを入力してください (~/... も可)",
   "prompt.autoImplConfirm":
     "Plan 完了後に自動で impl ラベルを付与しますか?",
+  "prompt.selectAgent": "実行エージェントを選択してください:",
   "prompt.intervalMinutes": "スケジュール実行間隔（分）を入力してください（10-1440）:",
   "prompt.intervalMinutesValidation": "10 以上 1440 以下の整数を入力してください",
 
@@ -144,6 +145,7 @@ const enMessages: MessageKeys = {
     "Enter an absolute path (~/... also accepted)",
   "prompt.autoImplConfirm":
     "Automatically add impl label after Plan completion?",
+  "prompt.selectAgent": "Select execution agent:",
   "prompt.intervalMinutes": "Enter the scheduled execution interval in minutes (10-1440):",
   "prompt.intervalMinutesValidation": "Must be an integer between 10 and 1440",
 
