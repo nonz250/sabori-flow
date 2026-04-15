@@ -48,14 +48,28 @@ const jaMessages: MessageKeys = {
     "\nインストールが完了しました。{minutes}分ごとにワーカーが実行されます。",
   "install.configValidationError": "Error: config.yml のバリデーションに失敗しました: {message}",
   "install.unexpectedError": "予期しないエラーが発生しました:",
+  "install.crontabNotFound":
+    "Error: crontab が見つかりません。cron がインストールされていることを確認してください。",
+  "install.cronIncompatibleInterval":
+    "Error: interval_minutes の値 {minutes} は cron で正確に表現できません。有効な値: {validValues}",
+  "install.registeringCron": "crontab に登録中...",
+  "install.cronComplete":
+    "\nインストールが完了しました。cron により {minutes}分ごとにワーカーが実行されます。",
+  "install.cronLocalComplete":
+    "\nローカルビルドのワーカーを cron に登録しました。{minutes}分ごとにワーカーが実行されます。",
+  "install.cronMacosWarning":
+    "Warning: macOS では cron はスリープ中にジョブを実行しません。また、macOS Sequoia 以降では Full Disk Access 権限が必要な場合があります。推奨: --scheduler launchd を使用してください。",
+  "install.launchdNotAvailable":
+    "Error: launchd はこのプラットフォームでは利用できません。--scheduler cron を使用してください。",
 
   // uninstall command
   "uninstall.deleted": "削除しました: {path}",
-  "uninstall.notRegistered": "LaunchAgent は登録されていません。",
+  "uninstall.notRegistered": "スケジューラの登録が見つかりません。",
   "uninstall.complete": "\nアンインストールが完了しました。",
   "uninstall.confirmDeleteAll":
     "{dir} を完全に削除しますか? (config.yml, プロンプト, ログを含む)",
   "uninstall.deletedAll": "削除しました: {dir}",
+  "uninstall.cronRemoved": "crontab からエントリを削除しました。",
 
   // repository-prompt (shared helper)
   "prompt.enterOwner": "リポジトリの owner を入力してください:",
@@ -74,14 +88,16 @@ const jaMessages: MessageKeys = {
   // cli descriptions
   "cli.descriptionAdd": "既存の config.yml にリポジトリを追加します",
   "cli.descriptionInit": "対話的に config.yml を作成します",
-  "cli.descriptionInstall": "plist 生成 + launchd 登録を行います",
+  "cli.descriptionInstall": "スケジューラにワーカーを登録します（launchd または cron）",
   "cli.optionLocal": "ローカルビルドのワーカーを登録します",
-  "cli.descriptionUninstall": "launchd の登録を解除します",
+  "cli.optionScheduler": "使用するスケジューラ（launchd, cron）",
+  "cli.descriptionUninstall": "スケジューラの登録を解除します",
   "cli.descriptionReinstall":
-    "launchd の登録を再インストールします（解除 + plist 再生成 + 登録）",
+    "スケジューラの登録を再インストールします（解除 + 再登録）",
   "cli.optionReinstallLocal": "ローカルビルドのワーカーを登録します",
+  "cli.optionReinstallScheduler": "使用するスケジューラ（launchd, cron）",
   "cli.descriptionWorker":
-    "ワーカーを実行します（通常は launchd から自動的に呼び出されます）",
+    "ワーカーを実行します（通常はスケジューラから自動的に呼び出されます）",
 };
 
 const enMessages: MessageKeys = {
@@ -125,14 +141,28 @@ const enMessages: MessageKeys = {
     "\nInstallation complete. The worker will run every {minutes} minutes.",
   "install.configValidationError": "Error: config.yml validation failed: {message}",
   "install.unexpectedError": "Unexpected error:",
+  "install.crontabNotFound":
+    "Error: crontab not found. Please ensure cron is installed.",
+  "install.cronIncompatibleInterval":
+    "Error: interval_minutes value {minutes} cannot be exactly represented as a cron expression. Valid values: {validValues}",
+  "install.registeringCron": "Registering with crontab...",
+  "install.cronComplete":
+    "\nInstallation complete. The worker will run every {minutes} minutes via cron.",
+  "install.cronLocalComplete":
+    "\nLocal build worker registered with cron. The worker will run every {minutes} minutes.",
+  "install.cronMacosWarning":
+    "Warning: On macOS, cron does not run jobs during sleep. Also, Full Disk Access may be required on macOS Sequoia+. Recommended: use --scheduler launchd instead.",
+  "install.launchdNotAvailable":
+    "Error: launchd is not available on this platform. Use --scheduler cron instead.",
 
   // uninstall command
   "uninstall.deleted": "Deleted: {path}",
-  "uninstall.notRegistered": "LaunchAgent is not registered.",
+  "uninstall.notRegistered": "No scheduler registration found.",
   "uninstall.complete": "\nUninstall complete.",
   "uninstall.confirmDeleteAll":
     "Delete {dir} completely? (includes config.yml, prompts, and logs)",
   "uninstall.deletedAll": "Deleted: {dir}",
+  "uninstall.cronRemoved": "Removed sabori-flow entry from crontab.",
 
   // repository-prompt (shared helper)
   "prompt.enterOwner": "Enter repository owner:",
@@ -150,14 +180,16 @@ const enMessages: MessageKeys = {
   // cli descriptions
   "cli.descriptionAdd": "Add a repository to existing config.yml",
   "cli.descriptionInit": "Create config.yml interactively",
-  "cli.descriptionInstall": "Generate plist and register with launchd",
+  "cli.descriptionInstall": "Register the worker with a scheduler (launchd or cron)",
   "cli.optionLocal": "Register local build worker",
-  "cli.descriptionUninstall": "Unregister from launchd",
+  "cli.optionScheduler": "Scheduler to use (launchd, cron)",
+  "cli.descriptionUninstall": "Unregister from scheduler",
   "cli.descriptionReinstall":
-    "Reinstall launchd registration (unregister + regenerate plist + register)",
+    "Reinstall scheduler registration (unregister + re-register)",
   "cli.optionReinstallLocal": "Register local build worker",
+  "cli.optionReinstallScheduler": "Scheduler to use (launchd, cron)",
   "cli.descriptionWorker":
-    "Run the worker (normally called automatically by launchd)",
+    "Run the worker (normally called automatically by the scheduler)",
 };
 
 export const messages: Record<Language, MessageKeys> = {
