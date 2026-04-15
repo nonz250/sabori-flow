@@ -3,10 +3,15 @@ import {
   ProcessTimeoutError,
   ProcessExecutionError,
 } from "./process.js";
+import type { FailureDiagnostics } from "./models.js";
+import { FailureCategory } from "./models.js";
 
 const GH_TIMEOUT_MS = 120_000;
 
 const MAX_COMMENT_LENGTH = 64_000;
+
+const PARTIAL_STDOUT_TAIL_LENGTH = 2_000;
+const PARTIAL_STDERR_TAIL_LENGTH = 4_000;
 
 // ---------- Secret pattern masking ----------
 
@@ -59,11 +64,108 @@ const FAILURE_TRUNCATED_SUFFIX = "\n\n---\n⚠️ 出力が長すぎるため省
 
 export {
   MAX_COMMENT_LENGTH,
+  PARTIAL_STDOUT_TAIL_LENGTH,
+  PARTIAL_STDERR_TAIL_LENGTH,
   SUCCESS_HEADER,
   SUCCESS_TRUNCATED_SUFFIX,
   FAILURE_HEADER,
   FAILURE_TRUNCATED_SUFFIX,
 };
+
+// ---------- Failure category labels ----------
+
+const FAILURE_CATEGORY_LABELS: Record<FailureCategory, string> = {
+  [FailureCategory.PROMPT_GENERATION]: "Prompt Generation Error",
+  [FailureCategory.CLI_EXECUTION_ERROR]: "CLI Execution Error",
+  [FailureCategory.CLI_NON_ZERO_EXIT]: "CLI Non-zero Exit",
+  [FailureCategory.CLI_TIMEOUT]: "CLI Timeout",
+  [FailureCategory.WORKTREE_CREATION]: "Worktree Creation Error",
+};
+
+// ---------- Failure diagnostics formatting ----------
+
+/**
+ * Escape sequences of 3+ backticks to prevent breaking out of fenced code blocks.
+ * Inserts a zero-width space after each backtick in the sequence.
+ */
+function escapeCodeBlock(text: string): string {
+  return text.replace(/`{3,}/g, (match) => match.split("").join("\u200B"));
+}
+
+/**
+ * Format a FailureDiagnostics object into a structured Markdown body
+ * suitable for posting as a GitHub Issue comment.
+ *
+ * - stderr/stdout are sanitized via sanitizeOutput() before inclusion
+ * - errorMessage is also sanitized to prevent credential leakage
+ * - stdout is truncated to the last PARTIAL_STDOUT_TAIL_LENGTH characters
+ * - stderr is truncated to the last PARTIAL_STDERR_TAIL_LENGTH characters
+ * - Content is wrapped in code blocks inside collapsible <details> to prevent Markdown injection
+ * - Backtick sequences are escaped to prevent code block breakout
+ */
+export function formatFailureDiagnostics(diag: FailureDiagnostics): string {
+  const sections: string[] = [];
+
+  const categoryLabel = FAILURE_CATEGORY_LABELS[diag.category];
+  sections.push(`**Category:** ${categoryLabel}`);
+  sections.push(`**Summary:** ${diag.summary}`);
+
+  if (diag.exitCode !== undefined && diag.exitCode !== null) {
+    sections.push(`**Exit Code:** ${diag.exitCode}`);
+  }
+
+  if (diag.timeoutMs !== undefined) {
+    const timeoutSeconds = diag.timeoutMs / 1_000;
+    sections.push(`**Timeout:** ${timeoutSeconds}s`);
+  }
+
+  if (diag.errorMessage) {
+    const sanitized = sanitizeOutput(diag.errorMessage);
+    sections.push(`**Error:** \`${escapeCodeBlock(sanitized)}\``);
+  }
+
+  if (diag.stderr) {
+    let output = diag.stderr;
+    if (output.length > PARTIAL_STDERR_TAIL_LENGTH) {
+      output = output.slice(-PARTIAL_STDERR_TAIL_LENGTH);
+    }
+    const sanitized = escapeCodeBlock(sanitizeOutput(output));
+    sections.push(
+      [
+        "<details>",
+        "<summary>stderr</summary>",
+        "",
+        "```",
+        sanitized,
+        "```",
+        "",
+        "</details>",
+      ].join("\n"),
+    );
+  }
+
+  if (diag.stdout) {
+    let output = diag.stdout;
+    if (output.length > PARTIAL_STDOUT_TAIL_LENGTH) {
+      output = output.slice(-PARTIAL_STDOUT_TAIL_LENGTH);
+    }
+    const sanitized = escapeCodeBlock(sanitizeOutput(output));
+    sections.push(
+      [
+        "<details>",
+        "<summary>stdout (partial)</summary>",
+        "",
+        "```",
+        sanitized,
+        "```",
+        "",
+        "</details>",
+      ].join("\n"),
+    );
+  }
+
+  return sections.join("\n\n");
+}
 
 export class CommentError extends Error {
   constructor(message: string) {

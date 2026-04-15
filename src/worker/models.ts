@@ -79,6 +79,29 @@ export interface AppConfig {
   readonly execution: ExecutionConfig;
 }
 
+// ---------- Failure diagnostics ----------
+
+/** Failure category for diagnostics */
+export const FailureCategory = {
+  PROMPT_GENERATION: "prompt_generation",
+  CLI_EXECUTION_ERROR: "cli_execution_error",
+  CLI_NON_ZERO_EXIT: "cli_non_zero_exit",
+  CLI_TIMEOUT: "cli_timeout",
+  WORKTREE_CREATION: "worktree_creation",
+} as const;
+export type FailureCategory = (typeof FailureCategory)[keyof typeof FailureCategory];
+
+/** Structured failure context for diagnostic comments */
+export interface FailureDiagnostics {
+  readonly category: FailureCategory;
+  readonly summary: string;
+  readonly stderr?: string;
+  readonly stdout?: string;
+  readonly exitCode?: number | null;
+  readonly timeoutMs?: number;
+  readonly errorMessage?: string;
+}
+
 // ---------- Helper functions ----------
 
 /** リポジトリのフルネーム ("owner/repo") を返す */

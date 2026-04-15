@@ -407,3 +407,289 @@ describe("sanitizeOutput", () => {
     expect(sanitizeOutput("")).toBe("");
   });
 });
+
+// ---------------------------------------------------------------------------
+// formatFailureDiagnostics
+// ---------------------------------------------------------------------------
+
+import {
+  formatFailureDiagnostics,
+  PARTIAL_STDOUT_TAIL_LENGTH,
+  PARTIAL_STDERR_TAIL_LENGTH,
+} from "../../src/worker/comment.js";
+import { FailureCategory } from "../../src/worker/models.js";
+import type { FailureDiagnostics } from "../../src/worker/models.js";
+
+describe("formatFailureDiagnostics", () => {
+  it("PROMPT_GENERATION カテゴリが正しいラベルで表示される", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.PROMPT_GENERATION,
+      summary: "Template not found",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain("**Category:** Prompt Generation Error");
+  });
+
+  it("CLI_EXECUTION_ERROR カテゴリが正しいラベルで表示される", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_EXECUTION_ERROR,
+      summary: "Command failed",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain("**Category:** CLI Execution Error");
+  });
+
+  it("CLI_NON_ZERO_EXIT カテゴリが正しいラベルで表示される", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_NON_ZERO_EXIT,
+      summary: "Exited with error",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain("**Category:** CLI Non-zero Exit");
+  });
+
+  it("CLI_TIMEOUT カテゴリが正しいラベルで表示される", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_TIMEOUT,
+      summary: "Execution timed out",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain("**Category:** CLI Timeout");
+  });
+
+  it("WORKTREE_CREATION カテゴリが正しいラベルで表示される", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.WORKTREE_CREATION,
+      summary: "Worktree setup failed",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain("**Category:** Worktree Creation Error");
+  });
+
+  it("全フィールドが設定されている場合、すべてのセクションが出力に含まれる", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_NON_ZERO_EXIT,
+      summary: "Process exited with code 1",
+      stderr: "Error: module not found",
+      stdout: "Building project...\nCompiling...",
+      exitCode: 1,
+      timeoutMs: 300_000,
+      errorMessage: "CLI returned non-zero exit code",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain("**Category:** CLI Non-zero Exit");
+    expect(result).toContain("**Summary:** Process exited with code 1");
+    expect(result).toContain("**Exit Code:** 1");
+    expect(result).toContain("**Timeout:** 300s");
+    expect(result).toContain("**Error:** `CLI returned non-zero exit code`");
+    expect(result).toContain("<summary>stderr</summary>");
+    expect(result).toContain("Error: module not found");
+    expect(result).toContain("<summary>stdout (partial)</summary>");
+    expect(result).toContain("Building project...\nCompiling...");
+  });
+
+  it("オプショナルフィールドが未設定の場合、該当セクションは出力に含まれない", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.PROMPT_GENERATION,
+      summary: "Template file missing",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain("**Category:**");
+    expect(result).toContain("**Summary:**");
+    expect(result).not.toContain("**Exit Code:**");
+    expect(result).not.toContain("**Timeout:**");
+    expect(result).not.toContain("**Error:**");
+    expect(result).not.toContain("<details>");
+    expect(result).not.toContain("stderr");
+    expect(result).not.toContain("stdout");
+  });
+
+  it("stderr に含まれる GitHub トークンがサニタイズされる", () => {
+    const token = "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijkl";
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_EXECUTION_ERROR,
+      summary: "Auth failed",
+      stderr: `fatal: could not authenticate with token ${token}`,
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).not.toContain(token);
+    expect(result).toContain("[REDACTED]");
+    expect(result).toContain("<summary>stderr</summary>");
+  });
+
+  it("stdout に含まれる機密情報がサニタイズされる", () => {
+    const token = "ghs_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijkl";
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_EXECUTION_ERROR,
+      summary: "Unexpected output",
+      stdout: `Deploying with token ${token}`,
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).not.toContain(token);
+    expect(result).toContain("[REDACTED]");
+    expect(result).toContain("<summary>stdout (partial)</summary>");
+  });
+
+  it("stdout が 2000 文字を超える場合、末尾 2000 文字に切り詰められる", () => {
+    const prefix = "A".repeat(PARTIAL_STDOUT_TAIL_LENGTH + 500);
+    const tail = "B".repeat(PARTIAL_STDOUT_TAIL_LENGTH);
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_NON_ZERO_EXIT,
+      summary: "Long output",
+      stdout: prefix + tail,
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain("B".repeat(PARTIAL_STDOUT_TAIL_LENGTH));
+    expect(result).not.toContain("A".repeat(PARTIAL_STDOUT_TAIL_LENGTH + 500));
+  });
+
+  it("空文字列の stderr は出力に含まれない", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_EXECUTION_ERROR,
+      summary: "No stderr",
+      stderr: "",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).not.toContain("<summary>stderr</summary>");
+    expect(result).not.toContain("<details>");
+  });
+
+  it("空文字列の stdout は出力に含まれない", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_EXECUTION_ERROR,
+      summary: "No stdout",
+      stdout: "",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).not.toContain("<summary>stdout (partial)</summary>");
+    expect(result).not.toContain("<details>");
+  });
+
+  it("exitCode が 0 の場合は表示される", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_NON_ZERO_EXIT,
+      summary: "Unexpected",
+      exitCode: 0,
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain("**Exit Code:** 0");
+  });
+
+  it("exitCode が null の場合は表示されない", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_EXECUTION_ERROR,
+      summary: "Signal killed",
+      exitCode: null,
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).not.toContain("**Exit Code:**");
+  });
+
+  it("exitCode が undefined の場合は表示されない", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_EXECUTION_ERROR,
+      summary: "No exit code",
+      exitCode: undefined,
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).not.toContain("**Exit Code:**");
+  });
+
+  it("セクション間が二重改行で結合される", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_NON_ZERO_EXIT,
+      summary: "Failed",
+      exitCode: 1,
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    const sections = result.split("\n\n");
+    expect(sections[0]).toBe("**Category:** CLI Non-zero Exit");
+    expect(sections[1]).toBe("**Summary:** Failed");
+    expect(sections[2]).toBe("**Exit Code:** 1");
+  });
+
+  it("errorMessage に含まれるシークレットがサニタイズされる", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_EXECUTION_ERROR,
+      summary: "CLI failed",
+      errorMessage:
+        "Auth failed with token ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijkl",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).not.toContain("ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+    expect(result).toContain("[REDACTED]");
+  });
+
+  it("errorMessage がインラインコードとしてフォーマットされる", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_EXECUTION_ERROR,
+      summary: "CLI failed",
+      errorMessage: "spawn claude ENOENT",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain("**Error:** `spawn claude ENOENT`");
+  });
+
+  it("stderr 内のトリプルバッククォートがエスケープされる", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_NON_ZERO_EXIT,
+      summary: "Non-zero exit",
+      stderr: "before ```injected markdown``` after",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).not.toContain("before ```injected");
+  });
+
+  it("stderr が PARTIAL_STDERR_TAIL_LENGTH を超える場合、末尾のみが含まれる", () => {
+    const prefix = "X".repeat(5000);
+    const suffix = "Y".repeat(PARTIAL_STDERR_TAIL_LENGTH);
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_NON_ZERO_EXIT,
+      summary: "Non-zero exit",
+      stderr: prefix + suffix,
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).not.toContain("X".repeat(100));
+    expect(result).toContain("Y".repeat(100));
+  });
+});
