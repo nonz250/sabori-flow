@@ -38,6 +38,13 @@ export interface MessageKeys {
   "install.complete": string;
   "install.configValidationError": string;
   "install.unexpectedError": string;
+  "install.crontabNotFound": string;
+  "install.cronIncompatibleInterval": string;
+  "install.registeringCron": string;
+  "install.cronComplete": string;
+  "install.cronLocalComplete": string;
+  "install.cronMacosWarning": string;
+  "install.launchdNotAvailable": string;
 
   // uninstall command
   "uninstall.deleted": string;
@@ -45,6 +52,7 @@ export interface MessageKeys {
   "uninstall.complete": string;
   "uninstall.confirmDeleteAll": string;
   "uninstall.deletedAll": string;
+  "uninstall.cronRemoved": string;
 
   // repository-prompt (shared helper)
   "prompt.enterOwner": string;
@@ -61,8 +69,10 @@ export interface MessageKeys {
   "cli.descriptionInit": string;
   "cli.descriptionInstall": string;
   "cli.optionLocal": string;
+  "cli.optionScheduler": string;
   "cli.descriptionUninstall": string;
   "cli.descriptionReinstall": string;
   "cli.optionReinstallLocal": string;
+  "cli.optionReinstallScheduler": string;
   "cli.descriptionWorker": string;
 }

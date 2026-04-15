@@ -3,6 +3,7 @@ import { confirm } from "@inquirer/prompts";
 import { PLIST_DEST_PATH, getBaseDir, getConfigPath, getPlistGeneratedPath } from "../utils/paths.js";
 import { exec } from "../utils/shell.js";
 import { setLanguage, t, loadLanguageFromConfig } from "../i18n/index.js";
+import { cronEntryExists, uninstallCronEntry } from "../utils/cron.js";
 
 export async function uninstallCommand(
   options: { interactive?: boolean } = {},
@@ -11,28 +12,40 @@ export async function uninstallCommand(
 
   setLanguage(loadLanguageFromConfig(getConfigPath()));
 
-  // 1. launchd 解除
+  let removedAny = false;
+
+  // 1. launchd unregister
   if (fs.existsSync(PLIST_DEST_PATH)) {
     try {
       exec("launchctl", ["unload", PLIST_DEST_PATH]);
     } catch {
-      // unload 失敗は無視
+      // unload failure is ignored
     }
     fs.unlinkSync(PLIST_DEST_PATH);
     console.log(t("uninstall.deleted", { path: PLIST_DEST_PATH }));
-  } else {
-    console.log(t("uninstall.notRegistered"));
+    removedAny = true;
   }
 
-  // 2. 生成済み plist 削除
+  // 2. Delete generated plist
   const generatedPlist = getPlistGeneratedPath();
   if (fs.existsSync(generatedPlist)) {
     fs.unlinkSync(generatedPlist);
   }
 
+  // 3. cron entry removal
+  if (cronEntryExists()) {
+    uninstallCronEntry();
+    console.log(t("uninstall.cronRemoved"));
+    removedAny = true;
+  }
+
+  if (!removedAny) {
+    console.log(t("uninstall.notRegistered"));
+  }
+
   console.log(t("uninstall.complete"));
 
-  // 3. 全データ削除の確認
+  // 4. Confirm full data deletion
   if (interactive) {
     const baseDir = getBaseDir();
     if (fs.existsSync(baseDir)) {
@@ -46,7 +59,7 @@ export async function uninstallCommand(
           console.log(t("uninstall.deletedAll", { dir: baseDir }));
         }
       } catch {
-        // Ctrl+C — データ削除をスキップして静かに終了
+        // Ctrl+C — skip data deletion silently
       }
     }
   }

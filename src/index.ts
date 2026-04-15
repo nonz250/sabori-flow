@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createRequire } from "node:module";
-import { Command } from "commander";
+import { Command, Option } from "commander";
 import { addCommand } from "./commands/add.js";
 import { initCommand } from "./commands/init.js";
 import { installCommand } from "./commands/install.js";
@@ -35,6 +35,7 @@ program
   .command("install")
   .description(t("cli.descriptionInstall"))
   .option("--local", t("cli.optionLocal"))
+  .addOption(new Option("--scheduler <type>", t("cli.optionScheduler")).choices(["launchd", "cron"]))
   .action((options) => installCommand(options));
 
 program
@@ -46,6 +47,7 @@ program
   .command("reinstall")
   .description(t("cli.descriptionReinstall"))
   .option("--local", t("cli.optionReinstallLocal"))
+  .addOption(new Option("--scheduler <type>", t("cli.optionReinstallScheduler")).choices(["launchd", "cron"]))
   .action((options) => reinstallCommand(options));
 
 program

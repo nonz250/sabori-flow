@@ -29,7 +29,7 @@ beforeEach(() => {
 // ---------- Lazy import (after mocks) ----------
 
 async function runReinstallCommand(
-  options: { local?: boolean } = {},
+  options: { local?: boolean; scheduler?: "launchd" | "cron" } = {},
 ): Promise<void> {
   const { reinstallCommand } = await import(
     "../../src/commands/reinstall.js"
@@ -76,6 +76,20 @@ describe("reinstallCommand - options passthrough", () => {
 
     expect(mockedInstallCommand).toHaveBeenCalledTimes(1);
     expect(mockedInstallCommand).toHaveBeenCalledWith({});
+  });
+
+  it("passes { scheduler: 'cron' } to installCommand when called with --scheduler cron", async () => {
+    await runReinstallCommand({ scheduler: "cron" });
+
+    expect(mockedInstallCommand).toHaveBeenCalledTimes(1);
+    expect(mockedInstallCommand).toHaveBeenCalledWith({ scheduler: "cron" });
+  });
+
+  it("passes { local: true, scheduler: 'cron' } to installCommand when called with both options", async () => {
+    await runReinstallCommand({ local: true, scheduler: "cron" });
+
+    expect(mockedInstallCommand).toHaveBeenCalledTimes(1);
+    expect(mockedInstallCommand).toHaveBeenCalledWith({ local: true, scheduler: "cron" });
   });
 });
 
