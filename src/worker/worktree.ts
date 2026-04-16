@@ -34,6 +34,7 @@ function defaultTimestampFn(): string {
  *
  * @param localPath - クローン済みリポジトリの絶対パス
  * @param issueNumber - Issue 番号
+ * @param defaultBranch - デフォルトブランチ名（worktree の起点）
  * @param callback - worktree パスを受け取るコールバック
  * @param timestampFn - タイムスタンプ生成関数（テスト用）
  * @returns コールバックの戻り値
@@ -42,6 +43,7 @@ function defaultTimestampFn(): string {
 export async function withWorktree<T>(
   localPath: string,
   issueNumber: number,
+  defaultBranch: string,
   callback: (worktreePath: string) => T | Promise<T>,
   timestampFn: () => string = defaultTimestampFn,
 ): Promise<T> {
@@ -53,10 +55,17 @@ export async function withWorktree<T>(
   // worktree ディレクトリの親を作成
   mkdirSync(worktreesDir, { recursive: true });
 
+  // リモートの最新を取得
+  runGit(
+    localPath,
+    ["fetch", "origin"],
+    "git fetch origin に失敗しました",
+  );
+
   // worktree 作成
   runGit(
     localPath,
-    ["worktree", "add", worktreePath, "-b", branchName],
+    ["worktree", "add", worktreePath, "-b", branchName, `origin/${defaultBranch}`],
     `worktree の作成に失敗しました: ${worktreePath}`,
   );
 

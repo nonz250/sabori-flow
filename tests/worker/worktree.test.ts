@@ -48,19 +48,24 @@ describe("withWorktree", () => {
       await withWorktree(
         REPO_PATH,
         42,
+        "main",
         async () => { /* noop */ },
         fixedTimestampFn,
       );
 
-      // git worktree add と git worktree remove が呼ばれる
-      expect(mockedRunCommandSync).toHaveBeenCalledTimes(2);
+      // git fetch origin, git worktree add, git worktree remove が呼ばれる
+      expect(mockedRunCommandSync).toHaveBeenCalledTimes(3);
 
-      const addCall = mockedRunCommandSync.mock.calls[0];
+      const fetchCall = mockedRunCommandSync.mock.calls[0];
+      expect(fetchCall[0]).toBe("git");
+      expect(fetchCall[1]).toContain("fetch");
+
+      const addCall = mockedRunCommandSync.mock.calls[1];
       expect(addCall[0]).toBe("git");
       expect(addCall[1]).toContain("worktree");
       expect(addCall[1]).toContain("add");
 
-      const removeCall = mockedRunCommandSync.mock.calls[1];
+      const removeCall = mockedRunCommandSync.mock.calls[2];
       expect(removeCall[0]).toBe("git");
       expect(removeCall[1]).toContain("worktree");
       expect(removeCall[1]).toContain("remove");
@@ -74,6 +79,7 @@ describe("withWorktree", () => {
       await withWorktree(
         REPO_PATH,
         7,
+        "main",
         async (path) => { yieldedPath = path; },
         () => customTs,
       );
@@ -89,6 +95,7 @@ describe("withWorktree", () => {
       await withWorktree(
         REPO_PATH,
         issueNumber,
+        "main",
         async (path) => { yieldedPath = path; },
         fixedTimestampFn,
       );
@@ -107,11 +114,12 @@ describe("withWorktree", () => {
       await withWorktree(
         REPO_PATH,
         42,
+        "main",
         async () => { /* noop */ },
         fixedTimestampFn,
       );
 
-      const addCall = mockedRunCommandSync.mock.calls[0];
+      const addCall = mockedRunCommandSync.mock.calls[1];
       const args = addCall[1] as string[];
       const expectedBranch = `sabori-flow/42-${FIXED_TIMESTAMP}`;
       expect(args).toContain(expectedBranch);
@@ -123,6 +131,7 @@ describe("withWorktree", () => {
       await withWorktree(
         REPO_PATH,
         42,
+        "main",
         async () => { /* noop */ },
         fixedTimestampFn,
       );
@@ -139,33 +148,97 @@ describe("withWorktree", () => {
       const result = await withWorktree(
         REPO_PATH,
         42,
+        "main",
         async () => "callback result",
         fixedTimestampFn,
       );
 
       expect(result).toBe("callback result");
     });
+
+    it("git fetch origin が worktree add の前に実行される", async () => {
+      mockedRunCommandSync.mockReturnValue("");
+
+      await withWorktree(
+        REPO_PATH,
+        42,
+        "main",
+        async () => { /* noop */ },
+        fixedTimestampFn,
+      );
+
+      expect(mockedRunCommandSync).toHaveBeenCalledTimes(3);
+
+      // 1st call: fetch
+      const fetchCall = mockedRunCommandSync.mock.calls[0];
+      expect(fetchCall[0]).toBe("git");
+      expect(fetchCall[1]).toEqual(
+        expect.arrayContaining(["-C", REPO_PATH, "fetch", "origin"]),
+      );
+    });
+
+    it("worktree add で origin/defaultBranch が起点として指定される", async () => {
+      mockedRunCommandSync.mockReturnValue("");
+
+      await withWorktree(
+        REPO_PATH,
+        42,
+        "main",
+        async () => { /* noop */ },
+        fixedTimestampFn,
+      );
+
+      const addCall = mockedRunCommandSync.mock.calls[1];
+      const args = addCall[1] as string[];
+      expect(args).toContain("origin/main");
+    });
+
+    it("defaultBranch が 'develop' の場合に origin/develop が起点として指定される", async () => {
+      mockedRunCommandSync.mockReturnValue("");
+
+      await withWorktree(
+        REPO_PATH,
+        42,
+        "develop",
+        async () => { /* noop */ },
+        fixedTimestampFn,
+      );
+
+      const addCall = mockedRunCommandSync.mock.calls[1];
+      const args = addCall[1] as string[];
+      expect(args).toContain("origin/develop");
+    });
   });
 
   describe("異常系", () => {
     it("worktree 作成の git コマンドが失敗すると WorktreeError が発生する", async () => {
-      mockedRunCommandSync.mockImplementation(() => {
-        throw new ProcessExecutionError("fatal: branch already exists");
-      });
+      mockedRunCommandSync
+        .mockReturnValueOnce("") // fetch 成功
+        .mockImplementation(() => {
+          throw new ProcessExecutionError("fatal: branch already exists");
+        });
 
       await expect(
         withWorktree(
           REPO_PATH,
           42,
+          "main",
           async () => { /* noop */ },
           fixedTimestampFn,
         ),
       ).rejects.toThrow(WorktreeError);
 
+      mockedRunCommandSync
+        .mockReturnValueOnce("") // fetch 成功
+        .mockImplementation(() => {
+          throw new ProcessExecutionError("fatal: branch already exists");
+        });
+
       await expect(
         withWorktree(
           REPO_PATH,
           42,
+          "main",
           async () => { /* noop */ },
           fixedTimestampFn,
         ),
@@ -179,21 +252,23 @@ describe("withWorktree", () => {
         withWorktree(
           REPO_PATH,
           42,
+          "main",
           async () => { throw new Error("something went wrong"); },
           fixedTimestampFn,
         ),
       ).rejects.toThrow("something went wrong");
 
-      // 削除コマンド (2回目の呼び出し) が実行されている
-      expect(mockedRunCommandSync).toHaveBeenCalledTimes(2);
-      const removeCall = mockedRunCommandSync.mock.calls[1];
+      // 削除コマンド (3回目の呼び出し: fetch + add + remove) が実行されている
+      expect(mockedRunCommandSync).toHaveBeenCalledTimes(3);
+      const removeCall = mockedRunCommandSync.mock.calls[2];
       expect(removeCall[1]).toContain("remove");
     });
 
     it("worktree 削除が失敗しても例外は発生せず警告ログのみ出力される", async () => {
-      // add は成功、remove は失敗
+      // fetch は成功、add は成功、remove は失敗
       mockedRunCommandSync
-        .mockReturnValueOnce("")
+        .mockReturnValueOnce("") // fetch 成功
+        .mockReturnValueOnce("") // add 成功
         .mockImplementationOnce(() => {
           throw new ProcessExecutionError("remove failed");
         });
@@ -202,6 +277,7 @@ describe("withWorktree", () => {
       await withWorktree(
         REPO_PATH,
         42,
+        "main",
         async () => { /* noop */ },
         fixedTimestampFn,
       );
@@ -213,14 +289,17 @@ describe("withWorktree", () => {
     });
 
     it("WorktreeError は instanceof で判別できる", async () => {
-      mockedRunCommandSync.mockImplementation(() => {
-        throw new ProcessExecutionError("git error");
-      });
+      mockedRunCommandSync
+        .mockReturnValueOnce("") // fetch 成功
+        .mockImplementation(() => {
+          throw new ProcessExecutionError("git error");
+        });
 
       try {
         await withWorktree(
           REPO_PATH,
           42,
+          "main",
           async () => { /* noop */ },
           fixedTimestampFn,
         );
@@ -228,6 +307,59 @@ describe("withWorktree", () => {
       } catch (error: unknown) {
         expect(error).toBeInstanceOf(WorktreeError);
       }
+    });
+
+    it("git fetch origin が失敗した場合に WorktreeError が発生する", async () => {
+      // fetch で失敗
+      mockedRunCommandSync.mockImplementation(() => {
+        throw new ProcessExecutionError("fatal: unable to access remote");
+      });
+
+      await expect(
+        withWorktree(
+          REPO_PATH,
+          42,
+          "main",
+          async () => { /* noop */ },
+          fixedTimestampFn,
+        ),
+      ).rejects.toThrow(WorktreeError);
+
+      await expect(
+        withWorktree(
+          REPO_PATH,
+          42,
+          "main",
+          async () => { /* noop */ },
+          fixedTimestampFn,
+        ),
+      ).rejects.toThrow("git fetch origin に失敗しました");
+    });
+
+    it("git fetch origin が失敗した場合に worktree add は呼ばれない", async () => {
+      // fetch で失敗
+      mockedRunCommandSync.mockImplementation(() => {
+        throw new ProcessExecutionError("fatal: unable to access remote");
+      });
+
+      try {
+        await withWorktree(
+          REPO_PATH,
+          42,
+          "main",
+          async () => { /* noop */ },
+          fixedTimestampFn,
+        );
+      } catch {
+        // expected
+      }
+
+      // fetch の 1 回だけ呼ばれて、add は呼ばれない
+      expect(mockedRunCommandSync).toHaveBeenCalledTimes(1);
+      const fetchCall = mockedRunCommandSync.mock.calls[0];
+      expect(fetchCall[1]).toEqual(
+        expect.arrayContaining(["fetch", "origin"]),
+      );
     });
   });
 });
