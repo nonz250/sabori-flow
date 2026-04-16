@@ -58,6 +58,7 @@ describe("repoFullName", () => {
       owner: "nonz250",
       repo: "sabori-flow",
       localPath: "/path/to/repo",
+      defaultBranch: "main",
       labels: {
         plan: {
           trigger: "claude/plan",
@@ -73,6 +74,7 @@ describe("repoFullName", () => {
         },
       },
       priorityLabels: ["priority/high"],
+      autoImplAfterPlan: false,
     };
 
     expect(repoFullName(config)).toBe("nonz250/sabori-flow");
@@ -134,8 +136,10 @@ describe("型の構造テスト", () => {
       owner: "test-owner",
       repo: "test-repo",
       localPath: "/tmp/repo",
+      defaultBranch: "main",
       labels: labelsConfig,
       priorityLabels: ["priority/high", "priority/low"],
+      autoImplAfterPlan: false,
     };
 
     const executionConfig: ExecutionConfig = {

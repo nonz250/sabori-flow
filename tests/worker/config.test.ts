@@ -857,3 +857,127 @@ describe("loadConfig - auto_impl_after_plan", () => {
     );
   });
 });
+
+describe("loadConfig - default_branch", () => {
+  it("default_branch 省略時にデフォルト値 'main' になる", () => {
+    mockYaml(VALID_YAML);
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.repositories[0].defaultBranch).toBe("main");
+  });
+
+  it("default_branch: 'develop' が正しくパースされる", () => {
+    const yaml = VALID_YAML.replace(
+      "priority_labels:",
+      'default_branch: "develop"\n    priority_labels:',
+    );
+    mockYaml(yaml);
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.repositories[0].defaultBranch).toBe("develop");
+  });
+
+  it("default_branch にスラッシュを含む値が許容される", () => {
+    const yaml = VALID_YAML.replace(
+      "priority_labels:",
+      'default_branch: "release/1.0"\n    priority_labels:',
+    );
+    mockYaml(yaml);
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.repositories[0].defaultBranch).toBe("release/1.0");
+  });
+
+  it("default_branch が空文字列の場合にエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "priority_labels:",
+      'default_branch: ""\n    priority_labels:',
+    );
+    mockYaml(yaml);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(ConfigValidationError);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /default_branch: must be a non-empty string/,
+    );
+  });
+
+  it("default_branch が非文字列の場合にエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "priority_labels:",
+      "default_branch: 123\n    priority_labels:",
+    );
+    mockYaml(yaml);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(ConfigValidationError);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /default_branch: must be a non-empty string/,
+    );
+  });
+
+  it("default_branch に '..' を含む値がエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "priority_labels:",
+      'default_branch: "refs/../etc"\n    priority_labels:',
+    );
+    mockYaml(yaml);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(ConfigValidationError);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /default_branch: must not contain '\.\.'/,
+    );
+  });
+
+  it("default_branch が '-' で始まる値がエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "priority_labels:",
+      'default_branch: "-dangerous"\n    priority_labels:',
+    );
+    mockYaml(yaml);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(ConfigValidationError);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /default_branch: must not start with '-'/,
+    );
+  });
+
+  it("default_branch が '/' で終わる値がエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "priority_labels:",
+      'default_branch: "branch/"\n    priority_labels:',
+    );
+    mockYaml(yaml);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(ConfigValidationError);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /default_branch: must not end with '\/' or '\.'/,
+    );
+  });
+
+  it("default_branch が '.' で終わる値がエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "priority_labels:",
+      'default_branch: "branch."\n    priority_labels:',
+    );
+    mockYaml(yaml);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(ConfigValidationError);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /default_branch: must not end with '\/' or '\.'/,
+    );
+  });
+
+  it("default_branch が '.lock' で終わる値がエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "priority_labels:",
+      'default_branch: "branch.lock"\n    priority_labels:',
+    );
+    mockYaml(yaml);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(ConfigValidationError);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /default_branch: must not end with '\.lock'/,
+    );
+  });
+
+  it("default_branch のパスコンポーネントが '.' で始まる値がエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "priority_labels:",
+      'default_branch: "refs/.hidden/branch"\n    priority_labels:',
+    );
+    mockYaml(yaml);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(ConfigValidationError);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /default_branch: path components must not be empty or start with '\.'/,
+    );
+  });
+});
