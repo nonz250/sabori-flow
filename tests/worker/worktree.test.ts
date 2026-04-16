@@ -306,6 +306,7 @@ describe("withWorktree", () => {
         expect.fail("should have thrown");
       } catch (error: unknown) {
         expect(error).toBeInstanceOf(WorktreeError);
+        expect((error as WorktreeError).phase).toBe("create");
       }
     });
 
@@ -360,6 +361,48 @@ describe("withWorktree", () => {
       expect(fetchCall[1]).toEqual(
         expect.arrayContaining(["fetch", "origin"]),
       );
+    });
+
+    it("git fetch origin 失敗時の WorktreeError は phase が 'fetch' である", async () => {
+      mockedRunCommandSync.mockImplementation(() => {
+        throw new ProcessExecutionError("fatal: unable to access remote");
+      });
+
+      try {
+        await withWorktree(
+          REPO_PATH,
+          42,
+          "main",
+          async () => { /* noop */ },
+          fixedTimestampFn,
+        );
+        expect.fail("should have thrown");
+      } catch (error: unknown) {
+        expect(error).toBeInstanceOf(WorktreeError);
+        expect((error as WorktreeError).phase).toBe("fetch");
+      }
+    });
+
+    it("worktree add 失敗時の WorktreeError は phase が 'create' である", async () => {
+      mockedRunCommandSync
+        .mockReturnValueOnce("") // fetch 成功
+        .mockImplementation(() => {
+          throw new ProcessExecutionError("fatal: branch already exists");
+        });
+
+      try {
+        await withWorktree(
+          REPO_PATH,
+          42,
+          "main",
+          async () => { /* noop */ },
+          fixedTimestampFn,
+        );
+        expect.fail("should have thrown");
+      } catch (error: unknown) {
+        expect(error).toBeInstanceOf(WorktreeError);
+        expect((error as WorktreeError).phase).toBe("create");
+      }
     });
   });
 });

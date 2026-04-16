@@ -4,9 +4,13 @@ import { dirname, join } from "node:path";
 import { runCommandSync, ProcessExecutionError } from "./process.js";
 import { createLogger } from "./logger.js";
 
+export type WorktreePhase = "fetch" | "create";
+
 export class WorktreeError extends Error {
-  constructor(message: string) {
+  readonly phase: WorktreePhase;
+  constructor(message: string, phase: WorktreePhase) {
     super(message);
+    this.phase = phase;
     Object.setPrototypeOf(this, WorktreeError.prototype);
   }
 }
@@ -60,6 +64,7 @@ export async function withWorktree<T>(
     localPath,
     ["fetch", "origin"],
     "git fetch origin に失敗しました",
+    "fetch",
   );
 
   // worktree 作成
@@ -67,6 +72,7 @@ export async function withWorktree<T>(
     localPath,
     ["worktree", "add", worktreePath, "-b", branchName, `origin/${defaultBranch}`],
     `worktree の作成に失敗しました: ${worktreePath}`,
+    "create",
   );
 
   try {
@@ -78,6 +84,7 @@ export async function withWorktree<T>(
         localPath,
         ["worktree", "remove", worktreePath, "--force"],
         `worktree の削除に失敗しました: ${worktreePath}`,
+        "create",
       );
     } catch {
       logger.warn("worktree の削除に失敗しました: %s", worktreePath);
@@ -89,6 +96,7 @@ function runGit(
   localPath: string,
   gitArgs: readonly string[],
   errorMessage: string,
+  phase: WorktreePhase,
 ): void {
   try {
     runCommandSync("git", ["-C", localPath, ...gitArgs], {
@@ -96,7 +104,7 @@ function runGit(
     });
   } catch (error: unknown) {
     if (error instanceof ProcessExecutionError) {
-      throw new WorktreeError(`${errorMessage}: ${error.message}`);
+      throw new WorktreeError(`${errorMessage}: ${error.message}`, phase);
     }
     throw error;
   }

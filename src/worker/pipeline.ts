@@ -16,7 +16,7 @@ import {
   formatFailureDiagnostics,
   sanitizeOutput,
 } from "./comment.js";
-import { withWorktree } from "./worktree.js";
+import { withWorktree, WorktreeError } from "./worktree.js";
 import { createLogger } from "./logger.js";
 
 const logger = createLogger("pipeline");
@@ -257,9 +257,17 @@ export async function processIssue(
       error,
     );
     const errorMessage = error instanceof Error ? error.message : String(error);
+    const category =
+      error instanceof WorktreeError && error.phase === "fetch"
+        ? FailureCategory.GIT_FETCH
+        : FailureCategory.WORKTREE_CREATION;
+    const summary =
+      category === FailureCategory.GIT_FETCH
+        ? "Git fetch failed"
+        : "Worktree creation failed";
     handleFailure(deps, repo, issue.number, phaseLabels, {
-      category: FailureCategory.WORKTREE_CREATION,
-      summary: "Worktree creation failed",
+      category,
+      summary,
       errorMessage,
     });
     return false;
