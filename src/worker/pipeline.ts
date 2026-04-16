@@ -62,6 +62,7 @@ export interface PipelineDeps {
   withWorktree: <T>(
     localPath: string,
     issueNumber: number,
+    defaultBranch: string,
     callback: (worktreePath: string) => Promise<T>,
   ) => Promise<T>;
 }
@@ -133,6 +134,7 @@ export async function processIssue(
     return await deps.withWorktree(
       repoConfig.localPath,
       issue.number,
+      repoConfig.defaultBranch,
       async (worktreePath: string) => {
         // 3-1. プロンプト生成（レベル 2）
         let prompt: string;
