@@ -980,4 +980,40 @@ describe("loadConfig - default_branch", () => {
       /default_branch: path components must not be empty or start with '\.'/,
     );
   });
+
+  it("default_branch にスペースを含む値がエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "priority_labels:",
+      'default_branch: "main branch"\n    priority_labels:',
+    );
+    mockYaml(yaml);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(ConfigValidationError);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /default_branch: invalid characters/,
+    );
+  });
+
+  it("default_branch に '@' を含む値がエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "priority_labels:",
+      'default_branch: "main@branch"\n    priority_labels:',
+    );
+    mockYaml(yaml);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(ConfigValidationError);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /default_branch: invalid characters/,
+    );
+  });
+
+  it("default_branch に '~' を含む値がエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "priority_labels:",
+      'default_branch: "main~1"\n    priority_labels:',
+    );
+    mockYaml(yaml);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(ConfigValidationError);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /default_branch: invalid characters/,
+    );
+  });
 });
