@@ -19,6 +19,7 @@ const DEFAULT_EXECUTION_CONFIG: ExecutionConfig = {
   maxParallel: 1,
   maxIssuesPerRepo: 10,
   autonomy: "interactive",
+  intervalMinutes: 60,
   language: "ja",
 };
 
