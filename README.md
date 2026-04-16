@@ -238,6 +238,7 @@ language: ja
 | `repositories[].labels` | Label names for each phase (customizable) |
 | `repositories[].labels.plan` | Labels for the plan phase: `trigger`, `in_progress`, `done`, `failed` |
 | `repositories[].labels.impl` | Labels for the impl phase: `trigger`, `in_progress`, `done`, `failed` |
+| `repositories[].default_branch` | Default branch name used as worktree starting point. Default is `main` |
 | `repositories[].priority_labels` | Priority labels. Issues with labels higher in the list are processed first |
 | `execution.max_parallel` | Number of parallel executions. Default is `1` (sequential) |
 | `execution.max_issues_per_repo` | Maximum number of issues to process per repository. Default is `1` |
