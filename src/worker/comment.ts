@@ -80,6 +80,7 @@ const FAILURE_CATEGORY_LABELS: Record<FailureCategory, string> = {
   [FailureCategory.CLI_NON_ZERO_EXIT]: "CLI Non-zero Exit",
   [FailureCategory.CLI_TIMEOUT]: "CLI Timeout",
   [FailureCategory.WORKTREE_CREATION]: "Worktree Creation Error",
+  [FailureCategory.GIT_FETCH]: "Git Fetch Error",
 };
 
 // ---------- Failure diagnostics formatting ----------

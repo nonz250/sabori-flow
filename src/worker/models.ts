@@ -88,6 +88,7 @@ export const FailureCategory = {
   CLI_NON_ZERO_EXIT: "cli_non_zero_exit",
   CLI_TIMEOUT: "cli_timeout",
   WORKTREE_CREATION: "worktree_creation",
+  GIT_FETCH: "git_fetch",
 } as const;
 export type FailureCategory = (typeof FailureCategory)[keyof typeof FailureCategory];
 
