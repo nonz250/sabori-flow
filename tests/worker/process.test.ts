@@ -196,6 +196,120 @@ describe("runCommand", () => {
     mockKill.mockRestore();
   });
 
+  it("maxBuffer を超えた stdout がタイムアウト時に maxBuffer までで切り詰められる", async () => {
+    // 仕様: `maxBuffer` は stdout/stderr ごとに適用される上限。
+    // data チャンクが上限を超えて到達した場合、`runCommand` はその場で
+    // `stdout.slice(0, maxBuffer)` により切り詰める。
+    // タイムアウトとの組み合わせで、partial 出力にも maxBuffer 制限が
+    // 正しく反映されることを検証する。
+    const maxBuffer = 10;
+    const oversizedChunk = "A".repeat(20);
+
+    const child = createMockChildProcess();
+    mockedSpawn.mockReturnValue(child);
+
+    const mockKill = vi
+      .spyOn(process, "kill")
+      .mockImplementation(() => true);
+
+    const promise = runCommand("slow-cmd", [], {
+      timeoutMs: 5_000,
+      maxBuffer,
+    });
+
+    child.stdout!.emit("data", Buffer.from(oversizedChunk));
+
+    vi.advanceTimersByTime(5_000);
+    child.emit("close", null);
+
+    try {
+      await promise;
+      expect.fail("should have thrown");
+    } catch (error: unknown) {
+      expect(error).toBeInstanceOf(ProcessTimeoutError);
+      const err = error as ProcessTimeoutError;
+      expect(err.stdout.length).toBe(maxBuffer);
+      expect(err.stdout).toBe("A".repeat(maxBuffer));
+    }
+
+    mockKill.mockRestore();
+  });
+
+  it("maxBuffer を超えた stderr がタイムアウト時に maxBuffer までで切り詰められる", async () => {
+    // 仕様: stderr 側にも stdout と同じ maxBuffer ロジックが適用される。
+    // タイムアウト経路で partial stderr が正しく切り詰められることを確認する。
+    const maxBuffer = 10;
+    const oversizedChunk = "E".repeat(20);
+
+    const child = createMockChildProcess();
+    mockedSpawn.mockReturnValue(child);
+
+    const mockKill = vi
+      .spyOn(process, "kill")
+      .mockImplementation(() => true);
+
+    const promise = runCommand("slow-cmd", [], {
+      timeoutMs: 5_000,
+      maxBuffer,
+    });
+
+    child.stderr!.emit("data", Buffer.from(oversizedChunk));
+
+    vi.advanceTimersByTime(5_000);
+    child.emit("close", null);
+
+    try {
+      await promise;
+      expect.fail("should have thrown");
+    } catch (error: unknown) {
+      expect(error).toBeInstanceOf(ProcessTimeoutError);
+      const err = error as ProcessTimeoutError;
+      expect(err.stderr.length).toBe(maxBuffer);
+      expect(err.stderr).toBe("E".repeat(maxBuffer));
+    }
+
+    mockKill.mockRestore();
+  });
+
+  it("maxBuffer 到達後の data チャンクはタイムアウト時も partial に加算されない", async () => {
+    // 仕様: 一度 maxBuffer に達した後の `on('data')` コールバックは
+    // 早期 return するため、残りのチャンクは partial に積み上がらない。
+    // タイムアウト発火後に追加 chunk が届いても挙動は同じであることを確認する。
+    const maxBuffer = 10;
+
+    const child = createMockChildProcess();
+    mockedSpawn.mockReturnValue(child);
+
+    const mockKill = vi
+      .spyOn(process, "kill")
+      .mockImplementation(() => true);
+
+    const promise = runCommand("slow-cmd", [], {
+      timeoutMs: 5_000,
+      maxBuffer,
+    });
+
+    child.stdout!.emit("data", Buffer.from("A".repeat(20))); // 上限到達 (10 で切り詰め)
+
+    vi.advanceTimersByTime(5_000);
+
+    child.stdout!.emit("data", Buffer.from("B".repeat(20))); // 到達後なので破棄
+    child.emit("close", null);
+
+    try {
+      await promise;
+      expect.fail("should have thrown");
+    } catch (error: unknown) {
+      expect(error).toBeInstanceOf(ProcessTimeoutError);
+      const err = error as ProcessTimeoutError;
+      expect(err.stdout.length).toBe(maxBuffer);
+      expect(err.stdout).toBe("A".repeat(maxBuffer));
+      expect(err.stdout).not.toContain("B");
+    }
+
+    mockKill.mockRestore();
+  });
+
   it("コマンドが見つからない場合に ProcessExecutionError を throw する", async () => {
     const child = createMockChildProcess();
     mockedSpawn.mockReturnValue(child);
