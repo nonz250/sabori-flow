@@ -47,6 +47,8 @@ import { confirm, select, input } from "@inquirer/prompts";
 import { promptRepository } from "../../src/commands/helpers/repository-prompt.js";
 import type { RepositoryInput } from "../../src/commands/helpers/repository-prompt.js";
 import { getBaseDir, getConfigPath, getUserPromptsDir, getDefaultPromptsDir } from "../../src/utils/paths.js";
+import { Autonomy } from "../../src/worker/models.js";
+import type { Language } from "../../src/i18n/types.js";
 
 const mockedFs = vi.mocked(fs);
 const mockedConfirm = vi.mocked(confirm);
@@ -68,6 +70,37 @@ function makeRepoInput(overrides?: Partial<RepositoryInput>): RepositoryInput {
     auto_impl_after_plan: false,
     ...overrides,
   };
+}
+
+interface InitPromptAnswers {
+  language?: Language;
+  autonomy?: Autonomy;
+  intervalMinutes?: string;
+}
+
+/**
+ * Route each inquirer `select` call to the right answer based on the
+ * prompt message text, rather than relying on call order. Tests that
+ * need different answers only set the fields they care about.
+ */
+function setupInitPrompts(answers: InitPromptAnswers = {}): void {
+  const language: Language = answers.language ?? "ja";
+  const autonomy: Autonomy = answers.autonomy ?? Autonomy.INTERACTIVE;
+  const intervalMinutes = answers.intervalMinutes ?? "60";
+
+  mockedSelect.mockImplementation(async (config: unknown) => {
+    const msg = (config as { message?: unknown }).message;
+    const msgStr = typeof msg === "string" ? msg : "";
+    if (
+      msgStr.includes("自律実行") ||
+      msgStr.toLowerCase().includes("autonomy")
+    ) {
+      return autonomy;
+    }
+    return language;
+  });
+
+  mockedInput.mockResolvedValue(intervalMinutes);
 }
 
 function parseWrittenYaml(): Record<string, unknown> {
@@ -104,9 +137,8 @@ beforeEach(() => {
   mockedGetUserPromptsDir.mockReturnValue("/mock/config/dir/prompts");
   mockedGetDefaultPromptsDir.mockReturnValue("/mock/package/prompts");
 
-  mockedSelect.mockResolvedValue("ja");
-  // interval_minutes のデフォルト応答
-  mockedInput.mockResolvedValue("60");
+  // 言語 / autonomy / interval_minutes のデフォルト応答
+  setupInitPrompts();
 
   consoleSpy = {
     log: vi.spyOn(console, "log").mockImplementation(() => {}),
@@ -255,6 +287,82 @@ describe("initCommand - 書き込まれる YAML の内容", () => {
     expect(execution).not.toHaveProperty("log_dir");
     expect(execution.max_parallel).toBe(1);
     expect(execution.max_issues_per_repo).toBe(1);
+  });
+});
+
+describe("initCommand - autonomy 選択", () => {
+  it("interactive を選択した場合 execution.autonomy が 'interactive' になる", async () => {
+    setupInitPrompts({ autonomy: Autonomy.INTERACTIVE });
+    mockExistsSyncForConfig(false);
+    mockedPromptRepository.mockResolvedValueOnce(makeRepoInput());
+    mockedConfirm.mockResolvedValueOnce(false);
+
+    await runInitCommand();
+
+    const written = parseWrittenYaml();
+    const execution = written.execution as Record<string, unknown>;
+    expect(execution.autonomy).toBe("interactive");
+  });
+
+  it("auto を選択した場合 execution.autonomy が 'auto' になる", async () => {
+    setupInitPrompts({ autonomy: Autonomy.AUTO });
+    mockExistsSyncForConfig(false);
+    mockedPromptRepository.mockResolvedValueOnce(makeRepoInput());
+    mockedConfirm.mockResolvedValueOnce(false);
+
+    await runInitCommand();
+
+    const written = parseWrittenYaml();
+    const execution = written.execution as Record<string, unknown>;
+    expect(execution.autonomy).toBe("auto");
+  });
+
+  it("full を選択した場合 execution.autonomy が 'full' になる", async () => {
+    setupInitPrompts({ autonomy: Autonomy.FULL });
+    mockExistsSyncForConfig(false);
+    mockedPromptRepository.mockResolvedValueOnce(makeRepoInput());
+    mockedConfirm.mockResolvedValueOnce(false);
+
+    await runInitCommand();
+
+    const written = parseWrittenYaml();
+    const execution = written.execution as Record<string, unknown>;
+    expect(execution.autonomy).toBe("full");
+  });
+
+  it("autonomy 選択 UI には sandboxed が含まれない (choices)", async () => {
+    setupInitPrompts();
+    mockExistsSyncForConfig(false);
+    mockedPromptRepository.mockResolvedValueOnce(makeRepoInput());
+    mockedConfirm.mockResolvedValueOnce(false);
+
+    await runInitCommand();
+
+    const autonomyCall = mockedSelect.mock.calls.find((call) => {
+      const msg = (call[0] as { message?: unknown }).message;
+      return typeof msg === "string" && msg.includes("自律実行");
+    });
+    expect(autonomyCall).toBeDefined();
+
+    const choices = (autonomyCall?.[0] as { choices: Array<{ value: string }> })
+      .choices;
+    const values = choices.map((c) => c.value);
+    expect(values).toEqual(["interactive", "auto", "full"]);
+    expect(values).not.toContain("sandboxed");
+  });
+
+  it("英語モードでは autonomy プロンプトに 'autonomy' が含まれる", async () => {
+    setupInitPrompts({ language: "en", autonomy: Autonomy.AUTO });
+    mockExistsSyncForConfig(false);
+    mockedPromptRepository.mockResolvedValueOnce(makeRepoInput());
+    mockedConfirm.mockResolvedValueOnce(false);
+
+    await runInitCommand();
+
+    const written = parseWrittenYaml();
+    expect(written.language).toBe("en");
+    const execution = written.execution as Record<string, unknown>;
+    expect(execution.autonomy).toBe("auto");
   });
 });
 

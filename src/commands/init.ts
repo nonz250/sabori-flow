@@ -14,9 +14,15 @@ import {
 } from "./helpers/repository-prompt.js";
 import { setLanguage, t } from "../i18n/index.js";
 import type { Language } from "../i18n/types.js";
+import { Autonomy } from "../worker/models.js";
 import { TEMPLATE_FILES } from "../worker/prompt.js";
 
-function buildConfigData(repos: RepositoryInput[], language: string, intervalMinutes: number) {
+function buildConfigData(
+  repos: RepositoryInput[],
+  language: string,
+  intervalMinutes: number,
+  autonomy: Autonomy,
+) {
   return {
     language,
     repositories: repos.map((r) => ({
@@ -27,7 +33,11 @@ function buildConfigData(repos: RepositoryInput[], language: string, intervalMin
       labels: getDefaultLabels(),
       priority_labels: getDefaultPriorityLabels(),
     })),
-    execution: { ...getDefaultExecution(), interval_minutes: intervalMinutes },
+    execution: {
+      ...getDefaultExecution(),
+      autonomy,
+      interval_minutes: intervalMinutes,
+    },
   };
 }
 
@@ -96,6 +106,29 @@ export async function initCommand(): Promise<void> {
       })
     );
 
+    // autonomy 選択 (sandboxed は手動編集専用のため UI には載せない)
+    const autonomy = await select<Autonomy>({
+      message: t("prompt.autonomy"),
+      choices: [
+        {
+          value: Autonomy.INTERACTIVE,
+          name: t("prompt.autonomyChoiceInteractive"),
+          description: t("prompt.autonomyDescInteractive"),
+        },
+        {
+          value: Autonomy.AUTO,
+          name: t("prompt.autonomyChoiceAuto"),
+          description: t("prompt.autonomyDescAuto"),
+        },
+        {
+          value: Autonomy.FULL,
+          name: t("prompt.autonomyChoiceFull"),
+          description: t("prompt.autonomyDescFull"),
+        },
+      ],
+      default: Autonomy.INTERACTIVE,
+    });
+
     // interval_minutes 入力
     const intervalMinutesStr = await input({
       message: t("prompt.intervalMinutes"),
@@ -111,7 +144,7 @@ export async function initCommand(): Promise<void> {
     const intervalMinutes = Number(intervalMinutesStr);
 
     // YAML 生成・書き込み
-    const config = buildConfigData(repos, language, intervalMinutes);
+    const config = buildConfigData(repos, language, intervalMinutes, autonomy);
     const yamlStr = stringify(config);
     fs.writeFileSync(getConfigPath(), yamlStr, { encoding: "utf-8", mode: 0o600 });
 
