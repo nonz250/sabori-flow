@@ -113,6 +113,7 @@ const FAILURE_CATEGORY_LABELS: Record<FailureCategory, string> = {
   [FailureCategory.CLI_EXECUTION_ERROR]: "CLI Execution Error",
   [FailureCategory.CLI_NON_ZERO_EXIT]: "CLI Non-zero Exit",
   [FailureCategory.CLI_TIMEOUT]: "CLI Timeout",
+  [FailureCategory.CLI_PERMISSION_DENIED]: "CLI Permission Denied (auto mode classifier)",
   [FailureCategory.WORKTREE_CREATION]: "Worktree Creation Error",
   [FailureCategory.GIT_FETCH]: "Git Fetch Error",
 };

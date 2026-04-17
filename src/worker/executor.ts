@@ -5,9 +5,6 @@ import {
 } from "./process.js";
 import type { ProcessResult } from "./process.js";
 import { Autonomy } from "./models.js";
-import { createLogger } from "./logger.js";
-
-const logger = createLogger("executor");
 
 export class ExecutorError extends Error {
   constructor(message: string) {
@@ -37,14 +34,14 @@ export interface RunClaudeOptions {
 }
 
 /**
- * Claude Code CLI を実行し、結果を返す。
+ * Run the Claude Code CLI and return its result.
  *
- * stdin 経由でプロンプトを渡して非対話実行する。
+ * The prompt is supplied via stdin so the CLI runs non-interactively.
  *
- * @param prompt - Claude Code CLI に渡すプロンプト文字列
- * @param options - cwd, timeoutMs を指定可能
+ * @param prompt - prompt string passed to the Claude Code CLI
+ * @param options - optional cwd, timeoutMs, autonomy
  * @returns ProcessResult (success, stdout, stderr)
- * @throws ExecutorError - タイムアウトまたは予期しない実行エラーの場合
+ * @throws ExecutorError - on timeout or unexpected execution failures
  */
 export async function runClaude(
   prompt: string,
@@ -54,11 +51,6 @@ export async function runClaude(
 
   const autonomy = options?.autonomy ?? Autonomy.INTERACTIVE;
   const autonomyFlags = resolveClaudeAutonomyFlags(autonomy);
-  if (autonomy === Autonomy.SANDBOXED) {
-    logger.warn(
-      "Claude Code does not support 'sandboxed' autonomy; falling back to 'interactive'",
-    );
-  }
   const args = ["-p", ...autonomyFlags];
 
   try {
@@ -88,19 +80,67 @@ export async function runClaude(
 }
 
 /**
- * Autonomy レベルから Claude Code CLI のフラグを解決する。
+ * Resolve Claude Code CLI flags from an autonomy level.
  *
- * Claude Code は full と interactive のみ対応。
- * sandboxed は未対応のため interactive と同じフラグ（空配列）を返す。
+ * - full        -> --dangerously-skip-permissions
+ * - auto        -> --permission-mode auto
+ * - sandboxed   -> no flags (Claude Code does not support it; reserved for future non-Claude CLIs)
+ * - interactive -> no flags
  */
 export function resolveClaudeAutonomyFlags(autonomy: Autonomy): readonly string[] {
   switch (autonomy) {
     case Autonomy.FULL:
       return ["--dangerously-skip-permissions"];
+    case Autonomy.AUTO:
+      return ["--permission-mode", "auto"];
     case Autonomy.SANDBOXED:
       return [];
     case Autonomy.INTERACTIVE:
       return [];
+    default: {
+      const _exhaustive: never = autonomy;
+      throw new Error(`Unknown autonomy level: ${_exhaustive}`);
+    }
+  }
+}
+
+export type AutonomyLogLevel = "info" | "warn";
+
+export interface AutonomyLogMessage {
+  readonly level: AutonomyLogLevel;
+  readonly message: string;
+}
+
+/**
+ * Return the startup log entry (if any) for a given autonomy level.
+ *
+ * Emitted once at config load so operators can see the mode the worker
+ * is running in. Null means no log should be emitted for that level.
+ */
+export function resolveAutonomyLogMessage(
+  autonomy: Autonomy,
+): AutonomyLogMessage | null {
+  switch (autonomy) {
+    case Autonomy.FULL:
+      return {
+        level: "warn",
+        message:
+          "autonomy is set to 'full'. Claude Code CLI will run with --dangerously-skip-permissions.",
+      };
+    case Autonomy.AUTO:
+      return {
+        level: "info",
+        message:
+          "autonomy is set to 'auto'. Claude Code CLI will run with --permission-mode auto.",
+      };
+    case Autonomy.SANDBOXED:
+      return {
+        level: "warn",
+        message:
+          "Claude Code does not support 'sandboxed' autonomy; falling back to 'interactive'",
+      };
+    case Autonomy.INTERACTIVE:
+      return null;
     default: {
       const _exhaustive: never = autonomy;
       throw new Error(`Unknown autonomy level: ${_exhaustive}`);

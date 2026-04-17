@@ -552,7 +552,7 @@ describe("loadConfig - execution validation", () => {
       ConfigValidationError,
     );
     expect(() => loadConfig("/path/to/config.yml")).toThrow(
-      /execution.autonomy: must be one of: full, sandboxed, interactive/,
+      /execution\.autonomy: must be one of: (?=.*full)(?=.*auto)(?=.*sandboxed)(?=.*interactive)/,
     );
   });
 

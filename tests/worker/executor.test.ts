@@ -22,7 +22,13 @@ vi.mock("../../src/worker/logger.js", () => ({
   createLogger: vi.fn(() => mockLoggerInstance),
 }));
 
-import { runClaude, ExecutorError, ExecutorTimeoutError, resolveClaudeAutonomyFlags } from "../../src/worker/executor.js";
+import {
+  runClaude,
+  ExecutorError,
+  ExecutorTimeoutError,
+  resolveClaudeAutonomyFlags,
+  resolveAutonomyLogMessage,
+} from "../../src/worker/executor.js";
 import {
   runCommand,
   ProcessTimeoutError,
@@ -339,23 +345,41 @@ describe("runClaude", () => {
       expect(args).not.toContain("--dangerously-skip-permissions");
     });
 
-    it("autonomy が sandboxed の場合 WARN ログが出力される", async () => {
+    it("autonomy が auto の場合 --permission-mode と auto が隣接して含まれる", async () => {
       mockedRunCommand.mockResolvedValue({
         success: true,
         stdout: "",
         stderr: "",
       });
 
-      mockLoggerInstance.warn.mockClear();
+      await runClaude("prompt text", { autonomy: "auto" });
 
-      await runClaude("prompt text", { autonomy: "sandboxed" });
-
-      expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
-        "Claude Code does not support 'sandboxed' autonomy; falling back to 'interactive'",
-      );
+      const args = mockedRunCommand.mock.calls[0][1];
+      expect(args).toEqual(["-p", "--permission-mode", "auto"]);
+      expect(args).not.toContain("--dangerously-skip-permissions");
     });
 
-    it("autonomy が full の場合 sandboxed WARN ログが出力されない", async () => {
+    it("autonomy が auto の場合は full のフラグと異なる", async () => {
+      mockedRunCommand.mockResolvedValue({
+        success: true,
+        stdout: "",
+        stderr: "",
+      });
+
+      await runClaude("prompt text", { autonomy: "auto" });
+      const autoArgs = mockedRunCommand.mock.calls[0][1];
+
+      mockedRunCommand.mockClear();
+
+      await runClaude("prompt text", { autonomy: "full" });
+      const fullArgs = mockedRunCommand.mock.calls[0][1];
+
+      expect(autoArgs).not.toEqual(fullArgs);
+      expect(autoArgs).toContain("--permission-mode");
+      expect(fullArgs).toContain("--dangerously-skip-permissions");
+    });
+
+    it("runClaude は autonomy ログを直接出力しない (config ロード時に一括出力)", async () => {
       mockedRunCommand.mockResolvedValue({
         success: true,
         stdout: "",
@@ -363,17 +387,30 @@ describe("runClaude", () => {
       });
 
       mockLoggerInstance.warn.mockClear();
+      mockLoggerInstance.info.mockClear();
 
+      await runClaude("prompt text", { autonomy: "sandboxed" });
       await runClaude("prompt text", { autonomy: "full" });
+      await runClaude("prompt text", { autonomy: "auto" });
 
       expect(mockLoggerInstance.warn).not.toHaveBeenCalled();
+      expect(mockLoggerInstance.info).not.toHaveBeenCalled();
     });
   });
 });
 
 describe("resolveClaudeAutonomyFlags", () => {
   it("full の場合 --dangerously-skip-permissions を返す", () => {
-    expect(resolveClaudeAutonomyFlags("full")).toEqual(["--dangerously-skip-permissions"]);
+    expect(resolveClaudeAutonomyFlags("full")).toEqual([
+      "--dangerously-skip-permissions",
+    ]);
+  });
+
+  it("auto の場合 ['--permission-mode', 'auto'] を返す", () => {
+    expect(resolveClaudeAutonomyFlags("auto")).toEqual([
+      "--permission-mode",
+      "auto",
+    ]);
   });
 
   it("sandboxed の場合 空配列を返す", () => {
@@ -382,5 +419,39 @@ describe("resolveClaudeAutonomyFlags", () => {
 
   it("interactive の場合 空配列を返す", () => {
     expect(resolveClaudeAutonomyFlags("interactive")).toEqual([]);
+  });
+
+  it("auto と full は異なるフラグ配列を返す", () => {
+    expect(resolveClaudeAutonomyFlags("auto")).not.toEqual(
+      resolveClaudeAutonomyFlags("full"),
+    );
+  });
+});
+
+describe("resolveAutonomyLogMessage", () => {
+  it("full の場合 warn レベルで full 向けメッセージを返す", () => {
+    const result = resolveAutonomyLogMessage("full");
+    expect(result).not.toBeNull();
+    expect(result?.level).toBe("warn");
+    expect(result?.message).toContain("--dangerously-skip-permissions");
+  });
+
+  it("auto の場合 info レベルで auto 向けメッセージを返す", () => {
+    const result = resolveAutonomyLogMessage("auto");
+    expect(result).not.toBeNull();
+    expect(result?.level).toBe("info");
+    expect(result?.message).toContain("--permission-mode auto");
+  });
+
+  it("sandboxed の場合 warn レベルで fallback メッセージを返す", () => {
+    const result = resolveAutonomyLogMessage("sandboxed");
+    expect(result).not.toBeNull();
+    expect(result?.level).toBe("warn");
+    expect(result?.message).toContain("sandboxed");
+    expect(result?.message).toContain("interactive");
+  });
+
+  it("interactive の場合 null を返す", () => {
+    expect(resolveAutonomyLogMessage("interactive")).toBeNull();
   });
 });
