@@ -108,6 +108,27 @@ const FAILURE_CATEGORY_LABELS: Record<FailureCategory, string> = {
   [FailureCategory.GIT_FETCH]: "Git Fetch Error",
 };
 
+// ---------- Output section labels ----------
+
+const STDOUT_SUMMARY_LABEL = "stdout (partial)";
+const STDERR_SUMMARY_LABEL = "stderr";
+const TIMEOUT_OUTPUT_SUMMARY_SUFFIX = "(partial, before timeout)";
+
+/**
+ * Resolve the <summary> label for a stdout/stderr section based on
+ * the failure category. CLI_TIMEOUT uses a dedicated label to signal
+ * that the output was interrupted by the timeout.
+ */
+function buildOutputSummaryLabel(
+  stream: "stdout" | "stderr",
+  category: FailureCategory,
+): string {
+  if (category === FailureCategory.CLI_TIMEOUT) {
+    return `${stream} ${TIMEOUT_OUTPUT_SUMMARY_SUFFIX}`;
+  }
+  return stream === "stdout" ? STDOUT_SUMMARY_LABEL : STDERR_SUMMARY_LABEL;
+}
+
 // ---------- Failure diagnostics formatting ----------
 
 /**
@@ -156,10 +177,11 @@ export function formatFailureDiagnostics(diag: FailureDiagnostics): string {
       output = TRUNCATION_PREFIX + output.slice(-PARTIAL_STDERR_TAIL_LENGTH);
     }
     const sanitized = escapeCodeBlock(sanitizeOutput(output));
+    const label = buildOutputSummaryLabel("stderr", diag.category);
     sections.push(
       [
         "<details>",
-        "<summary>stderr</summary>",
+        `<summary>${label}</summary>`,
         "",
         "```",
         sanitized,
@@ -176,10 +198,11 @@ export function formatFailureDiagnostics(diag: FailureDiagnostics): string {
       output = TRUNCATION_PREFIX + output.slice(-PARTIAL_STDOUT_TAIL_LENGTH);
     }
     const sanitized = escapeCodeBlock(sanitizeOutput(output));
+    const label = buildOutputSummaryLabel("stdout", diag.category);
     sections.push(
       [
         "<details>",
-        "<summary>stdout (partial)</summary>",
+        `<summary>${label}</summary>`,
         "",
         "```",
         sanitized,

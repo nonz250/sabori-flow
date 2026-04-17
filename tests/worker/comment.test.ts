@@ -873,4 +873,69 @@ describe("formatFailureDiagnostics", () => {
     expect(result).not.toContain(token);
     expect(result).toContain("[REDACTED]");
   });
+
+  it("CLI_TIMEOUT カテゴリで stdout ラベルが 'partial, before timeout' になる", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_TIMEOUT,
+      summary: "timed out",
+      stdout: "some stdout",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain("<summary>stdout (partial, before timeout)</summary>");
+    expect(result).not.toContain("<summary>stdout (partial)</summary>");
+  });
+
+  it("CLI_TIMEOUT カテゴリで stderr ラベルが 'partial, before timeout' になる", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_TIMEOUT,
+      summary: "timed out",
+      stderr: "some stderr",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain("<summary>stderr (partial, before timeout)</summary>");
+    expect(result).not.toContain("<summary>stderr</summary>");
+  });
+
+  it("CLI_NON_ZERO_EXIT カテゴリでは従来の stdout ラベルが使われる", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_NON_ZERO_EXIT,
+      summary: "non-zero",
+      stdout: "some stdout",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain("<summary>stdout (partial)</summary>");
+    expect(result).not.toContain("partial, before timeout");
+  });
+
+  it("CLI_NON_ZERO_EXIT カテゴリでは従来の stderr ラベルが使われる", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_NON_ZERO_EXIT,
+      summary: "non-zero",
+      stderr: "some stderr",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain("<summary>stderr</summary>");
+    expect(result).not.toContain("partial, before timeout");
+  });
+
+  it("CLI_EXECUTION_ERROR でも従来の stderr ラベルが使われる", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_EXECUTION_ERROR,
+      summary: "exec error",
+      stderr: "some stderr",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain("<summary>stderr</summary>");
+    expect(result).not.toContain("partial, before timeout");
+  });
 });
