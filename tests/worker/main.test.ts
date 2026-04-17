@@ -519,10 +519,10 @@ describe("workerMain", () => {
   });
 
   // -----------------------------------------------------------------------
-  // autonomy WARN ログ
+  // autonomy startup ログ
   // -----------------------------------------------------------------------
 
-  describe("autonomy WARN ログ", () => {
+  describe("autonomy startup ログ", () => {
     it("autonomy が full の場合 WARN ログが出力される", async () => {
       vi.mocked(deps.loadConfig).mockReturnValue(
         makeAppConfig({ execution: { autonomy: Autonomy.FULL } }),
@@ -530,6 +530,7 @@ describe("workerMain", () => {
       vi.mocked(deps.fetchIssues).mockResolvedValue([]);
 
       mockLoggerInstance.warn.mockClear();
+      mockLoggerInstance.info.mockClear();
 
       await workerMain("/path/to/config.yml", deps);
 
@@ -538,20 +539,24 @@ describe("workerMain", () => {
       );
     });
 
-    it("autonomy が interactive の場合 autonomy WARN ログが出力されない", async () => {
+    it("autonomy が auto の場合 INFO ログが出力され WARN は出ない", async () => {
       vi.mocked(deps.loadConfig).mockReturnValue(
-        makeAppConfig({ execution: { autonomy: Autonomy.INTERACTIVE } }),
+        makeAppConfig({ execution: { autonomy: Autonomy.AUTO } }),
       );
       vi.mocked(deps.fetchIssues).mockResolvedValue([]);
 
       mockLoggerInstance.warn.mockClear();
+      mockLoggerInstance.info.mockClear();
 
       await workerMain("/path/to/config.yml", deps);
 
+      expect(mockLoggerInstance.info).toHaveBeenCalledWith(
+        expect.stringContaining("--permission-mode auto"),
+      );
       expect(mockLoggerInstance.warn).not.toHaveBeenCalled();
     });
 
-    it("autonomy が sandboxed の場合 autonomy WARN ログが出力されない", async () => {
+    it("autonomy が sandboxed の場合 WARN ログが一度だけ出力される", async () => {
       vi.mocked(deps.loadConfig).mockReturnValue(
         makeAppConfig({ execution: { autonomy: Autonomy.SANDBOXED } }),
       );
@@ -561,7 +566,29 @@ describe("workerMain", () => {
 
       await workerMain("/path/to/config.yml", deps);
 
+      expect(mockLoggerInstance.warn).toHaveBeenCalledTimes(1);
+      expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
+        expect.stringContaining("sandboxed"),
+      );
+    });
+
+    it("autonomy が interactive の場合 autonomy ログは出力されない", async () => {
+      vi.mocked(deps.loadConfig).mockReturnValue(
+        makeAppConfig({ execution: { autonomy: Autonomy.INTERACTIVE } }),
+      );
+      vi.mocked(deps.fetchIssues).mockResolvedValue([]);
+
+      mockLoggerInstance.warn.mockClear();
+      mockLoggerInstance.info.mockClear();
+
+      await workerMain("/path/to/config.yml", deps);
+
       expect(mockLoggerInstance.warn).not.toHaveBeenCalled();
+      const autonomyInfoCalls = mockLoggerInstance.info.mock.calls.filter(
+        ([msg]: [string]) =>
+          typeof msg === "string" && msg.startsWith("autonomy"),
+      );
+      expect(autonomyInfoCalls).toHaveLength(0);
     });
   });
 });

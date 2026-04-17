@@ -1,9 +1,10 @@
 import type { AppConfig, ExecutionConfig, Issue, Phase, RepositoryConfig } from "./models.js";
-import { Autonomy, repoFullName } from "./models.js";
+import { repoFullName } from "./models.js";
 import { Phase as PhaseEnum } from "./models.js";
 import { loadConfig } from "./config.js";
 import { fetchIssues } from "./fetcher.js";
 import { processIssue } from "./pipeline.js";
+import { resolveAutonomyLogMessage } from "./executor.js";
 import { configureLogger, createLogger, rotateOldLogs } from "./logger.js";
 import { getConfigPath, getLogsDir } from "../utils/paths.js";
 
@@ -188,10 +189,9 @@ export async function workerMain(
     appConfig.repositories.length,
   );
 
-  if (appConfig.execution.autonomy === Autonomy.FULL) {
-    logger.warn(
-      "autonomy is set to 'full'. Claude Code CLI will run with --dangerously-skip-permissions.",
-    );
+  const autonomyLog = resolveAutonomyLogMessage(appConfig.execution.autonomy);
+  if (autonomyLog !== null) {
+    logger[autonomyLog.level](autonomyLog.message);
   }
 
   // リポジトリ並列処理 (Promise.allSettled + セマフォ制御)
