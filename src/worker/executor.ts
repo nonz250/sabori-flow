@@ -20,6 +20,8 @@ export class ExecutorTimeoutError extends ExecutorError {
   constructor(
     message: string,
     public readonly timeoutMs: number,
+    public readonly stdout: string = "",
+    public readonly stderr: string = "",
   ) {
     super(message);
     Object.setPrototypeOf(this, ExecutorTimeoutError.prototype);
@@ -74,6 +76,8 @@ export async function runClaude(
       throw new ExecutorTimeoutError(
         `Claude Code CLI timed out after ${timeoutMs}ms`,
         timeoutMs,
+        error.stdout,
+        error.stderr,
       );
     }
     if (error instanceof ProcessExecutionError) {

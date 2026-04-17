@@ -406,6 +406,165 @@ describe("sanitizeOutput", () => {
   it("空文字列を渡しても正常に動作する", () => {
     expect(sanitizeOutput("")).toBe("");
   });
+
+  it("Anthropic API キー (sk-ant-api03-...) がマスキングされる", () => {
+    const secret =
+      "sk-ant-api03-" + "A".repeat(64);
+    const text = `ANTHROPIC_API_KEY=${secret}_and_more`;
+    const result = sanitizeOutput(text);
+    expect(result).not.toContain(secret);
+    expect(result).toContain("[REDACTED]");
+  });
+
+  it("sk-ant-api03- 以外の短い sk- で始まる文字列は誤検知されない", () => {
+    // 先頭 sk- の後の文字数が 20 未満なので OpenAI パターンにもマッチしない
+    const tooShort = "sk-short";
+    const text = `something ${tooShort} else`;
+    expect(sanitizeOutput(text)).toBe(text);
+  });
+
+  it("OpenAI API キー (sk-...) がマスキングされる", () => {
+    const secret = "sk-" + "A".repeat(40);
+    const text = `OPENAI_API_KEY=${secret}`;
+    const result = sanitizeOutput(text);
+    expect(result).not.toContain(secret);
+    expect(result).toContain("[REDACTED]");
+  });
+
+  it("OpenAI project-scoped API キー (sk-proj-...) がマスキングされる", () => {
+    const secret = "sk-proj-" + "B".repeat(40);
+    const text = `key: ${secret}`;
+    const result = sanitizeOutput(text);
+    expect(result).not.toContain(secret);
+    expect(result).toContain("[REDACTED]");
+  });
+
+  it("Slack トークン (xoxb-...) がマスキングされる", () => {
+    const secret = "xoxb-" + "A".repeat(30);
+    const text = `slack token: ${secret} end`;
+    const result = sanitizeOutput(text);
+    expect(result).not.toContain(secret);
+    expect(result).toContain("[REDACTED]");
+  });
+
+  it("Slack user トークン (xoxp-...) がマスキングされる", () => {
+    const secret = "xoxp-" + "1".repeat(30);
+    const text = `${secret}`;
+    const result = sanitizeOutput(text);
+    expect(result).not.toContain(secret);
+    expect(result).toContain("[REDACTED]");
+  });
+
+  it("短すぎる xox 文字列は誤検知されない", () => {
+    const text = "xoxb-short";
+    expect(sanitizeOutput(text)).toBe(text);
+  });
+
+  it("Google API キー (AIza...) がマスキングされる", () => {
+    const secret = "AIza" + "A".repeat(35);
+    const text = `key = "${secret}"`;
+    const result = sanitizeOutput(text);
+    expect(result).not.toContain(secret);
+    expect(result).toContain("[REDACTED]");
+  });
+
+  it("短すぎる AIza 文字列は誤検知されない", () => {
+    const tooShort = "AIza" + "A".repeat(10);
+    const text = `key = ${tooShort}`;
+    expect(sanitizeOutput(text)).toBe(text);
+  });
+
+  it("JWT トークン (eyJ...) がマスキングされる", () => {
+    const header = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9";
+    const payload = "eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4ifQ";
+    const sig = "sig_abcDEFghiJKLmno123-_abc";
+    const jwt = `${header}.${payload}.${sig}`;
+    const text = `Authorization header has ${jwt} in it`;
+    const result = sanitizeOutput(text);
+    expect(result).not.toContain(jwt);
+    expect(result).toContain("[REDACTED]");
+  });
+
+  it("JWT として形式が不完全な文字列は誤検知されない", () => {
+    const text = "not-a-jwt eyJonlyheader end";
+    expect(sanitizeOutput(text)).toBe(text);
+  });
+
+  it("npm トークン (npm_...) がマスキングされる", () => {
+    const secret = "npm_" + "A".repeat(36);
+    const text = `//registry.npmjs.org/:_authToken=${secret}`;
+    const result = sanitizeOutput(text);
+    expect(result).not.toContain(secret);
+    expect(result).toContain("[REDACTED]");
+  });
+
+  it("npm トークンの桁数が 36 文字未満の場合は誤検知されない", () => {
+    const tooShort = "npm_" + "A".repeat(10);
+    const text = `authToken=${tooShort}`;
+    expect(sanitizeOutput(text)).toBe(text);
+  });
+
+  // -------------------------------------------------------------------------
+  // 個別 SECRET_PATTERNS の独立検証
+  //
+  // 汎用 key=value パターン (/^.*(?:api[_-]?key|api[_-]?secret|
+  // access[_-]?token|secret[_-]?key)[=:].*$/gim) は行全体を [REDACTED] に
+  // 置換するため、そのキーワードを含むコンテキスト (例: "OPENAI_API_KEY=...")
+  // では個別パターンが壊れていても検出できない。
+  // 以下のテストはキーワードを含まないコンテキストを用いて、個別パターンが
+  // 独立して機能することを検証する。
+  // -------------------------------------------------------------------------
+
+  it("Anthropic API キー (sk-ant-api03-...) が汎用キーワードなしでも独立してマスキングされる", () => {
+    // 長さを 250 文字にすることで、OpenAI パターンの 200 文字上限を超える。
+    // Anthropic 専用パターンが機能していない場合、OpenAI パターンでは
+    // 先頭 200 文字しかマスクされず末尾 A が残るため、本テストが失敗する。
+    // これにより個別 Anthropic パターンの独立動作が保証される。
+    const secretBody = "A".repeat(250);
+    const secret = `sk-ant-api03-${secretBody}`;
+    const text = `log line with token ${secret} embedded in trace`;
+    // ガードレール: このテストデータは汎用 key=value パターンにマッチしないこと
+    expect(text).not.toMatch(
+      /api[_-]?key|api[_-]?secret|access[_-]?token|secret[_-]?key/i,
+    );
+
+    const result = sanitizeOutput(text);
+
+    expect(result).not.toContain(secret);
+    expect(result).not.toContain("sk-ant-api03-");
+    // OpenAI パターンだけが効いた場合に残存し得る A 文字列の塊が残っていないこと
+    expect(result).not.toContain("A".repeat(20));
+    expect(result).toContain("[REDACTED]");
+  });
+
+  it("OpenAI API キー (sk-...) が汎用キーワードなしでも独立してマスキングされる", () => {
+    const secret = "sk-" + "A".repeat(40);
+    const text = `trace output contains ${secret} between other text`;
+    // ガードレール: このテストデータは汎用 key=value パターンにマッチしないこと
+    expect(text).not.toMatch(
+      /api[_-]?key|api[_-]?secret|access[_-]?token|secret[_-]?key/i,
+    );
+
+    const result = sanitizeOutput(text);
+
+    expect(result).not.toContain(secret);
+    expect(result).toContain("[REDACTED]");
+  });
+
+  it("OpenAI project-scoped API キー (sk-proj-...) が汎用キーワードなしでも独立してマスキングされる", () => {
+    const secret = "sk-proj-" + "B".repeat(40);
+    const text = `diagnostic dump ${secret} end of line`;
+    // ガードレール: このテストデータは汎用 key=value パターンにマッチしないこと
+    expect(text).not.toMatch(
+      /api[_-]?key|api[_-]?secret|access[_-]?token|secret[_-]?key/i,
+    );
+
+    const result = sanitizeOutput(text);
+
+    expect(result).not.toContain(secret);
+    expect(result).not.toContain("sk-proj-");
+    expect(result).toContain("[REDACTED]");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -416,6 +575,8 @@ import {
   formatFailureDiagnostics,
   PARTIAL_STDOUT_TAIL_LENGTH,
   PARTIAL_STDERR_TAIL_LENGTH,
+  TRUNCATION_PREFIX,
+  CLI_TIMEOUT_WARNING_NOTE,
 } from "../../src/worker/comment.js";
 import { FailureCategory } from "../../src/worker/models.js";
 import type { FailureDiagnostics } from "../../src/worker/models.js";
@@ -702,5 +863,212 @@ describe("formatFailureDiagnostics", () => {
 
     expect(result).not.toContain("X".repeat(100));
     expect(result).toContain("Y".repeat(100));
+  });
+
+  it("stdout が閾値超過時はトランケートプレフィックスが付与される", () => {
+    const stdout = "Z".repeat(PARTIAL_STDOUT_TAIL_LENGTH + 500);
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_NON_ZERO_EXIT,
+      summary: "Truncated",
+      stdout,
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain(TRUNCATION_PREFIX);
+    expect(result).toContain("Z".repeat(PARTIAL_STDOUT_TAIL_LENGTH));
+  });
+
+  it("stderr が閾値超過時はトランケートプレフィックスが付与される", () => {
+    const stderr = "E".repeat(PARTIAL_STDERR_TAIL_LENGTH + 500);
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_NON_ZERO_EXIT,
+      summary: "Truncated",
+      stderr,
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain(TRUNCATION_PREFIX);
+    expect(result).toContain("E".repeat(PARTIAL_STDERR_TAIL_LENGTH));
+  });
+
+  it("stdout が閾値以下の場合はトランケートプレフィックスが付与されない", () => {
+    const stdout = "Z".repeat(PARTIAL_STDOUT_TAIL_LENGTH);
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_NON_ZERO_EXIT,
+      summary: "At threshold",
+      stdout,
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).not.toContain(TRUNCATION_PREFIX);
+    expect(result).toContain(stdout);
+  });
+
+  it("stderr が閾値以下の場合はトランケートプレフィックスが付与されない", () => {
+    const stderr = "E".repeat(PARTIAL_STDERR_TAIL_LENGTH);
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_NON_ZERO_EXIT,
+      summary: "At threshold",
+      stderr,
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).not.toContain(TRUNCATION_PREFIX);
+    expect(result).toContain(stderr);
+  });
+
+  it("トランケート後の出力にシークレットが含まれる場合も [REDACTED] に置換される", () => {
+    const token = "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijkl";
+    const padded = "x".repeat(PARTIAL_STDOUT_TAIL_LENGTH);
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_NON_ZERO_EXIT,
+      summary: "Trunc with secret",
+      stdout: padded + `token=${token}`,
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain(TRUNCATION_PREFIX);
+    expect(result).not.toContain(token);
+    expect(result).toContain("[REDACTED]");
+  });
+
+  it("CLI_TIMEOUT カテゴリで stdout ラベルが 'partial, before timeout' になる", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_TIMEOUT,
+      summary: "timed out",
+      stdout: "some stdout",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain("<summary>stdout (partial, before timeout)</summary>");
+    expect(result).not.toContain("<summary>stdout (partial)</summary>");
+  });
+
+  it("CLI_TIMEOUT カテゴリで stderr ラベルが 'partial, before timeout' になる", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_TIMEOUT,
+      summary: "timed out",
+      stderr: "some stderr",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain("<summary>stderr (partial, before timeout)</summary>");
+    expect(result).not.toContain("<summary>stderr</summary>");
+  });
+
+  it("CLI_NON_ZERO_EXIT カテゴリでは従来の stdout ラベルが使われる", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_NON_ZERO_EXIT,
+      summary: "non-zero",
+      stdout: "some stdout",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain("<summary>stdout (partial)</summary>");
+    expect(result).not.toContain("partial, before timeout");
+  });
+
+  it("CLI_NON_ZERO_EXIT カテゴリでは従来の stderr ラベルが使われる", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_NON_ZERO_EXIT,
+      summary: "non-zero",
+      stderr: "some stderr",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain("<summary>stderr</summary>");
+    expect(result).not.toContain("partial, before timeout");
+  });
+
+  it("CLI_EXECUTION_ERROR でも従来の stderr ラベルが使われる", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_EXECUTION_ERROR,
+      summary: "exec error",
+      stderr: "some stderr",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain("<summary>stderr</summary>");
+    expect(result).not.toContain("partial, before timeout");
+  });
+
+  it("CLI_TIMEOUT で stderr がある場合、信頼性警告注記が含まれる", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_TIMEOUT,
+      summary: "timed out",
+      stderr: "some stderr",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain(CLI_TIMEOUT_WARNING_NOTE);
+  });
+
+  it("CLI_TIMEOUT で stdout だけの場合も信頼性警告注記が含まれる", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_TIMEOUT,
+      summary: "timed out",
+      stdout: "some stdout",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain(CLI_TIMEOUT_WARNING_NOTE);
+  });
+
+  it("CLI_TIMEOUT で partial 出力がない場合は警告注記が含まれない", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_TIMEOUT,
+      summary: "timed out",
+      timeoutMs: 600_000,
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).not.toContain(CLI_TIMEOUT_WARNING_NOTE);
+  });
+
+  it("CLI_NON_ZERO_EXIT では信頼性警告注記が含まれない", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_NON_ZERO_EXIT,
+      summary: "non-zero",
+      stdout: "some stdout",
+      stderr: "some stderr",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).not.toContain(CLI_TIMEOUT_WARNING_NOTE);
+  });
+
+  it("CLI_TIMEOUT で警告注記は stderr セクションの前に挿入される", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_TIMEOUT,
+      summary: "timed out",
+      stderr: "some stderr content",
+      stdout: "some stdout content",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    const noteIndex = result.indexOf(CLI_TIMEOUT_WARNING_NOTE);
+    const stderrIndex = result.indexOf("<summary>stderr");
+    const stdoutIndex = result.indexOf("<summary>stdout");
+
+    expect(noteIndex).toBeGreaterThanOrEqual(0);
+    expect(stderrIndex).toBeGreaterThanOrEqual(0);
+    expect(stdoutIndex).toBeGreaterThanOrEqual(0);
+    expect(noteIndex).toBeLessThan(stderrIndex);
+    expect(noteIndex).toBeLessThan(stdoutIndex);
   });
 });

@@ -9,6 +9,7 @@ import type {
 import { Phase, Priority } from "../../../src/worker/models.js";
 import type { Language } from "../../../src/i18n/types.js";
 import type { ProcessResult } from "../../../src/worker/process.js";
+import { ExecutorTimeoutError } from "../../../src/worker/executor.js";
 
 // ---------- Label constants ----------
 
@@ -77,6 +78,23 @@ export function makeProcessResult(
     exitCode: overrides?.success === false ? 1 : 0,
     ...overrides,
   };
+}
+
+export function makeExecutorTimeoutError(overrides?: {
+  timeoutMs?: number;
+  stdout?: string;
+  stderr?: string;
+  message?: string;
+}): ExecutorTimeoutError {
+  const timeoutMs = overrides?.timeoutMs ?? 3_600_000;
+  const message =
+    overrides?.message ?? `Claude Code CLI timed out after ${timeoutMs}ms`;
+  return new ExecutorTimeoutError(
+    message,
+    timeoutMs,
+    overrides?.stdout ?? "",
+    overrides?.stderr ?? "",
+  );
 }
 
 export function makeAppConfig(

@@ -5,10 +5,12 @@ import { Phase } from "../../src/worker/models.js";
 import type { ExecutionConfig } from "../../src/worker/models.js";
 import { ExecutorTimeoutError } from "../../src/worker/executor.js";
 import { WorktreeError } from "../../src/worker/worktree.js";
+import { CLI_TIMEOUT_WARNING_NOTE } from "../../src/worker/comment.js";
 import {
   makeRepoConfig,
   makeIssue,
   makeProcessResult,
+  makeExecutorTimeoutError,
   PLAN_LABELS,
   IMPL_LABELS,
 } from "./helpers/factories.js";
@@ -291,6 +293,73 @@ describe("processIssue", () => {
       expect(failureMessage).toContain("CLI Timeout");
       expect(failureMessage).toContain("Claude Code CLI timed out");
       expect(failureMessage).toContain("1800s");
+    });
+
+    it("ExecutorTimeoutError の partial stdout/stderr が failed コメントに含まれる", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
+      vi.mocked(deps.runClaude).mockRejectedValue(
+        makeExecutorTimeoutError({
+          timeoutMs: 600_000,
+          stdout: "partial stdout chunk",
+          stderr: "partial stderr chunk",
+        }),
+      );
+
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, deps);
+
+      expect(result).toBe(false);
+      expect(deps.postFailureComment).toHaveBeenCalledOnce();
+      const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
+      expect(failureMessage).toContain("CLI Timeout");
+      expect(failureMessage).toContain("partial stdout chunk");
+      expect(failureMessage).toContain("partial stderr chunk");
+      // CLI_TIMEOUT かつ partial 出力が非空のとき、信頼性警告注記が含まれる
+      expect(failureMessage).toContain(CLI_TIMEOUT_WARNING_NOTE);
+      expect(failureMessage).toContain("Output reliability is limited");
+    });
+
+    it("ExecutorTimeoutError の partial 出力に含まれるシークレットはサニタイズされる", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      const token = "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijkl";
+      vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
+      vi.mocked(deps.runClaude).mockRejectedValue(
+        makeExecutorTimeoutError({
+          timeoutMs: 600_000,
+          stdout: `using token ${token}`,
+          stderr: "",
+        }),
+      );
+
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, deps);
+
+      expect(result).toBe(false);
+      const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
+      expect(failureMessage).not.toContain(token);
+      expect(failureMessage).toContain("[REDACTED]");
+    });
+
+    it("ExecutorTimeoutError の partial が空の場合、stdout/stderr セクションは含まれない", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
+      vi.mocked(deps.runClaude).mockRejectedValue(
+        makeExecutorTimeoutError({ timeoutMs: 600_000 }),
+      );
+
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, deps);
+
+      expect(result).toBe(false);
+      const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
+      expect(failureMessage).toContain("CLI Timeout");
+      expect(failureMessage).not.toContain("<summary>stderr");
+      expect(failureMessage).not.toContain("<summary>stdout");
+      // CLI_TIMEOUT でも partial 出力がない場合、信頼性警告注記は含めない。
+      // 警告対象となる出力自体が存在しないため、注記を出すと情報ノイズとなる。
+      expect(failureMessage).not.toContain(CLI_TIMEOUT_WARNING_NOTE);
+      expect(failureMessage).not.toContain("Output reliability is limited");
     });
 
     it("runClaude が success=false を返すと failed 遷移 + 失敗コメントが呼ばれ false が返る", async () => {

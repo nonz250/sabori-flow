@@ -167,6 +167,46 @@ describe("runClaude", () => {
         expect((error as ExecutorTimeoutError).timeoutMs).toBe(customTimeoutMs);
       }
     });
+
+    it("ProcessTimeoutError の partial stdout/stderr が ExecutorTimeoutError に中継される", async () => {
+      mockedRunCommand.mockRejectedValue(
+        new ProcessTimeoutError(
+          1_800_000,
+          "partial claude stdout",
+          "partial claude stderr",
+        ),
+      );
+
+      try {
+        await runClaude("Long running task");
+        expect.fail("should have thrown");
+      } catch (error: unknown) {
+        expect(error).toBeInstanceOf(ExecutorTimeoutError);
+        const err = error as ExecutorTimeoutError;
+        expect(err.stdout).toBe("partial claude stdout");
+        expect(err.stderr).toBe("partial claude stderr");
+      }
+    });
+
+    it("ProcessTimeoutError が partial 未指定でも ExecutorTimeoutError は空文字列で保持する", async () => {
+      mockedRunCommand.mockRejectedValue(new ProcessTimeoutError(1_800_000));
+
+      try {
+        await runClaude("Long running task");
+        expect.fail("should have thrown");
+      } catch (error: unknown) {
+        expect(error).toBeInstanceOf(ExecutorTimeoutError);
+        const err = error as ExecutorTimeoutError;
+        expect(err.stdout).toBe("");
+        expect(err.stderr).toBe("");
+      }
+    });
+
+    it("ExecutorTimeoutError のデフォルトコンストラクタで stdout/stderr は空文字列", () => {
+      const err = new ExecutorTimeoutError("timed out", 1_000);
+      expect(err.stdout).toBe("");
+      expect(err.stderr).toBe("");
+    });
   });
 
   describe("バイナリ未検出", () => {

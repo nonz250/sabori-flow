@@ -13,6 +13,20 @@ const MAX_COMMENT_LENGTH = 64_000;
 const PARTIAL_STDOUT_TAIL_LENGTH = 2_000;
 const PARTIAL_STDERR_TAIL_LENGTH = 4_000;
 
+/**
+ * Prefix prepended to stdout/stderr when they have been truncated
+ * to signal explicitly that earlier content was dropped.
+ */
+const TRUNCATION_PREFIX = "...(truncated)\n";
+
+/**
+ * Warning note inserted into CLI_TIMEOUT failure comments to signal
+ * that the captured output may be partial or incomplete because the
+ * process was terminated by SIGTERM/SIGKILL on timeout.
+ */
+const CLI_TIMEOUT_WARNING_NOTE =
+  "> :warning: **Output reliability is limited.** The process was terminated by SIGTERM/SIGKILL on timeout, so the following output may be partial or incomplete.";
+
 // ---------- Secret pattern masking ----------
 
 /**
@@ -20,25 +34,43 @@ const PARTIAL_STDERR_TAIL_LENGTH = 4_000;
  * マッチした部分はコメント投稿前に [REDACTED] へ置換される。
  */
 const SECRET_PATTERNS: RegExp[] = [
-  // AWS アクセスキー (AKIA + 16文字の英大文字・数字)
+  // AWS access key id
   /AKIA[0-9A-Z]{16}/g,
 
-  // AWS シークレットキー (aws_secret_access_key / SecretAccessKey 等の直後にある40文字の文字列)
+  // AWS secret access key (preceded by an assignment to a known identifier)
   /(?<=(?:aws_secret_access_key|SecretAccessKey|secret_access_key)\s*[=:]\s*['"]?)[A-Za-z0-9/+=]{40}/gi,
 
-  // GitHub トークン (ghp_, ghs_ 形式)
+  // GitHub personal / server token
   /gh[ps]_[A-Za-z0-9_]{36,}/g,
 
   // GitHub fine-grained PAT
   /github_pat_[A-Za-z0-9_]{22,}/g,
 
-  // SSH 秘密鍵ブロック
+  // SSH private key block
   /-----BEGIN [A-Z ]+ PRIVATE KEY-----[\s\S]*?-----END [A-Z ]+ PRIVATE KEY-----/g,
 
-  // Bearer トークン
+  // Bearer token
   /Bearer [A-Za-z0-9\-._~+/]+=*/g,
 
-  // 汎用 API キー / トークン (key=value 形式の行)
+  // Anthropic API key
+  /sk-ant-api03-[A-Za-z0-9_\-]{64,}/g,
+
+  // OpenAI API key (sk-... or sk-proj-...), upper-bounded to avoid over-matching
+  /sk-(?:proj-)?[A-Za-z0-9_\-]{20,200}/g,
+
+  // Slack token (bot, app, personal, refresh, session)
+  /xox[abprs]-[A-Za-z0-9-]{10,}/g,
+
+  // Google API key
+  /AIza[0-9A-Za-z_\-]{35}/g,
+
+  // JSON Web Token (header.payload.signature, each base64url segment at least 10 chars)
+  /eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}/g,
+
+  // npm access token
+  /npm_[A-Za-z0-9]{36}/g,
+
+  // Generic API key / token assignment (key=value line)
   /^.*(?:api[_-]?key|api[_-]?secret|access[_-]?token|secret[_-]?key)\s*[=:].*$/gim,
 ];
 
@@ -66,6 +98,8 @@ export {
   MAX_COMMENT_LENGTH,
   PARTIAL_STDOUT_TAIL_LENGTH,
   PARTIAL_STDERR_TAIL_LENGTH,
+  TRUNCATION_PREFIX,
+  CLI_TIMEOUT_WARNING_NOTE,
   SUCCESS_HEADER,
   SUCCESS_TRUNCATED_SUFFIX,
   FAILURE_HEADER,
@@ -82,6 +116,27 @@ const FAILURE_CATEGORY_LABELS: Record<FailureCategory, string> = {
   [FailureCategory.WORKTREE_CREATION]: "Worktree Creation Error",
   [FailureCategory.GIT_FETCH]: "Git Fetch Error",
 };
+
+// ---------- Output section labels ----------
+
+const STDOUT_SUMMARY_LABEL = "stdout (partial)";
+const STDERR_SUMMARY_LABEL = "stderr";
+const TIMEOUT_OUTPUT_SUMMARY_SUFFIX = "(partial, before timeout)";
+
+/**
+ * Resolve the <summary> label for a stdout/stderr section based on
+ * the failure category. CLI_TIMEOUT uses a dedicated label to signal
+ * that the output was interrupted by the timeout.
+ */
+function buildOutputSummaryLabel(
+  stream: "stdout" | "stderr",
+  category: FailureCategory,
+): string {
+  if (category === FailureCategory.CLI_TIMEOUT) {
+    return `${stream} ${TIMEOUT_OUTPUT_SUMMARY_SUFFIX}`;
+  }
+  return stream === "stdout" ? STDOUT_SUMMARY_LABEL : STDERR_SUMMARY_LABEL;
+}
 
 // ---------- Failure diagnostics formatting ----------
 
@@ -125,16 +180,24 @@ export function formatFailureDiagnostics(diag: FailureDiagnostics): string {
     sections.push(`**Error:** \`${escapeCodeBlock(sanitized)}\``);
   }
 
+  if (
+    diag.category === FailureCategory.CLI_TIMEOUT &&
+    (diag.stdout || diag.stderr)
+  ) {
+    sections.push(CLI_TIMEOUT_WARNING_NOTE);
+  }
+
   if (diag.stderr) {
     let output = diag.stderr;
     if (output.length > PARTIAL_STDERR_TAIL_LENGTH) {
-      output = output.slice(-PARTIAL_STDERR_TAIL_LENGTH);
+      output = TRUNCATION_PREFIX + output.slice(-PARTIAL_STDERR_TAIL_LENGTH);
     }
     const sanitized = escapeCodeBlock(sanitizeOutput(output));
+    const label = buildOutputSummaryLabel("stderr", diag.category);
     sections.push(
       [
         "<details>",
-        "<summary>stderr</summary>",
+        `<summary>${label}</summary>`,
         "",
         "```",
         sanitized,
@@ -148,13 +211,14 @@ export function formatFailureDiagnostics(diag: FailureDiagnostics): string {
   if (diag.stdout) {
     let output = diag.stdout;
     if (output.length > PARTIAL_STDOUT_TAIL_LENGTH) {
-      output = output.slice(-PARTIAL_STDOUT_TAIL_LENGTH);
+      output = TRUNCATION_PREFIX + output.slice(-PARTIAL_STDOUT_TAIL_LENGTH);
     }
     const sanitized = escapeCodeBlock(sanitizeOutput(output));
+    const label = buildOutputSummaryLabel("stdout", diag.category);
     sections.push(
       [
         "<details>",
-        "<summary>stdout (partial)</summary>",
+        `<summary>${label}</summary>`,
         "",
         "```",
         sanitized,
