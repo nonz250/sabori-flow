@@ -55,8 +55,8 @@ const SECRET_PATTERNS: RegExp[] = [
   // Anthropic API key
   /sk-ant-api03-[A-Za-z0-9_\-]{64,}/g,
 
-  // OpenAI API key (including project-scoped sk-proj-*)
-  /sk-(?:proj-)?[A-Za-z0-9_\-]{20,}/g,
+  // OpenAI API key (sk-... or sk-proj-...), upper-bounded to avoid over-matching
+  /sk-(?:proj-)?[A-Za-z0-9_\-]{20,200}/g,
 
   // Slack token (bot, app, personal, refresh, session)
   /xox[abprs]-[A-Za-z0-9-]{10,}/g,
