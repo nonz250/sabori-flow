@@ -43,6 +43,7 @@ export function makeRepoConfig(
     labels: DEFAULT_LABELS_CONFIG,
     priorityLabels: ["priority:high", "priority:low"],
     autoImplAfterPlan: false,
+    defaultBranch: "main",
     ...overrides,
   };
 }

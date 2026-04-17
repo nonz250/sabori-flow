@@ -4,6 +4,7 @@ import { processIssue } from "../../src/worker/pipeline.js";
 import { Phase } from "../../src/worker/models.js";
 import type { ExecutionConfig } from "../../src/worker/models.js";
 import { ExecutorTimeoutError } from "../../src/worker/executor.js";
+import { WorktreeError } from "../../src/worker/worktree.js";
 import {
   makeRepoConfig,
   makeIssue,
@@ -18,6 +19,7 @@ const DEFAULT_EXECUTION_CONFIG: ExecutionConfig = {
   maxParallel: 1,
   maxIssuesPerRepo: 10,
   autonomy: "interactive",
+  intervalMinutes: 60,
   language: "ja",
 };
 
@@ -146,6 +148,26 @@ describe("processIssue", () => {
         "generated prompt",
         { cwd: "/tmp/worktrees/issue-mock", autonomy: "interactive" },
       );
+    });
+
+    it("withWorktree に repoConfig.defaultBranch が渡される", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+
+      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, deps);
+
+      expect(deps.withWorktree).toHaveBeenCalledOnce();
+      expect(deps.withWorktree.mock.calls[0][2]).toBe("main");
+    });
+
+    it("defaultBranch が 'develop' の場合に withWorktree に 'develop' が渡される", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig({ defaultBranch: "develop" });
+
+      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, deps);
+
+      expect(deps.withWorktree).toHaveBeenCalledOnce();
+      expect(deps.withWorktree.mock.calls[0][2]).toBe("develop");
     });
 
     it("stdout にシークレットが含まれる場合、sanitizeOutput 適用後の値で成功コメントが呼ばれる", async () => {
@@ -329,6 +351,29 @@ describe("processIssue", () => {
       const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
       expect(failureMessage).toContain("CLI Non-zero Exit");
       expect(failureMessage).toContain("Claude Code CLI returned a non-zero exit code");
+    });
+
+    it("WorktreeError (phase='fetch') の場合に GIT_FETCH カテゴリで失敗処理される", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.withWorktree).mockRejectedValue(
+        new WorktreeError("git fetch origin failed", "fetch"),
+      );
+
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, deps);
+
+      expect(result).toBe(false);
+      expect(deps.transitionToFailed).toHaveBeenCalledOnce();
+      expect(deps.transitionToFailed).toHaveBeenCalledWith(
+        "testowner/testrepo",
+        42,
+        PLAN_LABELS,
+      );
+      expect(deps.postFailureComment).toHaveBeenCalledOnce();
+      const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
+      expect(failureMessage).toContain("Git Fetch Error");
+      expect(failureMessage).toContain("Git fetch failed");
+      expect(failureMessage).toContain("git fetch origin failed");
     });
 
     it("worktree 作成失敗時に failed 遷移 + 失敗コメントが呼ばれ false が返る", async () => {

@@ -238,6 +238,7 @@ language: ja
 | `repositories[].labels` | 各フェーズのラベル名（カスタマイズ可能） |
 | `repositories[].labels.plan` | plan フェーズのラベル: `trigger`, `in_progress`, `done`, `failed` |
 | `repositories[].labels.impl` | impl フェーズのラベル: `trigger`, `in_progress`, `done`, `failed` |
+| `repositories[].default_branch` | worktree 作成時の起点となるデフォルトブランチ名。デフォルトは `main` |
 | `repositories[].priority_labels` | 優先度ラベル。リストの上位ほど先に処理される |
 | `execution.max_parallel` | 並列実行数。デフォルトは `1`（逐次実行） |
 | `execution.max_issues_per_repo` | リポジトリあたりの Issue 処理上限。デフォルトは `1` |

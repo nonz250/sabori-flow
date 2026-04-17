@@ -16,7 +16,7 @@ import {
   formatFailureDiagnostics,
   sanitizeOutput,
 } from "./comment.js";
-import { withWorktree } from "./worktree.js";
+import { withWorktree, WorktreeError } from "./worktree.js";
 import { createLogger } from "./logger.js";
 
 const logger = createLogger("pipeline");
@@ -62,6 +62,7 @@ export interface PipelineDeps {
   withWorktree: <T>(
     localPath: string,
     issueNumber: number,
+    defaultBranch: string,
     callback: (worktreePath: string) => Promise<T>,
   ) => Promise<T>;
 }
@@ -133,6 +134,7 @@ export async function processIssue(
     return await deps.withWorktree(
       repoConfig.localPath,
       issue.number,
+      repoConfig.defaultBranch,
       async (worktreePath: string) => {
         // 3-1. プロンプト生成（レベル 2）
         let prompt: string;
@@ -255,9 +257,17 @@ export async function processIssue(
       error,
     );
     const errorMessage = error instanceof Error ? error.message : String(error);
+    const category =
+      error instanceof WorktreeError && error.phase === "fetch"
+        ? FailureCategory.GIT_FETCH
+        : FailureCategory.WORKTREE_CREATION;
+    const summary =
+      category === FailureCategory.GIT_FETCH
+        ? "Git fetch failed"
+        : "Worktree creation failed";
     handleFailure(deps, repo, issue.number, phaseLabels, {
-      category: FailureCategory.WORKTREE_CREATION,
-      summary: "Worktree creation failed",
+      category,
+      summary,
       errorMessage,
     });
     return false;

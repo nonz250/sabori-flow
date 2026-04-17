@@ -476,6 +476,17 @@ describe("formatFailureDiagnostics", () => {
     expect(result).toContain("**Category:** Worktree Creation Error");
   });
 
+  it("GIT_FETCH カテゴリが正しいラベルで表示される", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.GIT_FETCH,
+      summary: "Git fetch failed",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain("**Category:** Git Fetch Error");
+  });
+
   it("全フィールドが設定されている場合、すべてのセクションが出力に含まれる", () => {
     const diag: FailureDiagnostics = {
       category: FailureCategory.CLI_NON_ZERO_EXIT,

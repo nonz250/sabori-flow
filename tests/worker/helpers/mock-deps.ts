@@ -25,7 +25,7 @@ export function createMockPipelineDeps(
     postSuccessComment: vi.fn().mockResolvedValue(undefined),
     postFailureComment: vi.fn().mockResolvedValue(undefined),
     withWorktree: vi.fn().mockImplementation(
-      async (_localPath: string, _issueNumber: number, callback: (path: string) => Promise<unknown>) => {
+      async (_localPath: string, _issueNumber: number, _defaultBranch: string, callback: (path: string) => Promise<unknown>) => {
         return callback("/tmp/worktrees/issue-mock");
       },
     ),

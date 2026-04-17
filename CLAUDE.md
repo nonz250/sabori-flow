@@ -64,7 +64,8 @@ src/
 3. 各リポジトリで plan → impl の順にフェーズを処理
 4. 各 Issue に対して以下のパイプラインを実行:
    - ラベル遷移: trigger → in-progress
-   - git worktree 作成（対象リポジトリの local_path から）
+   - `git fetch origin` でリモートの最新を取得
+   - git worktree 作成（`origin/<default_branch>` を起点にブランチを作成）
    - プロンプト生成（テンプレート + Issue 情報）
    - `claude -p` を worktree 内で実行（`execution.autonomy` に応じてフラグを付与）
    - 成功: 出力サニタイズ後、done ラベル + 成功コメント / 失敗: failed ラベル + 構造化された失敗診断コメント（カテゴリ、stderr、stdout、exit code 等）
@@ -144,6 +145,7 @@ src/
 ### config.yml の設定項目
 
 - `repositories`: 対象リポジトリ一覧（必須、1 件以上）
+- `repositories[].default_branch`: デフォルトブランチ名（文字列、デフォルト: `main`）。worktree 作成時に `origin/<default_branch>` を起点として使用
 - `execution.max_parallel`: 並列実行数（整数、1-10、デフォルト: 1）
 - `execution.max_issues_per_repo`: リポジトリあたりの最大処理 Issue 数（整数、1-20、デフォルト: 1）
 - `execution.autonomy`: CLI の自律実行レベル（`full` / `sandboxed` / `interactive`、デフォルト: `interactive`）

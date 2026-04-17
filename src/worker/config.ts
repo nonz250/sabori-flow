@@ -26,6 +26,8 @@ export class ConfigValidationError extends Error {
 
 const OWNER_REPO_PATTERN = /^[a-zA-Z0-9._-]+$/;
 const LABEL_PATTERN = /^[a-zA-Z0-9./:_ -]+$/;
+const BRANCH_NAME_PATTERN = /^[a-zA-Z0-9._\/-]+$/;
+const DEFAULT_BRANCH_DEFAULT = "main";
 const PHASE_LABEL_KEYS = ["trigger", "in_progress", "done", "failed"] as const;
 
 // ---------- Public API ----------
@@ -238,10 +240,26 @@ function parseRepositories(raw: unknown): readonly RepositoryConfig[] {
       autoImplAfterPlan = rawAutoImpl;
     }
 
+    // default_branch (optional, default: "main")
+    let defaultBranch = DEFAULT_BRANCH_DEFAULT;
+    if ("default_branch" in record) {
+      const rawDefaultBranch = record["default_branch"];
+      if (typeof rawDefaultBranch !== "string" || rawDefaultBranch === "") {
+        throw new ConfigValidationError(
+          `${prefix}.default_branch: must be a non-empty string`,
+        );
+      }
+      defaultBranch = validateBranchName(
+        rawDefaultBranch,
+        `${prefix}.default_branch`,
+      );
+    }
+
     configs.push({
       owner,
       repo,
       localPath: resolvedLocalPath,
+      defaultBranch,
       labels,
       priorityLabels: priorityRaw as string[],
       autoImplAfterPlan,
@@ -418,6 +436,41 @@ function parseExecution(raw: unknown): Omit<ExecutionConfig, "language"> {
 }
 
 // ---------- Helpers ----------
+
+function validateBranchName(value: string, prefix: string): string {
+  if (!BRANCH_NAME_PATTERN.test(value)) {
+    throw new ConfigValidationError(
+      `${prefix}: invalid characters in '${value}'`,
+    );
+  }
+  if (value.startsWith("-")) {
+    throw new ConfigValidationError(
+      `${prefix}: must not start with '-'`,
+    );
+  }
+  if (value.endsWith("/") || value.endsWith(".")) {
+    throw new ConfigValidationError(
+      `${prefix}: must not end with '/' or '.'`,
+    );
+  }
+  if (value.includes("..")) {
+    throw new ConfigValidationError(
+      `${prefix}: must not contain '..'`,
+    );
+  }
+  if (value.endsWith(".lock")) {
+    throw new ConfigValidationError(
+      `${prefix}: must not end with '.lock'`,
+    );
+  }
+  const components = value.split("/");
+  if (components.some((c) => c === "" || c.startsWith("."))) {
+    throw new ConfigValidationError(
+      `${prefix}: path components must not be empty or start with '.'`,
+    );
+  }
+  return value;
+}
 
 function isAbsolutePath(p: string): boolean {
   return p.startsWith("/");
