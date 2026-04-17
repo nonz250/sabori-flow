@@ -174,6 +174,8 @@ export async function processIssue(
               summary: "Claude Code CLI timed out",
               timeoutMs: error.timeoutMs,
               errorMessage,
+              stdout: error.stdout,
+              stderr: error.stderr,
             });
           } else {
             handleFailure(deps, repo, issue.number, phaseLabels, {
