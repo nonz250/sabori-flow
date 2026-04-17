@@ -6,7 +6,11 @@ const DEFAULT_MAX_BUFFER = 10 * 1024 * 1024; // 10MB
 const SIGKILL_DELAY_MS = 5_000;
 
 export class ProcessTimeoutError extends Error {
-  constructor(public readonly timeoutMs: number) {
+  constructor(
+    public readonly timeoutMs: number,
+    public readonly stdout: string = "",
+    public readonly stderr: string = "",
+  ) {
     super(`Process timed out after ${timeoutMs}ms`);
     Object.setPrototypeOf(this, ProcessTimeoutError.prototype);
   }

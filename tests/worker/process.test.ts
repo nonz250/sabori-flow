@@ -129,6 +129,27 @@ describe("runCommand", () => {
   });
 });
 
+describe("ProcessTimeoutError", () => {
+  it("stdout/stderr 未指定時は空文字列がデフォルトで設定される", () => {
+    const err = new ProcessTimeoutError(5_000);
+    expect(err.timeoutMs).toBe(5_000);
+    expect(err.stdout).toBe("");
+    expect(err.stderr).toBe("");
+  });
+
+  it("stdout/stderr 指定時は渡した値が保持される", () => {
+    const err = new ProcessTimeoutError(5_000, "partial stdout", "partial stderr");
+    expect(err.timeoutMs).toBe(5_000);
+    expect(err.stdout).toBe("partial stdout");
+    expect(err.stderr).toBe("partial stderr");
+  });
+
+  it("メッセージにはタイムアウト値のみが含まれ、partial 出力は含まれない", () => {
+    const err = new ProcessTimeoutError(5_000, "partial stdout", "partial stderr");
+    expect(err.message).toBe("Process timed out after 5000ms");
+  });
+});
+
 describe("runCommandSync", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
