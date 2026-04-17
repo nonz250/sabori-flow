@@ -156,6 +156,7 @@ src/
   - `full`: `--dangerously-skip-permissions`。全許可
   - `sandboxed`: 将来の非-Claude CLI (OpenAI Codex 等) 向け予約値。現状は interactive にフォールバック
 - `execution.interval_minutes`: スケジュール実行間隔（整数、10-1440分、デフォルト: 60）
+- `execution.timeout_minutes`: Claude CLI 実行タイムアウト（整数、1-240分、デフォルト: 60）
 - `language`: CLI メッセージおよびプロンプトテンプレートの言語（`ja` / `en`、デフォルト: `ja`）
 
 ## コーディング規約

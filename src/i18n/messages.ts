@@ -70,6 +70,8 @@ const jaMessages: MessageKeys = {
     "Plan 完了後に自動で impl ラベルを付与しますか?",
   "prompt.intervalMinutes": "スケジュール実行間隔（分）を入力してください（10-1440）:",
   "prompt.intervalMinutesValidation": "10 以上 1440 以下の整数を入力してください",
+  "prompt.timeoutMinutes": "Claude CLI の実行タイムアウト（分）を入力してください（1-240）:",
+  "prompt.timeoutMinutesValidation": "1 以上 240 以下の整数を入力してください",
 
   // autonomy selection (init)
   "prompt.autonomy": "Claude Code CLI の自律実行レベルを選択してください:",
@@ -161,6 +163,8 @@ const enMessages: MessageKeys = {
     "Automatically add impl label after Plan completion?",
   "prompt.intervalMinutes": "Enter the scheduled execution interval in minutes (10-1440):",
   "prompt.intervalMinutesValidation": "Must be an integer between 10 and 1440",
+  "prompt.timeoutMinutes": "Enter the Claude CLI execution timeout in minutes (1-240):",
+  "prompt.timeoutMinutesValidation": "Must be an integer between 1 and 240",
 
   // autonomy selection (init)
   "prompt.autonomy": "Select the Claude Code CLI autonomy level:",

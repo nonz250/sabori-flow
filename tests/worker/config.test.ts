@@ -694,6 +694,104 @@ describe("loadConfig - execution validation", () => {
       /interval_minutes: must be an integer/,
     );
   });
+
+  it("timeout_minutes の指定値が正しくパースされる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  timeout_minutes: 120",
+    );
+    mockYaml(yaml);
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.timeoutMinutes).toBe(120);
+  });
+
+  it("timeout_minutes デフォルト値 (execution あり)", () => {
+    mockYaml(VALID_YAML);
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.timeoutMinutes).toBe(60);
+  });
+
+  it("timeout_minutes デフォルト値 (execution 省略)", () => {
+    mockYaml(VALID_YAML_NO_EXECUTION);
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.timeoutMinutes).toBe(60);
+  });
+
+  it("timeout_minutes が下限値 1 ちょうどの場合は正常", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  timeout_minutes: 1",
+    );
+    mockYaml(yaml);
+
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.timeoutMinutes).toBe(1);
+  });
+
+  it("timeout_minutes が上限値 240 ちょうどの場合は正常", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  timeout_minutes: 240",
+    );
+    mockYaml(yaml);
+
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.timeoutMinutes).toBe(240);
+  });
+
+  it("timeout_minutes が下限値 1 未満の場合にエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  timeout_minutes: 0",
+    );
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /timeout_minutes: must be >= 1/,
+    );
+  });
+
+  it("timeout_minutes が上限値 240 を超える場合にエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  timeout_minutes: 241",
+    );
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /timeout_minutes: must be <= 240/,
+    );
+  });
+
+  it("timeout_minutes string", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      'max_parallel: 4\n  timeout_minutes: "sixty"',
+    );
+    mockYaml(yaml);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(ConfigValidationError);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /timeout_minutes: must be an integer/,
+    );
+  });
+
+  it("timeout_minutes float", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  timeout_minutes: 30.5",
+    );
+    mockYaml(yaml);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(ConfigValidationError);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /timeout_minutes: must be an integer/,
+    );
+  });
 });
 
 describe("loadConfig - local_path validation", () => {
