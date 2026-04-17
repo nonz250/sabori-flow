@@ -22,7 +22,9 @@ repositories:
 execution:
   max_parallel: 1
   # max_issues_per_repo: 1  # Max issues per repository (default: 1)
-  # autonomy: interactive    # full / sandboxed / interactive (default: interactive)
+  # autonomy: interactive    # interactive / auto / full / sandboxed (default: interactive)
+  #                          # auto: Claude Code --permission-mode auto (v2.1.83+, Max/Team/Enterprise)
+  #                          # sandboxed: reserved for future non-Claude CLIs, currently behaves like interactive
   # interval_minutes: 60  # Scheduled execution interval in minutes (10-1440, default: 60)
 
 # Display language

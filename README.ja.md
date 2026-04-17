@@ -242,7 +242,7 @@ language: ja
 | `repositories[].priority_labels` | 優先度ラベル。リストの上位ほど先に処理される |
 | `execution.max_parallel` | 並列実行数。デフォルトは `1`（逐次実行） |
 | `execution.max_issues_per_repo` | リポジトリあたりの Issue 処理上限。デフォルトは `1` |
-| `execution.autonomy` | CLI の自律実行レベル: `full`（無制限）、`sandboxed`（サンドボックス実行、CLI の対応が必要）、`interactive`（ユーザー承認が必要）。デフォルトは `interactive` |
+| `execution.autonomy` | CLI の自律実行レベル: `interactive`（各操作にユーザー承認が必要、推奨デフォルト）、`auto`（Claude Code の `--permission-mode auto`。分類器が危険操作のみブロック。launchd 無人実行に推奨。Claude Code v2.1.83 以降および Max / Team / Enterprise プランが必要）、`full`（`--dangerously-skip-permissions`、無制限）、`sandboxed`（将来の非-Claude CLI（OpenAI Codex 等）向け予約値、現状は interactive にフォールバック）。デフォルトは `interactive` |
 | `execution.interval_minutes` | スケジュール実行間隔（分、10-1440）。デフォルトは `60` |
 | `language` | CLI メッセージおよびプロンプトテンプレートの言語（`ja` / `en`）。デフォルトは `ja` |
 
@@ -250,7 +250,10 @@ language: ja
 
 ## セキュリティ
 
-このツールはデフォルトで `interactive` モードで Claude Code CLI を実行し、各操作にユーザー承認が必要です。完全自律実行を有効にするには `config.yml` で `execution.autonomy: full` を設定してください。これにより Claude Code CLI に `--dangerously-skip-permissions` が付与され、マシン上でほぼ任意の操作が可能になります。launchd により定期的にユーザー操作なしで実行されます。
+このツールはデフォルトで `interactive` モードで Claude Code CLI を実行し、各操作にユーザー承認が必要です。launchd による無人実行向けには、安全性の高い順に以下の自動化オプションがあります:
+
+- `execution.autonomy: auto` — Claude Code の `--permission-mode auto` を使用。分類器が危険操作 (デプロイ・大規模削除等) のみブロックし、それ以外は自動承認します。Claude Code v2.1.83 以降および Max / Team / Enterprise プランが必要です。
+- `execution.autonomy: full` — `--dangerously-skip-permissions` を付与し、マシン上でほぼ任意の操作を許可します。`auto` が使用できない場合のみ検討してください。
 
 デフォルトの `npx` 方式では、実行時に npm レジストリからパッケージを取得します。万が一 npm パッケージが侵害された場合、悪意あるコードがスケジューラにより自動実行される可能性があります。
 

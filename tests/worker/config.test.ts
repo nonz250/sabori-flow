@@ -529,6 +529,17 @@ describe("loadConfig - execution validation", () => {
     expect(result.execution.autonomy).toBe("interactive");
   });
 
+  it("autonomy: 'auto' が正しくパースされる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      'max_parallel: 4\n  autonomy: "auto"',
+    );
+    mockYaml(yaml);
+
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.execution.autonomy).toBe("auto");
+  });
+
   it("autonomy デフォルト値 (execution あり、autonomy 省略)", () => {
     mockYaml(VALID_YAML);
     const result = loadConfig("/path/to/config.yml");
