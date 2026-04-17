@@ -64,8 +64,8 @@ const SECRET_PATTERNS: RegExp[] = [
   // Google API key
   /AIza[0-9A-Za-z_\-]{35}/g,
 
-  // JSON Web Token (header.payload.signature, all base64url)
-  /eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+/g,
+  // JSON Web Token (header.payload.signature, each base64url segment at least 10 chars)
+  /eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}/g,
 
   // npm access token
   /npm_[A-Za-z0-9]{36}/g,
