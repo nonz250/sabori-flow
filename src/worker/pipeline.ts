@@ -120,11 +120,12 @@ export async function processIssue(
   try {
     await deps.transitionToInProgress(repo, issue.number, phaseLabels);
   } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error(
       "Issue #%s: trigger -> in-progress のラベル遷移に失敗しました [repo=%s]: %s",
       issue.number,
       repo,
-      error,
+      errorMessage,
     );
     return false;
   }
@@ -141,13 +142,13 @@ export async function processIssue(
         try {
           prompt = deps.buildPrompt(issue, repoConfig, executionConfig.language);
         } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
           logger.error(
             "Issue #%s: プロンプト生成に失敗しました [repo=%s]: %s",
             issue.number,
             repo,
-            error,
+            errorMessage,
           );
-          const errorMessage = error instanceof Error ? error.message : String(error);
           handleFailure(deps, repo, issue.number, phaseLabels, {
             category: FailureCategory.PROMPT_GENERATION,
             summary: "Prompt generation failed",
@@ -161,13 +162,13 @@ export async function processIssue(
         try {
           result = await deps.runClaude(prompt, { cwd: worktreePath, autonomy: executionConfig.autonomy });
         } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
           logger.error(
             "Issue #%s: Claude CLI の実行に失敗しました [repo=%s]: %s",
             issue.number,
             repo,
-            error,
+            errorMessage,
           );
-          const errorMessage = error instanceof Error ? error.message : String(error);
           if (error instanceof ExecutorTimeoutError) {
             handleFailure(deps, repo, issue.number, phaseLabels, {
               category: FailureCategory.CLI_TIMEOUT,
@@ -209,11 +210,12 @@ export async function processIssue(
           await deps.transitionToDone(repo, issue.number, phaseLabels);
           doneTransitionSucceeded = true;
         } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
           logger.warn(
             "Issue #%s: done ラベル遷移に失敗しました [repo=%s]: %s",
             issue.number,
             repo,
-            error,
+            errorMessage,
           );
         }
 
@@ -222,11 +224,12 @@ export async function processIssue(
           try {
             await deps.addImplTriggerLabel(repo, issue.number, repoConfig.labels.impl.trigger);
           } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             logger.warn(
               "Issue #%s: impl trigger ラベルの自動付与に失敗しました [repo=%s]: %s",
               issue.number,
               repo,
-              error,
+              errorMessage,
             );
           }
         }
@@ -234,11 +237,12 @@ export async function processIssue(
         try {
           await deps.postSuccessComment(repo, issue.number, sanitizeOutput(result.stdout));
         } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
           logger.warn(
             "Issue #%s: 成功コメントの投稿に失敗しました [repo=%s]: %s",
             issue.number,
             repo,
-            error,
+            errorMessage,
           );
         }
 
@@ -252,13 +256,13 @@ export async function processIssue(
     );
   } catch (error: unknown) {
     // worktree 作成失敗（レベル 2）
+    const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error(
       "Issue #%s: worktree の作成に失敗しました [repo=%s]: %s",
       issue.number,
       repo,
-      error,
+      errorMessage,
     );
-    const errorMessage = error instanceof Error ? error.message : String(error);
     const category =
       error instanceof WorktreeError && error.phase === "fetch"
         ? FailureCategory.GIT_FETCH
@@ -294,11 +298,12 @@ function handleFailure(
 ): void {
   deps.transitionToFailed(repo, issueNumber, phaseLabels).catch(
     (error: unknown) => {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       logger.warn(
         "Issue #%s: failed ラベル遷移に失敗しました [repo=%s]: %s",
         issueNumber,
         repo,
-        error,
+        errorMessage,
       );
     },
   );
@@ -306,11 +311,12 @@ function handleFailure(
   const formattedMessage = formatFailureDiagnostics(diagnostics);
   deps.postFailureComment(repo, issueNumber, formattedMessage).catch(
     (error: unknown) => {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       logger.warn(
         "Issue #%s: 失敗コメントの投稿に失敗しました [repo=%s]: %s",
         issueNumber,
         repo,
-        error,
+        errorMessage,
       );
     },
   );
