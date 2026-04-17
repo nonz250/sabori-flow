@@ -406,6 +406,103 @@ describe("sanitizeOutput", () => {
   it("空文字列を渡しても正常に動作する", () => {
     expect(sanitizeOutput("")).toBe("");
   });
+
+  it("Anthropic API キー (sk-ant-api03-...) がマスキングされる", () => {
+    const secret =
+      "sk-ant-api03-" + "A".repeat(64);
+    const text = `ANTHROPIC_API_KEY=${secret}_and_more`;
+    const result = sanitizeOutput(text);
+    expect(result).not.toContain(secret);
+    expect(result).toContain("[REDACTED]");
+  });
+
+  it("sk-ant-api03- 以外の短い sk- で始まる文字列は誤検知されない", () => {
+    // 先頭 sk- の後の文字数が 20 未満なので OpenAI パターンにもマッチしない
+    const tooShort = "sk-short";
+    const text = `something ${tooShort} else`;
+    expect(sanitizeOutput(text)).toBe(text);
+  });
+
+  it("OpenAI API キー (sk-...) がマスキングされる", () => {
+    const secret = "sk-" + "A".repeat(40);
+    const text = `OPENAI_API_KEY=${secret}`;
+    const result = sanitizeOutput(text);
+    expect(result).not.toContain(secret);
+    expect(result).toContain("[REDACTED]");
+  });
+
+  it("OpenAI project-scoped API キー (sk-proj-...) がマスキングされる", () => {
+    const secret = "sk-proj-" + "B".repeat(40);
+    const text = `key: ${secret}`;
+    const result = sanitizeOutput(text);
+    expect(result).not.toContain(secret);
+    expect(result).toContain("[REDACTED]");
+  });
+
+  it("Slack トークン (xoxb-...) がマスキングされる", () => {
+    const secret = "xoxb-" + "A".repeat(30);
+    const text = `slack token: ${secret} end`;
+    const result = sanitizeOutput(text);
+    expect(result).not.toContain(secret);
+    expect(result).toContain("[REDACTED]");
+  });
+
+  it("Slack user トークン (xoxp-...) がマスキングされる", () => {
+    const secret = "xoxp-" + "1".repeat(30);
+    const text = `${secret}`;
+    const result = sanitizeOutput(text);
+    expect(result).not.toContain(secret);
+    expect(result).toContain("[REDACTED]");
+  });
+
+  it("短すぎる xox 文字列は誤検知されない", () => {
+    const text = "xoxb-short";
+    expect(sanitizeOutput(text)).toBe(text);
+  });
+
+  it("Google API キー (AIza...) がマスキングされる", () => {
+    const secret = "AIza" + "A".repeat(35);
+    const text = `key = "${secret}"`;
+    const result = sanitizeOutput(text);
+    expect(result).not.toContain(secret);
+    expect(result).toContain("[REDACTED]");
+  });
+
+  it("短すぎる AIza 文字列は誤検知されない", () => {
+    const tooShort = "AIza" + "A".repeat(10);
+    const text = `key = ${tooShort}`;
+    expect(sanitizeOutput(text)).toBe(text);
+  });
+
+  it("JWT トークン (eyJ...) がマスキングされる", () => {
+    const header = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9";
+    const payload = "eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4ifQ";
+    const sig = "sig_abcDEFghiJKLmno123-_abc";
+    const jwt = `${header}.${payload}.${sig}`;
+    const text = `Authorization header has ${jwt} in it`;
+    const result = sanitizeOutput(text);
+    expect(result).not.toContain(jwt);
+    expect(result).toContain("[REDACTED]");
+  });
+
+  it("JWT として形式が不完全な文字列は誤検知されない", () => {
+    const text = "not-a-jwt eyJonlyheader end";
+    expect(sanitizeOutput(text)).toBe(text);
+  });
+
+  it("npm トークン (npm_...) がマスキングされる", () => {
+    const secret = "npm_" + "A".repeat(36);
+    const text = `//registry.npmjs.org/:_authToken=${secret}`;
+    const result = sanitizeOutput(text);
+    expect(result).not.toContain(secret);
+    expect(result).toContain("[REDACTED]");
+  });
+
+  it("npm トークンの桁数が 36 文字未満の場合は誤検知されない", () => {
+    const tooShort = "npm_" + "A".repeat(10);
+    const text = `authToken=${tooShort}`;
+    expect(sanitizeOutput(text)).toBe(text);
+  });
 });
 
 // ---------------------------------------------------------------------------
