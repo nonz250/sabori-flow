@@ -86,17 +86,24 @@ const SECRET_PATTERNS: RegExp[] = [
  * on ordinary prose.
  */
 const SECRET_FILE_PATH_PATTERNS: RegExp[] = [
-  // SSH private keys, known_hosts, authorized_keys (with optional leading path)
-  /(?:[/~][\w\-./]*)?\.ssh\/(?:id_[A-Za-z0-9_]+|known_hosts|authorized_keys)/g,
+  // SSH private keys, known_hosts, authorized_keys (with optional leading path).
+  // Public keys (`id_rsa.pub`, `id_ed25519.pub`) are intentionally excluded —
+  // they are non-sensitive and redaction would hide useful triage context.
+  // The `\b(?!\.pub\b)` prevents the engine from backtracking to a shorter
+  // match inside a `.pub` suffix.
+  /(?:[/~][\w\-./]*)?\.ssh\/(?:id_[A-Za-z0-9_]+\b(?!\.pub\b)|known_hosts|authorized_keys)/g,
 
   // AWS credentials / config
   /(?:[/~][\w\-./]*)?\.aws\/(?:credentials|config)\b/g,
 
-  // .env family (.env, .env.local, .env.production, ...)
-  /(?<=^|[\s"'`/=(])\.env(?:\.[A-Za-z0-9_\-]+)?\b/g,
+  // .env family (.env, .env.local, .env.production, ...).
+  // Dummy/template variants that are typically committed publicly are excluded
+  // so diagnostic output remains readable when tools touch those files.
+  /(?<=^|[\s"'`/=(])\.env(?!\.(?:example|sample|template|dist)\b)(?:\.[A-Za-z0-9_\-]+)?\b/g,
 
-  // kubeconfig
+  // kubeconfig (user + common system paths)
   /(?:[/~][\w\-./]*)?\.kube\/config\b/g,
+  /\/etc\/kubernetes\/(?:admin|kubelet)\.conf\b/g,
 
   // GitHub CLI host file (contains oauth tokens)
   /(?:[/~][\w\-./]*)?\.config\/gh\/hosts\.yml\b/g,
@@ -109,6 +116,16 @@ const SECRET_FILE_PATH_PATTERNS: RegExp[] = [
 
   // Docker auth config
   /(?:[/~][\w\-./]*)?\.docker\/config\.json\b/g,
+
+  // .netrc (curl / HTTP basic auth credentials)
+  /(?<=^|[\s"'`/=(])\.netrc\b/g,
+
+  // PyPI token / pip index credentials
+  /(?<=^|[\s"'`/=(])\.pypirc\b/g,
+
+  // Terraform CLI / state (often contains plaintext secrets)
+  /(?<=^|[\s"'`/=(])\.terraformrc\b/g,
+  /(?<=^|[\s"'`/=(])terraform\.tfstate(?:\.backup)?\b/g,
 ];
 
 /**

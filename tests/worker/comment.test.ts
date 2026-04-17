@@ -672,6 +672,68 @@ describe("sanitizeOutput - secret file paths", () => {
     expect(result).toContain("[REDACTED]");
     expect(result).toContain("[REDACTED_PATH]");
   });
+
+  it("公開鍵 (id_rsa.pub) はマスクしない", () => {
+    const text = "uploaded ~/.ssh/id_rsa.pub to the server";
+    const result = sanitizeOutput(text);
+    expect(result).toContain("id_rsa.pub");
+    expect(result).not.toContain("[REDACTED_PATH]");
+  });
+
+  it("id_ed25519.pub もマスクしない", () => {
+    const text = "cat /home/alice/.ssh/id_ed25519.pub";
+    const result = sanitizeOutput(text);
+    expect(result).toContain("id_ed25519.pub");
+    expect(result).not.toContain("[REDACTED_PATH]");
+  });
+
+  it(".env.example / .env.sample / .env.template / .env.dist はマスクしない", () => {
+    const cases = [
+      "copy .env.example to .env",
+      "see .env.sample for defaults",
+      "template file .env.template",
+      "ship .env.dist as reference",
+    ];
+    for (const text of cases) {
+      const result = sanitizeOutput(text);
+      expect(result).toContain(".env");
+      // `.env` 自体 (suffix なし) はマスクされる場合があるが、
+      // 対象の `.env.example` 等の suffix はそのまま残ること
+      for (const dummy of [".env.example", ".env.sample", ".env.template", ".env.dist"]) {
+        if (text.includes(dummy)) {
+          expect(result).toContain(dummy);
+        }
+      }
+    }
+  });
+
+  it(".netrc / .pypirc / .terraformrc を置換する", () => {
+    expect(sanitizeOutput("read ~/.netrc")).toContain("[REDACTED_PATH]");
+    expect(sanitizeOutput("PyPI token in ~/.pypirc")).toContain(
+      "[REDACTED_PATH]",
+    );
+    expect(sanitizeOutput("CLI config ~/.terraformrc")).toContain(
+      "[REDACTED_PATH]",
+    );
+  });
+
+  it("terraform.tfstate / terraform.tfstate.backup を置換する", () => {
+    expect(sanitizeOutput("stat terraform.tfstate")).toContain(
+      "[REDACTED_PATH]",
+    );
+    expect(sanitizeOutput("stat terraform.tfstate.backup")).toContain(
+      "[REDACTED_PATH]",
+    );
+  });
+
+  it("/etc/kubernetes/admin.conf / kubelet.conf を置換する", () => {
+    expect(sanitizeOutput("parsed /etc/kubernetes/admin.conf")).toContain(
+      "[REDACTED_PATH]",
+    );
+    expect(sanitizeOutput("parsed /etc/kubernetes/kubelet.conf")).toContain(
+      "[REDACTED_PATH]",
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
