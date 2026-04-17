@@ -503,6 +503,68 @@ describe("sanitizeOutput", () => {
     const text = `authToken=${tooShort}`;
     expect(sanitizeOutput(text)).toBe(text);
   });
+
+  // -------------------------------------------------------------------------
+  // 個別 SECRET_PATTERNS の独立検証
+  //
+  // 汎用 key=value パターン (/^.*(?:api[_-]?key|api[_-]?secret|
+  // access[_-]?token|secret[_-]?key)[=:].*$/gim) は行全体を [REDACTED] に
+  // 置換するため、そのキーワードを含むコンテキスト (例: "OPENAI_API_KEY=...")
+  // では個別パターンが壊れていても検出できない。
+  // 以下のテストはキーワードを含まないコンテキストを用いて、個別パターンが
+  // 独立して機能することを検証する。
+  // -------------------------------------------------------------------------
+
+  it("Anthropic API キー (sk-ant-api03-...) が汎用キーワードなしでも独立してマスキングされる", () => {
+    // 長さを 250 文字にすることで、OpenAI パターンの 200 文字上限を超える。
+    // Anthropic 専用パターンが機能していない場合、OpenAI パターンでは
+    // 先頭 200 文字しかマスクされず末尾 A が残るため、本テストが失敗する。
+    // これにより個別 Anthropic パターンの独立動作が保証される。
+    const secretBody = "A".repeat(250);
+    const secret = `sk-ant-api03-${secretBody}`;
+    const text = `log line with token ${secret} embedded in trace`;
+    // ガードレール: このテストデータは汎用 key=value パターンにマッチしないこと
+    expect(text).not.toMatch(
+      /api[_-]?key|api[_-]?secret|access[_-]?token|secret[_-]?key/i,
+    );
+
+    const result = sanitizeOutput(text);
+
+    expect(result).not.toContain(secret);
+    expect(result).not.toContain("sk-ant-api03-");
+    // OpenAI パターンだけが効いた場合に残存し得る A 文字列の塊が残っていないこと
+    expect(result).not.toContain("A".repeat(20));
+    expect(result).toContain("[REDACTED]");
+  });
+
+  it("OpenAI API キー (sk-...) が汎用キーワードなしでも独立してマスキングされる", () => {
+    const secret = "sk-" + "A".repeat(40);
+    const text = `trace output contains ${secret} between other text`;
+    // ガードレール: このテストデータは汎用 key=value パターンにマッチしないこと
+    expect(text).not.toMatch(
+      /api[_-]?key|api[_-]?secret|access[_-]?token|secret[_-]?key/i,
+    );
+
+    const result = sanitizeOutput(text);
+
+    expect(result).not.toContain(secret);
+    expect(result).toContain("[REDACTED]");
+  });
+
+  it("OpenAI project-scoped API キー (sk-proj-...) が汎用キーワードなしでも独立してマスキングされる", () => {
+    const secret = "sk-proj-" + "B".repeat(40);
+    const text = `diagnostic dump ${secret} end of line`;
+    // ガードレール: このテストデータは汎用 key=value パターンにマッチしないこと
+    expect(text).not.toMatch(
+      /api[_-]?key|api[_-]?secret|access[_-]?token|secret[_-]?key/i,
+    );
+
+    const result = sanitizeOutput(text);
+
+    expect(result).not.toContain(secret);
+    expect(result).not.toContain("sk-proj-");
+    expect(result).toContain("[REDACTED]");
+  });
 });
 
 // ---------------------------------------------------------------------------
