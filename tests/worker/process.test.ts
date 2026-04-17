@@ -100,6 +100,93 @@ describe("runCommand", () => {
     mockKill.mockRestore();
   });
 
+  it("タイムアウト時、収集済みの partial stdout/stderr が ProcessTimeoutError に保持される", async () => {
+    const child = createMockChildProcess();
+    mockedSpawn.mockReturnValue(child);
+
+    const mockKill = vi
+      .spyOn(process, "kill")
+      .mockImplementation(() => true);
+
+    const promise = runCommand("slow-cmd", [], { timeoutMs: 5_000 });
+
+    child.stdout!.emit("data", Buffer.from("collected stdout"));
+    child.stderr!.emit("data", Buffer.from("collected stderr"));
+
+    vi.advanceTimersByTime(5_000);
+    child.emit("close", null);
+
+    try {
+      await promise;
+      expect.fail("should have thrown");
+    } catch (error: unknown) {
+      expect(error).toBeInstanceOf(ProcessTimeoutError);
+      const err = error as ProcessTimeoutError;
+      expect(err.stdout).toBe("collected stdout");
+      expect(err.stderr).toBe("collected stderr");
+    }
+
+    mockKill.mockRestore();
+  });
+
+  it("SIGTERM 後に追加で emit された data も partial 出力に含まれる", async () => {
+    const child = createMockChildProcess();
+    mockedSpawn.mockReturnValue(child);
+
+    const mockKill = vi
+      .spyOn(process, "kill")
+      .mockImplementation(() => true);
+
+    const promise = runCommand("slow-cmd", [], { timeoutMs: 5_000 });
+
+    child.stdout!.emit("data", Buffer.from("before-timeout-"));
+
+    vi.advanceTimersByTime(5_000);
+
+    // SIGTERM 発火後にもプロセスが最後のチャンクを吐くケース
+    child.stdout!.emit("data", Buffer.from("after-sigterm"));
+    child.stderr!.emit("data", Buffer.from("shutdown err"));
+    child.emit("close", null);
+
+    try {
+      await promise;
+      expect.fail("should have thrown");
+    } catch (error: unknown) {
+      expect(error).toBeInstanceOf(ProcessTimeoutError);
+      const err = error as ProcessTimeoutError;
+      expect(err.stdout).toBe("before-timeout-after-sigterm");
+      expect(err.stderr).toBe("shutdown err");
+    }
+
+    mockKill.mockRestore();
+  });
+
+  it("data emit なしでタイムアウトした場合は空文字列が保持される", async () => {
+    const child = createMockChildProcess();
+    mockedSpawn.mockReturnValue(child);
+
+    const mockKill = vi
+      .spyOn(process, "kill")
+      .mockImplementation(() => true);
+
+    const promise = runCommand("slow-cmd", [], { timeoutMs: 5_000 });
+
+    vi.advanceTimersByTime(5_000);
+    child.emit("close", null);
+
+    try {
+      await promise;
+      expect.fail("should have thrown");
+    } catch (error: unknown) {
+      expect(error).toBeInstanceOf(ProcessTimeoutError);
+      const err = error as ProcessTimeoutError;
+      expect(err.stdout).toBe("");
+      expect(err.stderr).toBe("");
+    }
+
+    mockKill.mockRestore();
+  });
+
   it("コマンドが見つからない場合に ProcessExecutionError を throw する", async () => {
     const child = createMockChildProcess();
     mockedSpawn.mockReturnValue(child);

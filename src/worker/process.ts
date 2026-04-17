@@ -124,7 +124,7 @@ export async function runCommand(
         clearTimeout(killTimer);
       }
       if (killed) {
-        reject(new ProcessTimeoutError(timeoutMs));
+        reject(new ProcessTimeoutError(timeoutMs, stdout, stderr));
         return;
       }
       resolve({
