@@ -514,6 +514,7 @@ import {
   PARTIAL_STDOUT_TAIL_LENGTH,
   PARTIAL_STDERR_TAIL_LENGTH,
   TRUNCATION_PREFIX,
+  CLI_TIMEOUT_WARNING_NOTE,
 } from "../../src/worker/comment.js";
 import { FailureCategory } from "../../src/worker/models.js";
 import type { FailureDiagnostics } from "../../src/worker/models.js";
@@ -937,5 +938,75 @@ describe("formatFailureDiagnostics", () => {
 
     expect(result).toContain("<summary>stderr</summary>");
     expect(result).not.toContain("partial, before timeout");
+  });
+
+  it("CLI_TIMEOUT で stderr がある場合、信頼性警告注記が含まれる", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_TIMEOUT,
+      summary: "timed out",
+      stderr: "some stderr",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain(CLI_TIMEOUT_WARNING_NOTE);
+  });
+
+  it("CLI_TIMEOUT で stdout だけの場合も信頼性警告注記が含まれる", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_TIMEOUT,
+      summary: "timed out",
+      stdout: "some stdout",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain(CLI_TIMEOUT_WARNING_NOTE);
+  });
+
+  it("CLI_TIMEOUT で partial 出力がない場合は警告注記が含まれない", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_TIMEOUT,
+      summary: "timed out",
+      timeoutMs: 600_000,
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).not.toContain(CLI_TIMEOUT_WARNING_NOTE);
+  });
+
+  it("CLI_NON_ZERO_EXIT では信頼性警告注記が含まれない", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_NON_ZERO_EXIT,
+      summary: "non-zero",
+      stdout: "some stdout",
+      stderr: "some stderr",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).not.toContain(CLI_TIMEOUT_WARNING_NOTE);
+  });
+
+  it("CLI_TIMEOUT で警告注記は stderr セクションの前に挿入される", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_TIMEOUT,
+      summary: "timed out",
+      stderr: "some stderr content",
+      stdout: "some stdout content",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    const noteIndex = result.indexOf(CLI_TIMEOUT_WARNING_NOTE);
+    const stderrIndex = result.indexOf("<summary>stderr");
+    const stdoutIndex = result.indexOf("<summary>stdout");
+
+    expect(noteIndex).toBeGreaterThanOrEqual(0);
+    expect(stderrIndex).toBeGreaterThanOrEqual(0);
+    expect(stdoutIndex).toBeGreaterThanOrEqual(0);
+    expect(noteIndex).toBeLessThan(stderrIndex);
+    expect(noteIndex).toBeLessThan(stdoutIndex);
   });
 });

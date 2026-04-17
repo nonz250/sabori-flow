@@ -19,6 +19,14 @@ const PARTIAL_STDERR_TAIL_LENGTH = 4_000;
  */
 const TRUNCATION_PREFIX = "...(truncated)\n";
 
+/**
+ * Warning note inserted into CLI_TIMEOUT failure comments to signal
+ * that the captured output may be partial or incomplete because the
+ * process was terminated by SIGTERM/SIGKILL on timeout.
+ */
+const CLI_TIMEOUT_WARNING_NOTE =
+  "> :warning: **Output reliability is limited.** The process was terminated by SIGTERM/SIGKILL on timeout, so the following output may be partial or incomplete.";
+
 // ---------- Secret pattern masking ----------
 
 /**
@@ -91,6 +99,7 @@ export {
   PARTIAL_STDOUT_TAIL_LENGTH,
   PARTIAL_STDERR_TAIL_LENGTH,
   TRUNCATION_PREFIX,
+  CLI_TIMEOUT_WARNING_NOTE,
   SUCCESS_HEADER,
   SUCCESS_TRUNCATED_SUFFIX,
   FAILURE_HEADER,
@@ -169,6 +178,13 @@ export function formatFailureDiagnostics(diag: FailureDiagnostics): string {
   if (diag.errorMessage) {
     const sanitized = sanitizeOutput(diag.errorMessage);
     sections.push(`**Error:** \`${escapeCodeBlock(sanitized)}\``);
+  }
+
+  if (
+    diag.category === FailureCategory.CLI_TIMEOUT &&
+    (diag.stdout || diag.stderr)
+  ) {
+    sections.push(CLI_TIMEOUT_WARNING_NOTE);
   }
 
   if (diag.stderr) {
