@@ -130,6 +130,15 @@ describe("runCommand", () => {
   });
 
   it("SIGTERM 後に追加で emit された data も partial 出力に含まれる", async () => {
+    // 仕様: タイムアウト発火により SIGTERM を送出した後でも、`close`
+    // イベントが到達するまでに届いた stdout/stderr の chunk は partial
+    // 出力に含まれる。これは `runCommand` が data リスナーを timeout
+    // 発火時に外さない設計仕様に基づく（close ハンドラで
+    // ProcessTimeoutError に stdout/stderr を同梱して reject する）。
+    //
+    // 将来の最適化でリスナーを timeout と同時に切断する方針へ変更する
+    // 場合、本テストの期待値（"before-timeout-after-sigterm"）から
+    // 後半の chunk を取り除く必要がある点に留意すること。
     const child = createMockChildProcess();
     mockedSpawn.mockReturnValue(child);
 
