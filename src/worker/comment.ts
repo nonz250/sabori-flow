@@ -13,6 +13,12 @@ const MAX_COMMENT_LENGTH = 64_000;
 const PARTIAL_STDOUT_TAIL_LENGTH = 2_000;
 const PARTIAL_STDERR_TAIL_LENGTH = 4_000;
 
+/**
+ * Prefix prepended to stdout/stderr when they have been truncated
+ * to signal explicitly that earlier content was dropped.
+ */
+const TRUNCATION_PREFIX = "...(truncated)\n";
+
 // ---------- Secret pattern masking ----------
 
 /**
@@ -84,6 +90,7 @@ export {
   MAX_COMMENT_LENGTH,
   PARTIAL_STDOUT_TAIL_LENGTH,
   PARTIAL_STDERR_TAIL_LENGTH,
+  TRUNCATION_PREFIX,
   SUCCESS_HEADER,
   SUCCESS_TRUNCATED_SUFFIX,
   FAILURE_HEADER,
@@ -146,7 +153,7 @@ export function formatFailureDiagnostics(diag: FailureDiagnostics): string {
   if (diag.stderr) {
     let output = diag.stderr;
     if (output.length > PARTIAL_STDERR_TAIL_LENGTH) {
-      output = output.slice(-PARTIAL_STDERR_TAIL_LENGTH);
+      output = TRUNCATION_PREFIX + output.slice(-PARTIAL_STDERR_TAIL_LENGTH);
     }
     const sanitized = escapeCodeBlock(sanitizeOutput(output));
     sections.push(
@@ -166,7 +173,7 @@ export function formatFailureDiagnostics(diag: FailureDiagnostics): string {
   if (diag.stdout) {
     let output = diag.stdout;
     if (output.length > PARTIAL_STDOUT_TAIL_LENGTH) {
-      output = output.slice(-PARTIAL_STDOUT_TAIL_LENGTH);
+      output = TRUNCATION_PREFIX + output.slice(-PARTIAL_STDOUT_TAIL_LENGTH);
     }
     const sanitized = escapeCodeBlock(sanitizeOutput(output));
     sections.push(

@@ -513,6 +513,7 @@ import {
   formatFailureDiagnostics,
   PARTIAL_STDOUT_TAIL_LENGTH,
   PARTIAL_STDERR_TAIL_LENGTH,
+  TRUNCATION_PREFIX,
 } from "../../src/worker/comment.js";
 import { FailureCategory } from "../../src/worker/models.js";
 import type { FailureDiagnostics } from "../../src/worker/models.js";
@@ -799,5 +800,77 @@ describe("formatFailureDiagnostics", () => {
 
     expect(result).not.toContain("X".repeat(100));
     expect(result).toContain("Y".repeat(100));
+  });
+
+  it("stdout が閾値超過時はトランケートプレフィックスが付与される", () => {
+    const stdout = "Z".repeat(PARTIAL_STDOUT_TAIL_LENGTH + 500);
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_NON_ZERO_EXIT,
+      summary: "Truncated",
+      stdout,
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain(TRUNCATION_PREFIX);
+    expect(result).toContain("Z".repeat(PARTIAL_STDOUT_TAIL_LENGTH));
+  });
+
+  it("stderr が閾値超過時はトランケートプレフィックスが付与される", () => {
+    const stderr = "E".repeat(PARTIAL_STDERR_TAIL_LENGTH + 500);
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_NON_ZERO_EXIT,
+      summary: "Truncated",
+      stderr,
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain(TRUNCATION_PREFIX);
+    expect(result).toContain("E".repeat(PARTIAL_STDERR_TAIL_LENGTH));
+  });
+
+  it("stdout が閾値以下の場合はトランケートプレフィックスが付与されない", () => {
+    const stdout = "Z".repeat(PARTIAL_STDOUT_TAIL_LENGTH);
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_NON_ZERO_EXIT,
+      summary: "At threshold",
+      stdout,
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).not.toContain(TRUNCATION_PREFIX);
+    expect(result).toContain(stdout);
+  });
+
+  it("stderr が閾値以下の場合はトランケートプレフィックスが付与されない", () => {
+    const stderr = "E".repeat(PARTIAL_STDERR_TAIL_LENGTH);
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_NON_ZERO_EXIT,
+      summary: "At threshold",
+      stderr,
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).not.toContain(TRUNCATION_PREFIX);
+    expect(result).toContain(stderr);
+  });
+
+  it("トランケート後の出力にシークレットが含まれる場合も [REDACTED] に置換される", () => {
+    const token = "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijkl";
+    const padded = "x".repeat(PARTIAL_STDOUT_TAIL_LENGTH);
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_NON_ZERO_EXIT,
+      summary: "Trunc with secret",
+      stdout: padded + `token=${token}`,
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain(TRUNCATION_PREFIX);
+    expect(result).not.toContain(token);
+    expect(result).toContain("[REDACTED]");
   });
 });
