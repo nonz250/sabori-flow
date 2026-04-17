@@ -75,17 +75,62 @@ const SECRET_PATTERNS: RegExp[] = [
 ];
 
 /**
- * テキストから機密情報パターンを検出し [REDACTED] に置換する。
+ * Filesystem paths that point to credential material. The filename
+ * alone is enough of a pointer to a secret that we redact it before
+ * posting diagnostics publicly. These patterns complement SECRET_PATTERNS
+ * (which target credential *values*) and are especially relevant when
+ * autonomy=auto's classifier surfaces blocked read attempts in stderr.
+ *
+ * Matches are intentionally anchored to path-like contexts (path
+ * separator, whitespace, quote, assignment) to reduce false positives
+ * on ordinary prose.
+ */
+const SECRET_FILE_PATH_PATTERNS: RegExp[] = [
+  // SSH private keys, known_hosts, authorized_keys (with optional leading path)
+  /(?:[/~][\w\-./]*)?\.ssh\/(?:id_[A-Za-z0-9_]+|known_hosts|authorized_keys)/g,
+
+  // AWS credentials / config
+  /(?:[/~][\w\-./]*)?\.aws\/(?:credentials|config)\b/g,
+
+  // .env family (.env, .env.local, .env.production, ...)
+  /(?<=^|[\s"'`/=(])\.env(?:\.[A-Za-z0-9_\-]+)?\b/g,
+
+  // kubeconfig
+  /(?:[/~][\w\-./]*)?\.kube\/config\b/g,
+
+  // GitHub CLI host file (contains oauth tokens)
+  /(?:[/~][\w\-./]*)?\.config\/gh\/hosts\.yml\b/g,
+
+  // npm auth file
+  /(?<=^|[\s"'`/=(])\.npmrc\b/g,
+
+  // git-credentials store
+  /(?<=^|[\s"'`/=(])\.git-credentials\b/g,
+
+  // Docker auth config
+  /(?:[/~][\w\-./]*)?\.docker\/config\.json\b/g,
+];
+
+/**
+ * Detect credential patterns and redact them.
  *
  * Claude CLI の stdout をそのまま Issue コメントに投稿すると、
- * .env やSSH鍵等の機密情報が公開リポジトリ上に露出するリスクがある。
- * この関数を投稿前に適用することでそのリスクを低減する。
+ * .env や SSH 鍵等の機密情報が公開リポジトリ上に露出するリスクがある。
+ * Credential *values* are replaced with [REDACTED]; credential *file
+ * paths* are replaced with [REDACTED_PATH] so operators can still tell
+ * roughly what was masked while not leaking the sensitive material.
+ *
+ * Best-effort only: exotic quoting / escaping can bypass the patterns.
  */
 export function sanitizeOutput(text: string): string {
-  return SECRET_PATTERNS.reduce(
-    (result, pattern) => result.replace(pattern, "[REDACTED]"),
-    text,
-  );
+  let result = text;
+  for (const pattern of SECRET_PATTERNS) {
+    result = result.replace(pattern, "[REDACTED]");
+  }
+  for (const pattern of SECRET_FILE_PATH_PATTERNS) {
+    result = result.replace(pattern, "[REDACTED_PATH]");
+  }
+  return result;
 }
 
 const SUCCESS_HEADER = "## ✅ Claude Code 実行結果: 成功\n\n";
