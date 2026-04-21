@@ -102,21 +102,30 @@ Claude offers [Scheduled Tasks](https://code.claude.com/docs/en/scheduled-tasks)
 ## Setup
 
 ```bash
-# 1. Create config.yml interactively
-npx sabori-flow init
+# 1. Clone and build
+git clone https://github.com/nonz250/sabori-flow.git
+cd sabori-flow
+npm install
+npm run build
+npm link
 
-# 2. Register with launchd for periodic execution
-npx sabori-flow install
+# 2. Create config.yml interactively
+sabori-flow init
+
+# 3. Register with launchd for periodic execution
+sabori-flow install
 ```
 
 The `install` command generates the plist file and registers with launchd.
+
+> **Note:** Once sabori-flow is published to npm, you can use `npx sabori-flow` instead of `npm link`.
 
 ### Adding a Repository
 
 To add a new repository to an existing `config.yml`.
 
 ```bash
-npx sabori-flow add
+sabori-flow add
 ```
 
 This interactively prompts for owner, repo, and local path, then appends the entry to `config.yml`. If the same owner/repo already exists, you will be asked whether to overwrite it.
@@ -124,7 +133,7 @@ This interactively prompts for owner, repo, and local path, then appends the ent
 ### Uninstall
 
 ```bash
-npx sabori-flow uninstall
+sabori-flow uninstall
 ```
 
 This unregisters from launchd and removes the plist file. You will be prompted whether to delete `~/.sabori-flow/` entirely (config, prompts, and logs).
@@ -199,7 +208,7 @@ launchctl start com.github.sabori-flow
 
 ## Configuration
 
-The configuration file is stored at `~/.sabori-flow/config.yml`. Create it based on `config.yml.example`, or generate it interactively with `npx sabori-flow init`.
+The configuration file is stored at `~/.sabori-flow/config.yml`. Create it based on `config.yml.example`, or generate it interactively with `sabori-flow init`.
 
 ```yaml
 repositories:
@@ -248,7 +257,7 @@ language: ja
 | `execution.timeout_minutes` | Claude CLI execution timeout in minutes (1-240). Default is `60` |
 | `language` | Language for CLI messages and prompt templates (`ja` / `en`). Default is `ja` |
 
-> **Note:** After editing `config.yml`, run `npx sabori-flow reinstall` to apply the changes to launchd.
+> **Note:** After editing `config.yml`, run `sabori-flow reinstall` to apply the changes to launchd.
 
 ## Security
 
@@ -257,11 +266,11 @@ By default, this tool runs Claude Code CLI in `interactive` mode, which requires
 - `execution.autonomy: auto` — Claude Code's `--permission-mode auto`. A classifier blocks dangerous actions (deploys, mass deletions, etc.) and auto-approves the rest. Requires Claude Code v2.1.83+ and a Max/Team/Enterprise plan.
 - `execution.autonomy: full` — passes `--dangerously-skip-permissions`, allowing nearly arbitrary operations on your machine. Use only when `auto` is not available.
 
-By default, the `npx` installation fetches packages from the npm registry at runtime. If the npm package were compromised, malicious code could be executed automatically by the scheduler.
+When using `npx` (after npm publish), packages are fetched from the npm registry at runtime. If the npm package were compromised, malicious code could be executed automatically by the scheduler. Using `npm link` with a local build (as described in [Setup](#setup)) avoids this risk since you can audit the code before running it.
 
 Additionally, multiple layers of security defenses are built in, including input validation, output sanitization, and process isolation.
 
-To mitigate this risk, use the `--local` flag to run from a locally built copy you can audit.
+For additional isolation, use the `--local` flag to run directly from the built copy without `npm link`.
 
 ```bash
 git clone https://github.com/nonz250/sabori-flow.git
