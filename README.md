@@ -242,7 +242,7 @@ language: ja
 | `repositories[].priority_labels` | Priority labels. Issues with labels higher in the list are processed first |
 | `execution.max_parallel` | Number of parallel executions. Default is `1` (sequential) |
 | `execution.max_issues_per_repo` | Maximum number of issues to process per repository. Default is `1` |
-| `execution.autonomy` | CLI autonomy level: `full` (unrestricted), `sandboxed` (sandboxed execution, CLI support required), `interactive` (requires user approval). Default is `interactive` |
+| `execution.autonomy` | CLI autonomy level: `interactive` (requires user approval for each action — recommended default), `auto` (Claude Code's `--permission-mode auto`; classifier blocks only dangerous actions — recommended for unattended launchd runs, requires Claude Code v2.1.83+ and a Max/Team/Enterprise plan), `full` (`--dangerously-skip-permissions`, unrestricted), `sandboxed` (reserved for future non-Claude CLIs such as OpenAI Codex; currently falls back to interactive). Default is `interactive` |
 | `execution.interval_minutes` | Scheduled execution interval in minutes (10-1440). Default is `60` |
 | `language` | Language for CLI messages and prompt templates (`ja` / `en`). Default is `ja` |
 
@@ -250,7 +250,10 @@ language: ja
 
 ## Security
 
-By default, this tool runs Claude Code CLI in `interactive` mode, which requires user approval for each action. To enable fully autonomous execution, set `execution.autonomy: full` in `config.yml` — this passes `--dangerously-skip-permissions` to Claude Code CLI, allowing nearly arbitrary operations on your machine. It is executed periodically by launchd without user interaction.
+By default, this tool runs Claude Code CLI in `interactive` mode, which requires user approval for each action. For unattended launchd runs you have two autonomous options, from safer to riskier:
+
+- `execution.autonomy: auto` — Claude Code's `--permission-mode auto`. A classifier blocks dangerous actions (deploys, mass deletions, etc.) and auto-approves the rest. Requires Claude Code v2.1.83+ and a Max/Team/Enterprise plan.
+- `execution.autonomy: full` — passes `--dangerously-skip-permissions`, allowing nearly arbitrary operations on your machine. Use only when `auto` is not available.
 
 By default, the `npx` installation fetches packages from the npm registry at runtime. If the npm package were compromised, malicious code could be executed automatically by the scheduler.
 

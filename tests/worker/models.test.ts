@@ -3,6 +3,7 @@ import {
   Phase,
   Priority,
   Autonomy,
+  FailureCategory,
   repoFullName,
 } from "../../src/worker/models.js";
 import type {
@@ -43,12 +44,46 @@ describe("Autonomy", () => {
     expect(Autonomy.FULL).toBe("full");
   });
 
+  it("AUTO の値が 'auto' である", () => {
+    expect(Autonomy.AUTO).toBe("auto");
+  });
+
   it("SANDBOXED の値が 'sandboxed' である", () => {
     expect(Autonomy.SANDBOXED).toBe("sandboxed");
   });
 
   it("INTERACTIVE の値が 'interactive' である", () => {
     expect(Autonomy.INTERACTIVE).toBe("interactive");
+  });
+});
+
+describe("FailureCategory", () => {
+  it("PROMPT_GENERATION の値が 'prompt_generation' である", () => {
+    expect(FailureCategory.PROMPT_GENERATION).toBe("prompt_generation");
+  });
+
+  it("CLI_EXECUTION_ERROR の値が 'cli_execution_error' である", () => {
+    expect(FailureCategory.CLI_EXECUTION_ERROR).toBe("cli_execution_error");
+  });
+
+  it("CLI_NON_ZERO_EXIT の値が 'cli_non_zero_exit' である", () => {
+    expect(FailureCategory.CLI_NON_ZERO_EXIT).toBe("cli_non_zero_exit");
+  });
+
+  it("CLI_TIMEOUT の値が 'cli_timeout' である", () => {
+    expect(FailureCategory.CLI_TIMEOUT).toBe("cli_timeout");
+  });
+
+  it("CLI_PERMISSION_DENIED の値が 'cli_permission_denied' である", () => {
+    expect(FailureCategory.CLI_PERMISSION_DENIED).toBe("cli_permission_denied");
+  });
+
+  it("WORKTREE_CREATION の値が 'worktree_creation' である", () => {
+    expect(FailureCategory.WORKTREE_CREATION).toBe("worktree_creation");
+  });
+
+  it("GIT_FETCH の値が 'git_fetch' である", () => {
+    expect(FailureCategory.GIT_FETCH).toBe("git_fetch");
   });
 });
 

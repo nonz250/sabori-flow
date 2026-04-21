@@ -75,17 +75,79 @@ const SECRET_PATTERNS: RegExp[] = [
 ];
 
 /**
- * テキストから機密情報パターンを検出し [REDACTED] に置換する。
+ * Filesystem paths that point to credential material. The filename
+ * alone is enough of a pointer to a secret that we redact it before
+ * posting diagnostics publicly. These patterns complement SECRET_PATTERNS
+ * (which target credential *values*) and are especially relevant when
+ * autonomy=auto's classifier surfaces blocked read attempts in stderr.
+ *
+ * Matches are intentionally anchored to path-like contexts (path
+ * separator, whitespace, quote, assignment) to reduce false positives
+ * on ordinary prose.
+ */
+const SECRET_FILE_PATH_PATTERNS: RegExp[] = [
+  // SSH private keys, known_hosts, authorized_keys (with optional leading path).
+  // Public keys (`id_rsa.pub`, `id_ed25519.pub`) are intentionally excluded —
+  // they are non-sensitive and redaction would hide useful triage context.
+  // The `\b(?!\.pub\b)` prevents the engine from backtracking to a shorter
+  // match inside a `.pub` suffix.
+  /(?:[/~][\w\-./]*)?\.ssh\/(?:id_[A-Za-z0-9_]+\b(?!\.pub\b)|known_hosts|authorized_keys)/g,
+
+  // AWS credentials / config
+  /(?:[/~][\w\-./]*)?\.aws\/(?:credentials|config)\b/g,
+
+  // .env family (.env, .env.local, .env.production, ...).
+  // Dummy/template variants that are typically committed publicly are excluded
+  // so diagnostic output remains readable when tools touch those files.
+  /(?<=^|[\s"'`/=(])\.env(?!\.(?:example|sample|template|dist)\b)(?:\.[A-Za-z0-9_\-]+)?\b/g,
+
+  // kubeconfig (user + common system paths)
+  /(?:[/~][\w\-./]*)?\.kube\/config\b/g,
+  /\/etc\/kubernetes\/(?:admin|kubelet)\.conf\b/g,
+
+  // GitHub CLI host file (contains oauth tokens)
+  /(?:[/~][\w\-./]*)?\.config\/gh\/hosts\.yml\b/g,
+
+  // npm auth file
+  /(?<=^|[\s"'`/=(])\.npmrc\b/g,
+
+  // git-credentials store
+  /(?<=^|[\s"'`/=(])\.git-credentials\b/g,
+
+  // Docker auth config
+  /(?:[/~][\w\-./]*)?\.docker\/config\.json\b/g,
+
+  // .netrc (curl / HTTP basic auth credentials)
+  /(?<=^|[\s"'`/=(])\.netrc\b/g,
+
+  // PyPI token / pip index credentials
+  /(?<=^|[\s"'`/=(])\.pypirc\b/g,
+
+  // Terraform CLI / state (often contains plaintext secrets)
+  /(?<=^|[\s"'`/=(])\.terraformrc\b/g,
+  /(?<=^|[\s"'`/=(])terraform\.tfstate(?:\.backup)?\b/g,
+];
+
+/**
+ * Detect credential patterns and redact them.
  *
  * Claude CLI の stdout をそのまま Issue コメントに投稿すると、
- * .env やSSH鍵等の機密情報が公開リポジトリ上に露出するリスクがある。
- * この関数を投稿前に適用することでそのリスクを低減する。
+ * .env や SSH 鍵等の機密情報が公開リポジトリ上に露出するリスクがある。
+ * Credential *values* are replaced with [REDACTED]; credential *file
+ * paths* are replaced with [REDACTED_PATH] so operators can still tell
+ * roughly what was masked while not leaking the sensitive material.
+ *
+ * Best-effort only: exotic quoting / escaping can bypass the patterns.
  */
 export function sanitizeOutput(text: string): string {
-  return SECRET_PATTERNS.reduce(
-    (result, pattern) => result.replace(pattern, "[REDACTED]"),
-    text,
-  );
+  let result = text;
+  for (const pattern of SECRET_PATTERNS) {
+    result = result.replace(pattern, "[REDACTED]");
+  }
+  for (const pattern of SECRET_FILE_PATH_PATTERNS) {
+    result = result.replace(pattern, "[REDACTED_PATH]");
+  }
+  return result;
 }
 
 const SUCCESS_HEADER = "## ✅ Claude Code 実行結果: 成功\n\n";
@@ -113,6 +175,7 @@ const FAILURE_CATEGORY_LABELS: Record<FailureCategory, string> = {
   [FailureCategory.CLI_EXECUTION_ERROR]: "CLI Execution Error",
   [FailureCategory.CLI_NON_ZERO_EXIT]: "CLI Non-zero Exit",
   [FailureCategory.CLI_TIMEOUT]: "CLI Timeout",
+  [FailureCategory.CLI_PERMISSION_DENIED]: "CLI Permission Denied (auto mode classifier)",
   [FailureCategory.WORKTREE_CREATION]: "Worktree Creation Error",
   [FailureCategory.GIT_FETCH]: "Git Fetch Error",
 };

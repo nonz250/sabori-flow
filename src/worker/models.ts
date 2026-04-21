@@ -17,9 +17,26 @@ export const Priority = {
 } as const;
 export type Priority = (typeof Priority)[keyof typeof Priority];
 
-/** Claude Code CLI の自律性レベル */
+/**
+ * Autonomy level passed to the AI CLI agent.
+ *
+ * Safety ordering (safer on the left):
+ *   interactive > auto > full
+ *
+ * - INTERACTIVE: requires user approval for each action. Safest, but
+ *   unsuitable for unattended launchd runs (blocks on approval prompts).
+ * - AUTO: Claude Code's `--permission-mode auto`. The classifier blocks
+ *   only dangerous actions (deploys, mass deletions, etc.) and
+ *   auto-approves the rest. Recommended for unattended runs.
+ * - FULL: maps to `--dangerously-skip-permissions`. Allows everything;
+ *   use with caution.
+ * - SANDBOXED: reserved value. Claude Code does not support it and
+ *   falls back to interactive. Retained for future non-Claude CLIs
+ *   (e.g. OpenAI Codex's `--sandbox`).
+ */
 export const Autonomy = {
   FULL: "full",
+  AUTO: "auto",
   SANDBOXED: "sandboxed",
   INTERACTIVE: "interactive",
 } as const;
@@ -82,12 +99,20 @@ export interface AppConfig {
 
 // ---------- Failure diagnostics ----------
 
-/** Failure category for diagnostics */
+/**
+ * Failure category for diagnostics.
+ *
+ * CLI_PERMISSION_DENIED is defined as a category only in this PR;
+ * detection logic (stderr pattern matching) is intentionally deferred
+ * to a follow-up PR so the pattern can be calibrated against real
+ * Claude Code auto mode output.
+ */
 export const FailureCategory = {
   PROMPT_GENERATION: "prompt_generation",
   CLI_EXECUTION_ERROR: "cli_execution_error",
   CLI_NON_ZERO_EXIT: "cli_non_zero_exit",
   CLI_TIMEOUT: "cli_timeout",
+  CLI_PERMISSION_DENIED: "cli_permission_denied",
   WORKTREE_CREATION: "worktree_creation",
   GIT_FETCH: "git_fetch",
 } as const;

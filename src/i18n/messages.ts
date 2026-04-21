@@ -71,6 +71,21 @@ const jaMessages: MessageKeys = {
   "prompt.intervalMinutes": "スケジュール実行間隔（分）を入力してください（10-1440）:",
   "prompt.intervalMinutesValidation": "10 以上 1440 以下の整数を入力してください",
 
+  // autonomy selection (init)
+  "prompt.autonomy": "Claude Code CLI の自律実行レベルを選択してください:",
+  "prompt.autonomyChoiceInteractive":
+    "interactive (推奨) — 各操作でユーザー承認が必要",
+  "prompt.autonomyChoiceAuto":
+    "auto — Claude Code の分類器が危険操作のみブロック",
+  "prompt.autonomyChoiceFull":
+    "full — 全許可 (--dangerously-skip-permissions)",
+  "prompt.autonomyDescInteractive":
+    "最も安全。ただし launchd での自動実行には向きません (承認待ちで停止します)",
+  "prompt.autonomyDescAuto":
+    "Claude Code v2.1.83 以降および Max / Team / Enterprise プランが必要です。launchd 自動実行に推奨",
+  "prompt.autonomyDescFull":
+    "警告: マシン上でほぼ任意の操作を許可します。必要性を慎重に検討してください",
+
   // cli descriptions
   "cli.descriptionAdd": "既存の config.yml にリポジトリを追加します",
   "cli.descriptionInit": "対話的に config.yml を作成します",
@@ -146,6 +161,21 @@ const enMessages: MessageKeys = {
     "Automatically add impl label after Plan completion?",
   "prompt.intervalMinutes": "Enter the scheduled execution interval in minutes (10-1440):",
   "prompt.intervalMinutesValidation": "Must be an integer between 10 and 1440",
+
+  // autonomy selection (init)
+  "prompt.autonomy": "Select the Claude Code CLI autonomy level:",
+  "prompt.autonomyChoiceInteractive":
+    "interactive (recommended) — requires user approval for each action",
+  "prompt.autonomyChoiceAuto":
+    "auto — Claude Code's classifier blocks only dangerous actions",
+  "prompt.autonomyChoiceFull":
+    "full — unrestricted (--dangerously-skip-permissions)",
+  "prompt.autonomyDescInteractive":
+    "Safest. Not suitable for unattended launchd runs (blocks on approval prompts).",
+  "prompt.autonomyDescAuto":
+    "Requires Claude Code v2.1.83+ and a Max / Team / Enterprise plan. Recommended for unattended launchd runs.",
+  "prompt.autonomyDescFull":
+    "Warning: allows nearly any operation on your machine. Use with caution.",
 
   // cli descriptions
   "cli.descriptionAdd": "Add a repository to existing config.yml",

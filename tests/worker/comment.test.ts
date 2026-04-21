@@ -567,6 +567,175 @@ describe("sanitizeOutput", () => {
   });
 });
 
+describe("sanitizeOutput - secret file paths", () => {
+  it("SSH 秘密鍵パス (id_rsa) を [REDACTED_PATH] に置換する", () => {
+    const text = "Reading /Users/alice/.ssh/id_rsa was blocked";
+    const result = sanitizeOutput(text);
+    expect(result).not.toContain("/.ssh/id_rsa");
+    expect(result).toContain("[REDACTED_PATH]");
+  });
+
+  it("SSH 秘密鍵パス (id_ed25519) を置換する", () => {
+    const text = "open('~/.ssh/id_ed25519') failed";
+    const result = sanitizeOutput(text);
+    expect(result).not.toContain("id_ed25519");
+    expect(result).toContain("[REDACTED_PATH]");
+  });
+
+  it("SSH authorized_keys / known_hosts を置換する", () => {
+    const text1 = "chmod 600 ~/.ssh/authorized_keys";
+    const text2 = "parsing /home/bob/.ssh/known_hosts";
+    expect(sanitizeOutput(text1)).not.toContain("authorized_keys");
+    expect(sanitizeOutput(text2)).not.toContain("known_hosts");
+  });
+
+  it("AWS credentials ファイルパスを置換する", () => {
+    const text = "Cannot read /Users/alice/.aws/credentials";
+    const result = sanitizeOutput(text);
+    expect(result).not.toContain(".aws/credentials");
+    expect(result).toContain("[REDACTED_PATH]");
+  });
+
+  it("AWS config ファイルパスを置換する", () => {
+    const text = "loading ~/.aws/config";
+    const result = sanitizeOutput(text);
+    expect(result).not.toContain(".aws/config");
+    expect(result).toContain("[REDACTED_PATH]");
+  });
+
+  it(".env および .env.local .env.production を置換する", () => {
+    const cases = [
+      "loaded .env",
+      "loading .env.local",
+      "loading .env.production",
+      "Reading /project/.env.staging",
+    ];
+    for (const text of cases) {
+      const result = sanitizeOutput(text);
+      expect(result).toContain("[REDACTED_PATH]");
+    }
+  });
+
+  it("kubeconfig を置換する", () => {
+    const text = "using ~/.kube/config";
+    const result = sanitizeOutput(text);
+    expect(result).not.toContain(".kube/config");
+    expect(result).toContain("[REDACTED_PATH]");
+  });
+
+  it("gh CLI hosts.yml を置換する", () => {
+    const text = "Reading /Users/alice/.config/gh/hosts.yml failed";
+    const result = sanitizeOutput(text);
+    expect(result).not.toContain("hosts.yml");
+    expect(result).toContain("[REDACTED_PATH]");
+  });
+
+  it(".npmrc / .git-credentials / docker config を置換する", () => {
+    expect(sanitizeOutput("opening ~/.npmrc")).toContain("[REDACTED_PATH]");
+    expect(sanitizeOutput("found .git-credentials")).toContain(
+      "[REDACTED_PATH]",
+    );
+    expect(
+      sanitizeOutput("cat /Users/alice/.docker/config.json"),
+    ).toContain("[REDACTED_PATH]");
+  });
+
+  it("auto mode 風 stderr 全体でパスがマスクされる", () => {
+    const stderr = [
+      "Error: Operation blocked by auto mode classifier.",
+      "Attempted to read: /Users/alice/.ssh/id_rsa",
+      "Also tried: .env.production",
+    ].join("\n");
+
+    const result = sanitizeOutput(stderr);
+
+    expect(result).not.toContain(".ssh/id_rsa");
+    expect(result).not.toContain(".env.production");
+    expect(result).toContain("[REDACTED_PATH]");
+  });
+
+  it("通常のファイル名 (package.json / README.md) は誤マッチしない", () => {
+    const text = "Checking package.json and README.md and tsconfig.json";
+    const result = sanitizeOutput(text);
+    expect(result).toBe(text);
+  });
+
+  it("文中の 'environment' ワードは .env パターンにマッチしない", () => {
+    const text = "The environment variables are loaded from environment.ts";
+    const result = sanitizeOutput(text);
+    expect(result).toBe(text);
+  });
+
+  it("値マスクとパスマスクは異なるプレースホルダを使う", () => {
+    const text = "key=ghp_" + "a".repeat(36) + " from /root/.ssh/id_rsa";
+    const result = sanitizeOutput(text);
+    expect(result).toContain("[REDACTED]");
+    expect(result).toContain("[REDACTED_PATH]");
+  });
+
+  it("公開鍵 (id_rsa.pub) はマスクしない", () => {
+    const text = "uploaded ~/.ssh/id_rsa.pub to the server";
+    const result = sanitizeOutput(text);
+    expect(result).toContain("id_rsa.pub");
+    expect(result).not.toContain("[REDACTED_PATH]");
+  });
+
+  it("id_ed25519.pub もマスクしない", () => {
+    const text = "cat /home/alice/.ssh/id_ed25519.pub";
+    const result = sanitizeOutput(text);
+    expect(result).toContain("id_ed25519.pub");
+    expect(result).not.toContain("[REDACTED_PATH]");
+  });
+
+  it(".env.example / .env.sample / .env.template / .env.dist はマスクしない", () => {
+    const cases = [
+      "copy .env.example to .env",
+      "see .env.sample for defaults",
+      "template file .env.template",
+      "ship .env.dist as reference",
+    ];
+    for (const text of cases) {
+      const result = sanitizeOutput(text);
+      expect(result).toContain(".env");
+      // `.env` 自体 (suffix なし) はマスクされる場合があるが、
+      // 対象の `.env.example` 等の suffix はそのまま残ること
+      for (const dummy of [".env.example", ".env.sample", ".env.template", ".env.dist"]) {
+        if (text.includes(dummy)) {
+          expect(result).toContain(dummy);
+        }
+      }
+    }
+  });
+
+  it(".netrc / .pypirc / .terraformrc を置換する", () => {
+    expect(sanitizeOutput("read ~/.netrc")).toContain("[REDACTED_PATH]");
+    expect(sanitizeOutput("PyPI token in ~/.pypirc")).toContain(
+      "[REDACTED_PATH]",
+    );
+    expect(sanitizeOutput("CLI config ~/.terraformrc")).toContain(
+      "[REDACTED_PATH]",
+    );
+  });
+
+  it("terraform.tfstate / terraform.tfstate.backup を置換する", () => {
+    expect(sanitizeOutput("stat terraform.tfstate")).toContain(
+      "[REDACTED_PATH]",
+    );
+    expect(sanitizeOutput("stat terraform.tfstate.backup")).toContain(
+      "[REDACTED_PATH]",
+    );
+  });
+
+  it("/etc/kubernetes/admin.conf / kubelet.conf を置換する", () => {
+    expect(sanitizeOutput("parsed /etc/kubernetes/admin.conf")).toContain(
+      "[REDACTED_PATH]",
+    );
+    expect(sanitizeOutput("parsed /etc/kubernetes/kubelet.conf")).toContain(
+      "[REDACTED_PATH]",
+    );
+  });
+});
+
 // ---------------------------------------------------------------------------
 // formatFailureDiagnostics
 // ---------------------------------------------------------------------------
@@ -646,6 +815,18 @@ describe("formatFailureDiagnostics", () => {
     const result = formatFailureDiagnostics(diag);
 
     expect(result).toContain("**Category:** Git Fetch Error");
+  });
+
+  it("CLI_PERMISSION_DENIED カテゴリが正しいラベルで表示される", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_PERMISSION_DENIED,
+      summary: "Auto mode classifier blocked an action",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain("CLI Permission Denied");
+    expect(result).toContain("auto mode classifier");
   });
 
   it("全フィールドが設定されている場合、すべてのセクションが出力に含まれる", () => {

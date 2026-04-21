@@ -56,6 +56,15 @@ export interface MessageKeys {
   "prompt.intervalMinutes": string;
   "prompt.intervalMinutesValidation": string;
 
+  // autonomy selection (init)
+  "prompt.autonomy": string;
+  "prompt.autonomyChoiceInteractive": string;
+  "prompt.autonomyChoiceAuto": string;
+  "prompt.autonomyChoiceFull": string;
+  "prompt.autonomyDescInteractive": string;
+  "prompt.autonomyDescAuto": string;
+  "prompt.autonomyDescFull": string;
+
   // cli descriptions
   "cli.descriptionAdd": string;
   "cli.descriptionInit": string;

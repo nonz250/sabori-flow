@@ -82,6 +82,8 @@ src/
 - **レベル 2**: プロンプト生成/CLI 実行失敗 → failed 遷移 + 構造化された失敗診断コメント（`FailureDiagnostics` → `formatFailureDiagnostics()` でフォーマット）
 - **レベル 3**: 後処理（done/failed ラベル遷移、コメント投稿）失敗 → ログ WARNING のみ
 
+`:failed` に遷移した Issue は trigger ラベルが剥がれるため、次回フェッチ対象から外れる (自動リトライされない)。再実行するにはユーザーが手動で trigger ラベル (`claude/plan` 等) を再付与する必要がある。
+
 ### 並列実行
 
 - `config.yml` の `execution.max_parallel`（1-10）で制御
@@ -148,7 +150,11 @@ src/
 - `repositories[].default_branch`: デフォルトブランチ名（文字列、デフォルト: `main`）。worktree 作成時に `origin/<default_branch>` を起点として使用
 - `execution.max_parallel`: 並列実行数（整数、1-10、デフォルト: 1）
 - `execution.max_issues_per_repo`: リポジトリあたりの最大処理 Issue 数（整数、1-20、デフォルト: 1）
-- `execution.autonomy`: CLI の自律実行レベル（`full` / `sandboxed` / `interactive`、デフォルト: `interactive`）
+- `execution.autonomy`: CLI の自律実行レベル（`interactive` / `auto` / `full` / `sandboxed`、デフォルト: `interactive`）
+  - `interactive`: 各操作にユーザー承認が必要。launchd 無人実行には不向き
+  - `auto`: Claude Code の `--permission-mode auto`。分類器が危険操作のみブロック (v2.1.83+ / Max・Team・Enterprise プラン必須)
+  - `full`: `--dangerously-skip-permissions`。全許可
+  - `sandboxed`: 将来の非-Claude CLI (OpenAI Codex 等) 向け予約値。現状は interactive にフォールバック
 - `execution.interval_minutes`: スケジュール実行間隔（整数、10-1440分、デフォルト: 60）
 - `language`: CLI メッセージおよびプロンプトテンプレートの言語（`ja` / `en`、デフォルト: `ja`）
 
