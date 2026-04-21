@@ -21,13 +21,15 @@ import { createLogger } from "./logger.js";
 
 const logger = createLogger("pipeline");
 
+const MS_PER_MINUTE = 60_000;
+
 // ---------- Dependency Injection ----------
 
 export interface PipelineDeps {
   buildPrompt: (issue: Issue, repoConfig: RepositoryConfig, language: Language) => string;
   runClaude: (
     prompt: string,
-    options: { cwd: string; autonomy?: Autonomy },
+    options: { cwd: string; autonomy?: Autonomy; timeoutMs?: number },
   ) => Promise<ProcessResult>;
   transitionToInProgress: (
     repo: string,
@@ -160,7 +162,11 @@ export async function processIssue(
         // 3-2. Claude CLI 実行（レベル 2）
         let result: ProcessResult;
         try {
-          result = await deps.runClaude(prompt, { cwd: worktreePath, autonomy: executionConfig.autonomy });
+          result = await deps.runClaude(prompt, {
+            cwd: worktreePath,
+            autonomy: executionConfig.autonomy,
+            timeoutMs: executionConfig.timeoutMinutes * MS_PER_MINUTE,
+          });
         } catch (error: unknown) {
           const errorMessage = error instanceof Error ? error.message : String(error);
           logger.error(

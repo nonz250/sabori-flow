@@ -226,6 +226,7 @@ execution:
   max_issues_per_repo: 1
   autonomy: interactive
   interval_minutes: 60
+  timeout_minutes: 60
 
 language: ja
 ```
@@ -244,6 +245,7 @@ language: ja
 | `execution.max_issues_per_repo` | Maximum number of issues to process per repository. Default is `1` |
 | `execution.autonomy` | CLI autonomy level: `interactive` (requires user approval for each action — recommended default), `auto` (Claude Code's `--permission-mode auto`; classifier blocks only dangerous actions — recommended for unattended launchd runs, requires Claude Code v2.1.83+ and a Max/Team/Enterprise plan), `full` (`--dangerously-skip-permissions`, unrestricted), `sandboxed` (reserved for future non-Claude CLIs such as OpenAI Codex; currently falls back to interactive). Default is `interactive` |
 | `execution.interval_minutes` | Scheduled execution interval in minutes (10-1440). Default is `60` |
+| `execution.timeout_minutes` | Claude CLI execution timeout in minutes (1-240). Default is `60` |
 | `language` | Language for CLI messages and prompt templates (`ja` / `en`). Default is `ja` |
 
 > **Note:** After editing `config.yml`, run `npx sabori-flow reinstall` to apply the changes to launchd.

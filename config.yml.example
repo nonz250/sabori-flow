@@ -26,6 +26,7 @@ execution:
   #                          # auto: Claude Code --permission-mode auto (v2.1.83+, Max/Team/Enterprise)
   #                          # sandboxed: reserved for future non-Claude CLIs, currently behaves like interactive
   # interval_minutes: 60  # Scheduled execution interval in minutes (10-1440, default: 60)
+  # timeout_minutes: 60   # Claude CLI execution timeout in minutes (1-240, default: 60)
 
 # Display language
 # language: ja  # ja / en (default: ja)

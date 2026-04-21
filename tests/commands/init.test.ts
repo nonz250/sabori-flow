@@ -137,7 +137,7 @@ beforeEach(() => {
   mockedGetUserPromptsDir.mockReturnValue("/mock/config/dir/prompts");
   mockedGetDefaultPromptsDir.mockReturnValue("/mock/package/prompts");
 
-  // 言語 / autonomy / interval_minutes のデフォルト応答
+  // 言語 / autonomy / interval_minutes / timeout_minutes のデフォルト応答
   setupInitPrompts();
 
   consoleSpy = {
@@ -287,6 +287,25 @@ describe("initCommand - 書き込まれる YAML の内容", () => {
     expect(execution).not.toHaveProperty("log_dir");
     expect(execution.max_parallel).toBe(1);
     expect(execution.max_issues_per_repo).toBe(1);
+  });
+
+  it("execution セクションに interval_minutes と timeout_minutes が含まれる", async () => {
+    const repoInput = makeRepoInput();
+
+    mockExistsSyncForConfig(false);
+    mockedPromptRepository.mockResolvedValueOnce(repoInput);
+    mockedConfirm.mockResolvedValueOnce(false);
+    // interval_minutes 応答 -> timeout_minutes 応答 の順
+    mockedInput
+      .mockResolvedValueOnce("30")
+      .mockResolvedValueOnce("120");
+
+    await runInitCommand();
+
+    const written = parseWrittenYaml();
+    const execution = written.execution as Record<string, unknown>;
+    expect(execution.interval_minutes).toBe(30);
+    expect(execution.timeout_minutes).toBe(120);
   });
 });
 

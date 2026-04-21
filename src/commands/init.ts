@@ -21,6 +21,7 @@ function buildConfigData(
   repos: RepositoryInput[],
   language: string,
   intervalMinutes: number,
+  timeoutMinutes: number,
   autonomy: Autonomy,
 ) {
   return {
@@ -37,6 +38,7 @@ function buildConfigData(
       ...getDefaultExecution(),
       autonomy,
       interval_minutes: intervalMinutes,
+      timeout_minutes: timeoutMinutes,
     },
   };
 }
@@ -143,8 +145,22 @@ export async function initCommand(): Promise<void> {
     });
     const intervalMinutes = Number(intervalMinutesStr);
 
+    // timeout_minutes 入力
+    const timeoutMinutesStr = await input({
+      message: t("prompt.timeoutMinutes"),
+      default: "60",
+      validate: (v) => {
+        const n = Number(v);
+        if (!Number.isInteger(n) || n < 1 || n > 240) {
+          return t("prompt.timeoutMinutesValidation");
+        }
+        return true;
+      },
+    });
+    const timeoutMinutes = Number(timeoutMinutesStr);
+
     // YAML 生成・書き込み
-    const config = buildConfigData(repos, language, intervalMinutes, autonomy);
+    const config = buildConfigData(repos, language, intervalMinutes, timeoutMinutes, autonomy);
     const yamlStr = stringify(config);
     fs.writeFileSync(getConfigPath(), yamlStr, { encoding: "utf-8", mode: 0o600 });
 

@@ -30,6 +30,10 @@ const BRANCH_NAME_PATTERN = /^[a-zA-Z0-9._\/-]+$/;
 const DEFAULT_BRANCH_DEFAULT = "main";
 const PHASE_LABEL_KEYS = ["trigger", "in_progress", "done", "failed"] as const;
 
+const TIMEOUT_MINUTES_DEFAULT = 60;
+const TIMEOUT_MINUTES_MIN = 1;
+const TIMEOUT_MINUTES_MAX = 240;
+
 // ---------- Public API ----------
 
 /**
@@ -335,7 +339,13 @@ function parsePhaseLabels(raw: unknown, phaseName: string): PhaseLabels {
 
 function parseExecution(raw: unknown): Omit<ExecutionConfig, "language"> {
   if (raw === undefined || raw === null) {
-    return { maxParallel: 1, maxIssuesPerRepo: 1, autonomy: Autonomy.INTERACTIVE, intervalMinutes: 60 };
+    return {
+      maxParallel: 1,
+      maxIssuesPerRepo: 1,
+      autonomy: Autonomy.INTERACTIVE,
+      intervalMinutes: 60,
+      timeoutMinutes: TIMEOUT_MINUTES_DEFAULT,
+    };
   }
 
   if (typeof raw !== "object" || Array.isArray(raw)) {
@@ -427,11 +437,34 @@ function parseExecution(raw: unknown): Omit<ExecutionConfig, "language"> {
     );
   }
 
+  // timeout_minutes
+  const rawTimeoutMinutes =
+    "timeout_minutes" in record ? record["timeout_minutes"] : TIMEOUT_MINUTES_DEFAULT;
+
+  if (typeof rawTimeoutMinutes !== "number" || !Number.isInteger(rawTimeoutMinutes)) {
+    throw new ConfigValidationError(
+      `execution.timeout_minutes: must be an integer, got ${typeof rawTimeoutMinutes}`,
+    );
+  }
+
+  if (rawTimeoutMinutes < TIMEOUT_MINUTES_MIN) {
+    throw new ConfigValidationError(
+      `execution.timeout_minutes: must be >= ${TIMEOUT_MINUTES_MIN}, got ${rawTimeoutMinutes}`,
+    );
+  }
+
+  if (rawTimeoutMinutes > TIMEOUT_MINUTES_MAX) {
+    throw new ConfigValidationError(
+      `execution.timeout_minutes: must be <= ${TIMEOUT_MINUTES_MAX}, got ${rawTimeoutMinutes}`,
+    );
+  }
+
   return {
     maxParallel: rawMaxParallel,
     maxIssuesPerRepo: rawMaxIssuesPerRepo,
     autonomy: rawAutonomy as Autonomy,
     intervalMinutes: rawIntervalMinutes,
+    timeoutMinutes: rawTimeoutMinutes,
   };
 }
 

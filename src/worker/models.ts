@@ -87,6 +87,7 @@ export interface ExecutionConfig {
   readonly maxIssuesPerRepo: number;
   readonly autonomy: Autonomy;
   readonly intervalMinutes: number;
+  readonly timeoutMinutes: number;
   readonly language: Language;
 }
 

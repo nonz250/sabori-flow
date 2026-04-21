@@ -109,6 +109,7 @@ export function makeAppConfig(
     maxIssuesPerRepo: 10,
     autonomy: "interactive",
     intervalMinutes: 60,
+    timeoutMinutes: 60,
     language: overrides?.language ?? "ja",
   };
 

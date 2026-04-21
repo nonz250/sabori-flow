@@ -55,6 +55,8 @@ export interface MessageKeys {
   "prompt.autoImplConfirm": string;
   "prompt.intervalMinutes": string;
   "prompt.intervalMinutesValidation": string;
+  "prompt.timeoutMinutes": string;
+  "prompt.timeoutMinutesValidation": string;
 
   // autonomy selection (init)
   "prompt.autonomy": string;

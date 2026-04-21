@@ -22,6 +22,7 @@ const DEFAULT_EXECUTION_CONFIG: ExecutionConfig = {
   maxIssuesPerRepo: 10,
   autonomy: "interactive",
   intervalMinutes: 60,
+  timeoutMinutes: 60,
   language: "ja",
 };
 
@@ -127,6 +128,8 @@ describe("processIssue", () => {
         maxParallel: 1,
         maxIssuesPerRepo: 10,
         autonomy: "full",
+        intervalMinutes: 60,
+        timeoutMinutes: 60,
         language: "ja",
       };
 
@@ -135,7 +138,7 @@ describe("processIssue", () => {
       expect(deps.runClaude).toHaveBeenCalledOnce();
       expect(deps.runClaude).toHaveBeenCalledWith(
         "generated prompt",
-        { cwd: "/tmp/worktrees/issue-mock", autonomy: "full" },
+        { cwd: "/tmp/worktrees/issue-mock", autonomy: "full", timeoutMs: 3_600_000 },
       );
     });
 
@@ -148,7 +151,41 @@ describe("processIssue", () => {
       expect(deps.runClaude).toHaveBeenCalledOnce();
       expect(deps.runClaude).toHaveBeenCalledWith(
         "generated prompt",
-        { cwd: "/tmp/worktrees/issue-mock", autonomy: "interactive" },
+        { cwd: "/tmp/worktrees/issue-mock", autonomy: "interactive", timeoutMs: 3_600_000 },
+      );
+    });
+
+    it("runClaude に executionConfig.timeoutMinutes を ms に変換した値が渡される", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      const executionConfig: ExecutionConfig = {
+        ...DEFAULT_EXECUTION_CONFIG,
+        timeoutMinutes: 30,
+      };
+
+      await processIssue(issue, repoConfig, executionConfig, deps);
+
+      expect(deps.runClaude).toHaveBeenCalledOnce();
+      expect(deps.runClaude).toHaveBeenCalledWith(
+        "generated prompt",
+        expect.objectContaining({ timeoutMs: 1_800_000 }),
+      );
+    });
+
+    it("runClaude に executionConfig.timeoutMinutes 最大値 240 を ms に変換した値が渡される", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      const executionConfig: ExecutionConfig = {
+        ...DEFAULT_EXECUTION_CONFIG,
+        timeoutMinutes: 240,
+      };
+
+      await processIssue(issue, repoConfig, executionConfig, deps);
+
+      expect(deps.runClaude).toHaveBeenCalledOnce();
+      expect(deps.runClaude).toHaveBeenCalledWith(
+        "generated prompt",
+        expect.objectContaining({ timeoutMs: 14_400_000 }),
       );
     });
 
