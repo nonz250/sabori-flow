@@ -4,6 +4,16 @@ import {
   ProcessExecutionError,
 } from "../../src/worker/process.js";
 
+const mockHomedir = vi.hoisted(() => vi.fn<() => string>(() => "/Users/alice"));
+
+vi.mock("node:os", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:os")>();
+  return {
+    ...actual,
+    homedir: mockHomedir,
+  };
+});
+
 vi.mock("../../src/worker/process.js", async (importOriginal) => {
   const original =
     await importOriginal<typeof import("../../src/worker/process.js")>();
@@ -1251,5 +1261,87 @@ describe("formatFailureDiagnostics", () => {
     expect(stdoutIndex).toBeGreaterThanOrEqual(0);
     expect(noteIndex).toBeLessThan(stderrIndex);
     expect(noteIndex).toBeLessThan(stdoutIndex);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// sanitizeOutput - homedir masking
+// ---------------------------------------------------------------------------
+
+describe("sanitizeOutput - homedir masking", () => {
+  beforeEach(() => {
+    mockHomedir.mockReturnValue("/Users/alice");
+  });
+
+  it("credential path に該当しない homedir 配下のパスは [REDACTED_HOME] に置換される", () => {
+    const text = "Reading /Users/alice/repo/src/file.ts failed";
+    const result = sanitizeOutput(text);
+    expect(result).toBe("Reading [REDACTED_HOME]/repo/src/file.ts failed");
+  });
+
+  it("同一文字列内で homedir が複数出現する場合、全て置換される", () => {
+    const text =
+      "Found /Users/alice/foo and /Users/alice/bar in /Users/alice/baz";
+    const result = sanitizeOutput(text);
+    expect(result).toBe(
+      "Found [REDACTED_HOME]/foo and [REDACTED_HOME]/bar in [REDACTED_HOME]/baz",
+    );
+    // 元の homedir 文字列が残っていないことを保証
+    expect(result).not.toContain("/Users/alice");
+  });
+
+  it("homedir が '/' 単体 (最低長未満) の場合は置換されない", () => {
+    mockHomedir.mockReturnValue("/");
+    const text = "path /foo/bar should not be touched";
+    const result = sanitizeOutput(text);
+    expect(result).toBe(text);
+  });
+
+  it("homedir が空文字の場合は例外なく、置換も発生しない", () => {
+    mockHomedir.mockReturnValue("");
+    const text = "this string should pass through unchanged";
+    expect(() => sanitizeOutput(text)).not.toThrow();
+    const result = sanitizeOutput(text);
+    expect(result).toBe(text);
+  });
+
+  it("AKIA AWS アクセスキーと homedir パスが両方含まれる場合、両方マスクされる", () => {
+    const text =
+      "Loaded /Users/alice/.aws-bin/script.sh and got key AKIAIOSFODNN7EXAMPLE";
+    const result = sanitizeOutput(text);
+    expect(result).toContain("[REDACTED_HOME]/.aws-bin/script.sh");
+    expect(result).not.toContain("AKIAIOSFODNN7EXAMPLE");
+    expect(result).toContain("[REDACTED]");
+    expect(result).not.toContain("/Users/alice");
+  });
+
+  it("formatFailureDiagnostics の errorMessage / stdout / stderr で homedir がマスクされる", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.CLI_EXECUTION_ERROR,
+      summary: "Path leaked",
+      errorMessage: "ENOENT at /Users/alice/project/src/main.ts",
+      stdout: "wrote /Users/alice/project/build/out.js",
+      stderr: "cwd was /Users/alice/project",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).not.toContain("/Users/alice");
+    // errorMessage 行
+    expect(result).toContain("ENOENT at [REDACTED_HOME]/project/src/main.ts");
+    // stdout / stderr 各セクション
+    expect(result).toContain("wrote [REDACTED_HOME]/project/build/out.js");
+    expect(result).toContain("cwd was [REDACTED_HOME]/project");
+  });
+
+  it("credential path が homedir 配下にある場合、credential path マスクが優先される", () => {
+    const text = "Reading /Users/alice/.ssh/id_rsa failed";
+    const result = sanitizeOutput(text);
+    // SSH 鍵パスは [REDACTED_PATH] に置換される。homedir 単独で [REDACTED_HOME] には
+    // 縮退しない (credential path の特異性を保ち、運用者が何を伏せたか判別できる)。
+    expect(result).toContain("[REDACTED_PATH]");
+    expect(result).toContain("Reading [REDACTED_PATH] failed");
+    expect(result).not.toContain("/Users/alice/.ssh/id_rsa");
+    expect(result).not.toContain("[REDACTED_HOME]");
   });
 });
