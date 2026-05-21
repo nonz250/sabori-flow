@@ -65,7 +65,7 @@ src/
 4. 各 Issue に対して以下のパイプラインを実行:
    - ラベル遷移: trigger → in-progress
    - `git fetch origin` でリモートの最新を取得
-   - git worktree 作成（`origin/<default_branch>` を起点にブランチを作成）
+   - git worktree 作成（`~/.sabori-flow/worktrees/<owner>/<repo>/issue-<番号>-<タイムスタンプ>/` に `origin/<default_branch>` を起点にブランチを作成）
    - プロンプト生成（テンプレート + Issue 情報）
    - `claude -p` を worktree 内で実行（`execution.autonomy` に応じてフラグを付与）
    - 成功: 出力サニタイズ後、done ラベル + 成功コメント / 失敗: failed ラベル + 構造化された失敗診断コメント（カテゴリ、stderr、stdout、exit code 等）
@@ -132,6 +132,7 @@ src/
 | 設定ファイル | `~/.sabori-flow/config.yml` |
 | プロンプトテンプレート | `~/.sabori-flow/prompts/` |
 | ログ | `~/.sabori-flow/logs/` |
+| git worktree | `~/.sabori-flow/worktrees/<owner>/<repo>/issue-<番号>-<タイムスタンプ>/` |
 | plist バックアップ | `~/.sabori-flow/com.github.sabori-flow.plist` |
 
 ### プロンプトテンプレート
