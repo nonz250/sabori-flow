@@ -1264,10 +1264,6 @@ describe("formatFailureDiagnostics", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// sanitizeOutput - homedir masking
-// ---------------------------------------------------------------------------
-
 describe("sanitizeOutput - homedir masking", () => {
   beforeEach(() => {
     mockHomedir.mockReturnValue("/Users/alice");

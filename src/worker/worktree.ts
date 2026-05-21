@@ -79,7 +79,6 @@ export async function withWorktree<T>(
     );
   }
 
-  // Phase 3: create the worktree itself.
   runGit(
     repoConfig.localPath,
     ["worktree", "add", worktreePath, "-b", branchName, `origin/${repoConfig.defaultBranch}`],
