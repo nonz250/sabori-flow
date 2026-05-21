@@ -189,14 +189,23 @@ describe("processIssue", () => {
       );
     });
 
-    it("withWorktree に repoConfig.defaultBranch が渡される", async () => {
+    it("withWorktree に owner/repo/localPath/defaultBranch を含む repoConfig が渡される", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
 
       await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, deps);
 
       expect(deps.withWorktree).toHaveBeenCalledOnce();
-      expect(deps.withWorktree.mock.calls[0][2]).toBe("main");
+      expect(deps.withWorktree).toHaveBeenCalledWith(
+        expect.objectContaining({
+          owner: repoConfig.owner,
+          repo: repoConfig.repo,
+          localPath: repoConfig.localPath,
+          defaultBranch: "main",
+        }),
+        issue.number,
+        expect.any(Function),
+      );
     });
 
     it("defaultBranch が 'develop' の場合に withWorktree に 'develop' が渡される", async () => {
@@ -206,7 +215,11 @@ describe("processIssue", () => {
       await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, deps);
 
       expect(deps.withWorktree).toHaveBeenCalledOnce();
-      expect(deps.withWorktree.mock.calls[0][2]).toBe("develop");
+      expect(deps.withWorktree).toHaveBeenCalledWith(
+        expect.objectContaining({ defaultBranch: "develop" }),
+        issue.number,
+        expect.any(Function),
+      );
     });
 
     it("stdout にシークレットが含まれる場合、sanitizeOutput 適用後の値で成功コメントが呼ばれる", async () => {
@@ -480,6 +493,47 @@ describe("processIssue", () => {
       expect(failureMessage).toContain("Git Fetch Error");
       expect(failureMessage).toContain("Git fetch failed");
       expect(failureMessage).toContain("git fetch origin failed");
+    });
+
+    it("WorktreeError (phase='mkdir') の場合に WORKTREE_CREATION カテゴリで失敗処理される", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.withWorktree).mockRejectedValue(
+        new WorktreeError("worktree ディレクトリの作成に失敗しました", "mkdir"),
+      );
+
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, deps);
+
+      expect(result).toBe(false);
+      expect(deps.transitionToFailed).toHaveBeenCalledOnce();
+      expect(deps.transitionToFailed).toHaveBeenCalledWith(
+        "testowner/testrepo",
+        42,
+        PLAN_LABELS,
+      );
+      expect(deps.postFailureComment).toHaveBeenCalledOnce();
+      const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
+      expect(failureMessage).toContain("Worktree Creation Error");
+      expect(failureMessage).toContain("Worktree creation failed");
+      expect(failureMessage).toContain("worktree ディレクトリの作成に失敗しました");
+    });
+
+    it("WorktreeError (phase='create') の場合に WORKTREE_CREATION カテゴリで失敗処理される", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.withWorktree).mockRejectedValue(
+        new WorktreeError("worktree の作成に失敗しました", "create"),
+      );
+
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, deps);
+
+      expect(result).toBe(false);
+      expect(deps.transitionToFailed).toHaveBeenCalledOnce();
+      expect(deps.postFailureComment).toHaveBeenCalledOnce();
+      const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
+      expect(failureMessage).toContain("Worktree Creation Error");
+      expect(failureMessage).toContain("Worktree creation failed");
+      expect(failureMessage).toContain("worktree の作成に失敗しました");
     });
 
     it("worktree 作成失敗時に failed 遷移 + 失敗コメントが呼ばれ false が返る", async () => {

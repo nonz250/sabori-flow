@@ -1,10 +1,12 @@
 import { mkdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 
+import type { RepositoryConfig } from "./models.js";
 import { runCommandSync, ProcessExecutionError } from "./process.js";
 import { createLogger } from "./logger.js";
+import { getWorktreesDir } from "../utils/paths.js";
 
-export type WorktreePhase = "fetch" | "create";
+export type WorktreePhase = "fetch" | "mkdir" | "create";
 
 export class WorktreeError extends Error {
   readonly phase: WorktreePhase;
@@ -16,10 +18,17 @@ export class WorktreeError extends Error {
 }
 
 const GIT_TIMEOUT_MS = 120_000;
-const WORKTREES_DIR_NAME = ".sabori-flow-worktrees";
+const WORKTREE_DIR_MODE = 0o700;
 
 const logger = createLogger("worktree");
 
+// Second-level granularity is sufficient because:
+//   1. Same-repo issues are processed sequentially (max_issues_per_repo
+//      gates parallelism per repo).
+//   2. Cross-repo collisions are prevented by the <owner>/<repo>/ path
+//      prefix added in withWorktree() below.
+// If max_issues_per_repo becomes truly parallel in the future, switch
+// to millisecond granularity or UUID-based naming.
 function defaultTimestampFn(): string {
   const now = new Date();
   const y = now.getFullYear();
@@ -32,45 +41,48 @@ function defaultTimestampFn(): string {
 }
 
 /**
- * git worktree を作成し、コールバック実行後に削除する。
+ * Creates a git worktree and removes it after the callback runs.
  *
- * Python 版の worktree_context コンテキストマネージャに相当する。
- *
- * @param localPath - クローン済みリポジトリの絶対パス
- * @param issueNumber - Issue 番号
- * @param defaultBranch - デフォルトブランチ名（worktree の起点）
- * @param callback - worktree パスを受け取るコールバック
- * @param timestampFn - タイムスタンプ生成関数（テスト用）
- * @returns コールバックの戻り値
- * @throws WorktreeError - worktree の作成に失敗した場合
+ * Worktrees are placed under ~/.sabori-flow/worktrees/<owner>/<repo>/
+ * to keep them out of the user's working tree.
  */
 export async function withWorktree<T>(
-  localPath: string,
+  repoConfig: Pick<RepositoryConfig, "owner" | "repo" | "localPath" | "defaultBranch">,
   issueNumber: number,
-  defaultBranch: string,
   callback: (worktreePath: string) => T | Promise<T>,
   timestampFn: () => string = defaultTimestampFn,
 ): Promise<T> {
   const ts = timestampFn();
   const branchName = `sabori-flow/${issueNumber}-${ts}`;
-  const worktreesDir = join(dirname(localPath), WORKTREES_DIR_NAME);
-  const worktreePath = join(worktreesDir, `issue-${issueNumber}-${ts}`);
+  const repoDir = join(getWorktreesDir(), repoConfig.owner, repoConfig.repo);
+  const worktreePath = join(repoDir, `issue-${issueNumber}-${ts}`);
 
-  // worktree ディレクトリの親を作成
-  mkdirSync(worktreesDir, { recursive: true });
-
-  // リモートの最新を取得
+  // Phase 1: fetch first. If fetch fails, no filesystem side-effects occur,
+  // so no empty directories are left behind.
   runGit(
-    localPath,
+    repoConfig.localPath,
     ["fetch", "origin"],
     "git fetch origin に失敗しました",
     "fetch",
   );
 
-  // worktree 作成
+  // Phase 2: create the parent directory (after fetch succeeds).
+  // mode 0o700 prevents other local users from reading worktree contents,
+  // which is relevant on shared workstations holding private repos.
+  try {
+    mkdirSync(repoDir, { recursive: true, mode: WORKTREE_DIR_MODE });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new WorktreeError(
+      `worktree ディレクトリの作成に失敗しました: ${repoDir}: ${message}`,
+      "mkdir",
+    );
+  }
+
+  // Phase 3: create the worktree itself.
   runGit(
-    localPath,
-    ["worktree", "add", worktreePath, "-b", branchName, `origin/${defaultBranch}`],
+    repoConfig.localPath,
+    ["worktree", "add", worktreePath, "-b", branchName, `origin/${repoConfig.defaultBranch}`],
     `worktree の作成に失敗しました: ${worktreePath}`,
     "create",
   );
@@ -78,10 +90,12 @@ export async function withWorktree<T>(
   try {
     return await callback(worktreePath);
   } finally {
-    // worktree 削除（失敗してもログ警告のみ）
+    // Intentionally do NOT remove the <owner>/<repo>/ parent directory:
+    // concurrent issues for the same repo may share it, and removing it
+    // could break other in-flight worktree operations.
     try {
       runGit(
-        localPath,
+        repoConfig.localPath,
         ["worktree", "remove", worktreePath, "--force"],
         `worktree の削除に失敗しました: ${worktreePath}`,
         "create",
