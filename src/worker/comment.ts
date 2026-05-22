@@ -1,3 +1,5 @@
+import { homedir } from "node:os";
+
 import {
   runCommand,
   ProcessTimeoutError,
@@ -128,6 +130,9 @@ const SECRET_FILE_PATH_PATTERNS: RegExp[] = [
   /(?<=^|[\s"'`/=(])terraform\.tfstate(?:\.backup)?\b/g,
 ];
 
+const MIN_HOMEDIR_LENGTH_FOR_MASKING = 5;
+const HOMEDIR_REDACTION_PLACEHOLDER = "[REDACTED_HOME]";
+
 /**
  * Detect credential patterns and redact them.
  *
@@ -146,6 +151,11 @@ export function sanitizeOutput(text: string): string {
   }
   for (const pattern of SECRET_FILE_PATH_PATTERNS) {
     result = result.replace(pattern, "[REDACTED_PATH]");
+  }
+  const home = homedir();
+  if (home.length >= MIN_HOMEDIR_LENGTH_FOR_MASKING) {
+    const escaped = home.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    result = result.replace(new RegExp(escaped, "g"), HOMEDIR_REDACTION_PLACEHOLDER);
   }
   return result;
 }

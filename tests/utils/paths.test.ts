@@ -60,6 +60,15 @@ describe("getPlistGeneratedPath", () => {
   });
 });
 
+describe("getWorktreesDir", () => {
+  it("~/.sabori-flow/worktrees を返す", async () => {
+    const { getWorktreesDir } = await import("../../src/utils/paths.js");
+    expect(getWorktreesDir()).toBe(
+      path.join("/mock/home", ".sabori-flow", "worktrees"),
+    );
+  });
+});
+
 describe("パッケージ内部リソースパス", () => {
   it("getConfigExamplePath は PACKAGE_ROOT/config.yml.example を返す", async () => {
     const { getConfigExamplePath, PACKAGE_ROOT } = await import(

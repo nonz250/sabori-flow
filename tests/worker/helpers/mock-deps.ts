@@ -2,6 +2,7 @@ import { vi } from "vitest";
 
 import type { PipelineDeps } from "../../../src/worker/pipeline.js";
 import type { WorkerDeps } from "../../../src/worker/main.js";
+import type { RepositoryConfig } from "../../../src/worker/models.js";
 
 /**
  * PipelineDeps の全プロパティを vi.fn() で生成したモックを返す。
@@ -25,9 +26,11 @@ export function createMockPipelineDeps(
     postSuccessComment: vi.fn().mockResolvedValue(undefined),
     postFailureComment: vi.fn().mockResolvedValue(undefined),
     withWorktree: vi.fn().mockImplementation(
-      async (_localPath: string, _issueNumber: number, _defaultBranch: string, callback: (path: string) => Promise<unknown>) => {
-        return callback("/tmp/worktrees/issue-mock");
-      },
+      async (
+        _repoConfig: Pick<RepositoryConfig, "owner" | "repo" | "localPath" | "defaultBranch">,
+        _issueNumber: number,
+        callback: (path: string) => Promise<unknown>,
+      ) => callback("/tmp/worktrees/issue-mock"),
     ),
     ...overrides,
   };

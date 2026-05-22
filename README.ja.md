@@ -197,6 +197,12 @@ launchctl start com.github.sabori-flow
 ~/.sabori-flow/logs/launchd_stderr.log      # launchd 経由の標準エラー出力
 ```
 
+**worktree の場所:**
+
+各 Issue は `~/.sabori-flow/worktrees/<owner>/<repo>/issue-<番号>-<タイムスタンプ>/` に作成される専用 worktree で処理されます。処理完了後は自動的に削除されます。
+
+旧バージョンからアップグレードした場合、以前作成された `<リポジトリの親ディレクトリ>/.sabori-flow-worktrees/` は使用されなくなるため、手動で削除して問題ありません。
+
 ## 設定
 
 設定ファイルは `~/.sabori-flow/config.yml` に保存されます。`config.yml.example` を参考に作成するか、`npx sabori-flow init` で対話的に生成できます。

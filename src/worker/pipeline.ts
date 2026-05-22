@@ -62,9 +62,8 @@ export interface PipelineDeps {
     message: string,
   ) => Promise<void>;
   withWorktree: <T>(
-    localPath: string,
+    repoConfig: Pick<RepositoryConfig, "owner" | "repo" | "localPath" | "defaultBranch">,
     issueNumber: number,
-    defaultBranch: string,
     callback: (worktreePath: string) => Promise<T>,
   ) => Promise<T>;
 }
@@ -135,9 +134,8 @@ export async function processIssue(
   // 3. worktree 作成 -> Claude 実行 -> worktree 削除
   try {
     return await deps.withWorktree(
-      repoConfig.localPath,
+      repoConfig,
       issue.number,
-      repoConfig.defaultBranch,
       async (worktreePath: string) => {
         // 3-1. プロンプト生成（レベル 2）
         let prompt: string;

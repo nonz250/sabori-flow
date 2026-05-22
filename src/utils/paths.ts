@@ -85,6 +85,10 @@ export function getPlistGeneratedPath(): string {
   return path.join(getBaseDir(), `${PLIST_LABEL}.plist`);
 }
 
+export function getWorktreesDir(): string {
+  return path.join(getBaseDir(), "worktrees");
+}
+
 /** plist テンプレートのパス（PLIST_TEMPLATE_PATH と同値） */
 export function getPlistTemplatePath(): string {
   return PLIST_TEMPLATE_PATH;
