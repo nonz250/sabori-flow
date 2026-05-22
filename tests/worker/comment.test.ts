@@ -1282,7 +1282,6 @@ describe("sanitizeOutput - homedir masking", () => {
     expect(result).toBe(
       "Found [REDACTED_HOME]/foo and [REDACTED_HOME]/bar in [REDACTED_HOME]/baz",
     );
-    // 元の homedir 文字列が残っていないことを保証
     expect(result).not.toContain("/Users/alice");
   });
 
@@ -1323,9 +1322,7 @@ describe("sanitizeOutput - homedir masking", () => {
     const result = formatFailureDiagnostics(diag);
 
     expect(result).not.toContain("/Users/alice");
-    // errorMessage 行
     expect(result).toContain("ENOENT at [REDACTED_HOME]/project/src/main.ts");
-    // stdout / stderr 各セクション
     expect(result).toContain("wrote [REDACTED_HOME]/project/build/out.js");
     expect(result).toContain("cwd was [REDACTED_HOME]/project");
   });
@@ -1333,8 +1330,6 @@ describe("sanitizeOutput - homedir masking", () => {
   it("credential path が homedir 配下にある場合、credential path マスクが優先される", () => {
     const text = "Reading /Users/alice/.ssh/id_rsa failed";
     const result = sanitizeOutput(text);
-    // SSH 鍵パスは [REDACTED_PATH] に置換される。homedir 単独で [REDACTED_HOME] には
-    // 縮退しない (credential path の特異性を保ち、運用者が何を伏せたか判別できる)。
     expect(result).toContain("[REDACTED_PATH]");
     expect(result).toContain("Reading [REDACTED_PATH] failed");
     expect(result).not.toContain("/Users/alice/.ssh/id_rsa");

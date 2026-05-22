@@ -130,13 +130,6 @@ const SECRET_FILE_PATH_PATTERNS: RegExp[] = [
   /(?<=^|[\s"'`/=(])terraform\.tfstate(?:\.backup)?\b/g,
 ];
 
-// Mask the current user's home directory path in CLI output.
-// Worktrees live under ~/.sabori-flow/worktrees/..., so absolute paths
-// containing the local username can leak into public Issue comments
-// via WorktreeError messages or Claude CLI output. This masking is the
-// LAST step so that more specific patterns (SECRET_FILE_PATH_PATTERNS)
-// take precedence. When adding new patterns in the future, insert them
-// BEFORE the homedir step to preserve precedence.
 const MIN_HOMEDIR_LENGTH_FOR_MASKING = 5;
 const HOMEDIR_REDACTION_PLACEHOLDER = "[REDACTED_HOME]";
 

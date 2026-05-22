@@ -85,10 +85,6 @@ export function getPlistGeneratedPath(): string {
   return path.join(getBaseDir(), `${PLIST_LABEL}.plist`);
 }
 
-/**
- * Returns the base directory for git worktrees managed by sabori-flow.
- * Located under ~/.sabori-flow/worktrees/.
- */
 export function getWorktreesDir(): string {
   return path.join(getBaseDir(), "worktrees");
 }
