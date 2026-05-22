@@ -18,17 +18,9 @@ export class WorktreeError extends Error {
 }
 
 const GIT_TIMEOUT_MS = 120_000;
-const WORKTREE_DIR_MODE = 0o700;
 
 const logger = createLogger("worktree");
 
-// Second-level granularity is sufficient because:
-//   1. Same-repo issues are processed sequentially (max_issues_per_repo
-//      gates parallelism per repo).
-//   2. Cross-repo collisions are prevented by the <owner>/<repo>/ path
-//      prefix added in withWorktree() below.
-// If max_issues_per_repo becomes truly parallel in the future, switch
-// to millisecond granularity or UUID-based naming.
 function defaultTimestampFn(): string {
   const now = new Date();
   const y = now.getFullYear();
@@ -40,12 +32,6 @@ function defaultTimestampFn(): string {
   return `${y}${mo}${d}${h}${mi}${s}`;
 }
 
-/**
- * Creates a git worktree and removes it after the callback runs.
- *
- * Worktrees are placed under ~/.sabori-flow/worktrees/<owner>/<repo>/
- * to keep them out of the user's working tree.
- */
 export async function withWorktree<T>(
   repoConfig: Pick<RepositoryConfig, "owner" | "repo" | "localPath" | "defaultBranch">,
   issueNumber: number,
@@ -57,8 +43,6 @@ export async function withWorktree<T>(
   const repoDir = join(getWorktreesDir(), repoConfig.owner, repoConfig.repo);
   const worktreePath = join(repoDir, `issue-${issueNumber}-${ts}`);
 
-  // Phase 1: fetch first. If fetch fails, no filesystem side-effects occur,
-  // so no empty directories are left behind.
   runGit(
     repoConfig.localPath,
     ["fetch", "origin"],
@@ -66,11 +50,8 @@ export async function withWorktree<T>(
     "fetch",
   );
 
-  // Phase 2: create the parent directory (after fetch succeeds).
-  // mode 0o700 prevents other local users from reading worktree contents,
-  // which is relevant on shared workstations holding private repos.
   try {
-    mkdirSync(repoDir, { recursive: true, mode: WORKTREE_DIR_MODE });
+    mkdirSync(repoDir, { recursive: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new WorktreeError(
@@ -89,9 +70,6 @@ export async function withWorktree<T>(
   try {
     return await callback(worktreePath);
   } finally {
-    // Intentionally do NOT remove the <owner>/<repo>/ parent directory:
-    // concurrent issues for the same repo may share it, and removing it
-    // could break other in-flight worktree operations.
     try {
       runGit(
         repoConfig.localPath,

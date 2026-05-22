@@ -164,7 +164,7 @@ describe("withWorktree", () => {
       expect(args).toContain(expectedBranch);
     });
 
-    it("worktrees ベース配下の <owner>/<repo> ディレクトリが mkdirSync で recursive + mode 0o700 で作成される", async () => {
+    it("worktrees ベース配下の <owner>/<repo> ディレクトリが mkdirSync で recursive 作成される", async () => {
       mockedRunCommandSync.mockReturnValue("");
 
       await withWorktree(
@@ -176,7 +176,7 @@ describe("withWorktree", () => {
 
       expect(mockedMkdirSync).toHaveBeenCalledWith(
         REPO_DIR,
-        { recursive: true, mode: 0o700 },
+        { recursive: true },
       );
     });
 
@@ -210,7 +210,6 @@ describe("withWorktree", () => {
       expect(fetchOrder).toBeLessThan(mkdirOrder);
       expect(mkdirOrder).toBeLessThan(addOrder);
 
-      // 1st runCommandSync = fetch origin
       expect(mockedRunCommandSync.mock.calls[0][1]).toEqual(
         expect.arrayContaining(["-C", REPO_LOCAL_PATH, "fetch", "origin"]),
       );
@@ -283,7 +282,6 @@ describe("withWorktree", () => {
         );
       }
 
-      // fetch は呼ばれるが、worktree add は呼ばれない
       expect(mockedRunCommandSync).toHaveBeenCalledTimes(1);
       const onlyCall = mockedRunCommandSync.mock.calls[0];
       expect(onlyCall[1]).toEqual(
@@ -353,13 +351,11 @@ describe("withWorktree", () => {
         );
       }
 
-      // fetch の 1 回だけ呼ばれる
       expect(mockedRunCommandSync).toHaveBeenCalledTimes(1);
       const fetchCall = mockedRunCommandSync.mock.calls[0];
       expect(fetchCall[1]).toEqual(
         expect.arrayContaining(["fetch", "origin"]),
       );
-      // mkdirSync は呼ばれない
       expect(mockedMkdirSync).not.toHaveBeenCalled();
     });
 
@@ -382,11 +378,8 @@ describe("withWorktree", () => {
       const removeCall = mockedRunCommandSync.mock.calls[2];
       const removeArgs = removeCall[1] as string[];
 
-      // git worktree remove は対象 worktreePath のみを受け取る
       expect(removeArgs).toContain("remove");
       expect(removeArgs).toContain(expectedWorktreePath);
-
-      // 共有される <owner>/<repo>/ ディレクトリやベースは引数として渡されない
       expect(removeArgs).not.toContain(REPO_DIR);
       expect(removeArgs).not.toContain(WORKTREES_BASE);
     });
