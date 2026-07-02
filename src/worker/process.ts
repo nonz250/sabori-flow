@@ -35,6 +35,7 @@ export interface RunCommandOptions {
   input?: string;
   timeoutMs?: number;
   maxBuffer?: number;
+  env?: NodeJS.ProcessEnv;
 }
 
 export async function runCommand(
@@ -52,6 +53,7 @@ export async function runCommand(
         cwd: options?.cwd,
         stdio: ["pipe", "pipe", "pipe"],
         detached: true,
+        env: options?.env,
       });
     } catch (error: unknown) {
       const message =

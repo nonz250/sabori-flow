@@ -47,6 +47,7 @@ export function createMockWorkerDeps(
     loadConfig: vi.fn(),
     fetchIssues: vi.fn().mockResolvedValue([]),
     processIssue: vi.fn().mockResolvedValue(true),
+    readAuthToken: vi.fn().mockReturnValue(null),
     ...overrides,
   };
 }

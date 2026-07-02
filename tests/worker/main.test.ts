@@ -591,4 +591,64 @@ describe("workerMain", () => {
       expect(autonomyInfoCalls).toHaveLength(0);
     });
   });
+
+  // -----------------------------------------------------------------------
+  // 認証トークン
+  // -----------------------------------------------------------------------
+
+  const AUTH_TOKEN_LOG = "Claude auth token loaded; scoping it to claude executions.";
+
+  describe("認証トークン", () => {
+    it("token が非 null の場合、INFO ログを出力し processIssue に token を渡す", async () => {
+      deps = createMockWorkerDeps({
+        readAuthToken: vi.fn().mockReturnValue("sk-ant-oat01-example"),
+      });
+      vi.mocked(deps.loadConfig).mockReturnValue(makeAppConfig());
+      vi.mocked(deps.fetchIssues)
+        .mockResolvedValueOnce([makeIssue({ phase: Phase.PLAN })])
+        .mockResolvedValueOnce([]);
+      vi.mocked(deps.processIssue).mockResolvedValue(true);
+
+      await workerMain("/path/to/config.yml", deps);
+
+      expect(deps.readAuthToken).toHaveBeenCalledOnce();
+      expect(mockLoggerInstance.info).toHaveBeenCalledWith(AUTH_TOKEN_LOG);
+      expect(deps.processIssue).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+        "sk-ant-oat01-example",
+      );
+    });
+
+    it("token が null の場合、INFO ログを出力せず processIssue に null を渡す", async () => {
+      deps = createMockWorkerDeps({
+        readAuthToken: vi.fn().mockReturnValue(null),
+      });
+      vi.mocked(deps.loadConfig).mockReturnValue(makeAppConfig());
+      vi.mocked(deps.fetchIssues)
+        .mockResolvedValueOnce([makeIssue({ phase: Phase.PLAN })])
+        .mockResolvedValueOnce([]);
+      vi.mocked(deps.processIssue).mockResolvedValue(true);
+
+      await workerMain("/path/to/config.yml", deps);
+
+      expect(mockLoggerInstance.info).not.toHaveBeenCalledWith(AUTH_TOKEN_LOG);
+      expect(deps.processIssue).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+        null,
+      );
+    });
+
+    it("Issue が 0 件でも readAuthToken は 1 回呼ばれる", async () => {
+      vi.mocked(deps.loadConfig).mockReturnValue(makeAppConfig());
+      vi.mocked(deps.fetchIssues).mockResolvedValue([]);
+
+      await workerMain("/path/to/config.yml", deps);
+
+      expect(deps.readAuthToken).toHaveBeenCalledOnce();
+    });
+  });
 });

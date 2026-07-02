@@ -7,6 +7,7 @@ import { processIssue } from "./pipeline.js";
 import { resolveAutonomyLogMessage } from "./executor.js";
 import { configureLogger, createLogger, rotateOldLogs } from "./logger.js";
 import { getConfigPath, getLogsDir } from "../utils/paths.js";
+import { readAuthToken } from "../utils/auth-token.js";
 
 const logger = createLogger("main");
 
@@ -22,13 +23,16 @@ export interface WorkerDeps {
     issue: Issue,
     repoConfig: RepositoryConfig,
     executionConfig: ExecutionConfig,
+    authToken: string | null,
   ) => Promise<boolean>;
+  readAuthToken: () => string | null;
 }
 
 export const defaultWorkerDeps: WorkerDeps = {
   loadConfig,
   fetchIssues,
   processIssue,
+  readAuthToken,
 };
 
 // ---------- Internal helpers ----------
@@ -45,6 +49,7 @@ async function processPhase(
   executionConfig: ExecutionConfig,
   deps: WorkerDeps,
   remainingQuota: number,
+  authToken: string | null,
 ): Promise<{ anySuccess: boolean; processedCount: number }> {
   const fullName = repoFullName(repoConfig);
 
@@ -93,7 +98,7 @@ async function processPhase(
       issue.priority,
       issue.title,
     );
-    const success = await deps.processIssue(issue, repoConfig, executionConfig);
+    const success = await deps.processIssue(issue, repoConfig, executionConfig, authToken);
     if (success) {
       anySuccess = true;
     }
@@ -111,6 +116,7 @@ async function processRepository(
   repoConfig: RepositoryConfig,
   executionConfig: ExecutionConfig,
   deps: WorkerDeps,
+  authToken: string | null,
 ): Promise<boolean> {
   const fullName = repoFullName(repoConfig);
   let anySuccess = false;
@@ -121,7 +127,7 @@ async function processRepository(
       logger.info("[%s] リポジトリ上限に達したため %s フェーズをスキップ", fullName, phase);
       break;
     }
-    const result = await processPhase(repoConfig, phase, executionConfig, deps, remaining);
+    const result = await processPhase(repoConfig, phase, executionConfig, deps, remaining, authToken);
     remaining -= result.processedCount;
     if (result.anySuccess) {
       anySuccess = true;
@@ -194,6 +200,11 @@ export async function workerMain(
     logger[autonomyLog.level](autonomyLog.message);
   }
 
+  const authToken = deps.readAuthToken();
+  if (authToken !== null) {
+    logger.info("Claude auth token loaded; scoping it to claude executions.");
+  }
+
   // リポジトリ並列処理 (Promise.allSettled + セマフォ制御)
   const semaphore = new Semaphore(appConfig.execution.maxParallel);
 
@@ -201,7 +212,7 @@ export async function workerMain(
     appConfig.repositories.map(async (repoConfig) => {
       await semaphore.acquire();
       try {
-        return await processRepository(repoConfig, appConfig.execution, deps);
+        return await processRepository(repoConfig, appConfig.execution, deps, authToken);
       } finally {
         semaphore.release();
       }
