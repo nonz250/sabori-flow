@@ -28,6 +28,10 @@ let consoleSpy: {
 
 beforeEach(() => {
   vi.restoreAllMocks();
+  // restoreAllMocks / clearMocks は vi.fn() ファクトリの実装をリセットしないため、
+  // 前テストが仕込んだ実装（書き込み失敗テストの throw 等）が後続に漏れるのを防ぐ
+  mockedWriteAuthToken.mockReset();
+  mockedPassword.mockReset();
   // config が読めないケースで loadLanguageFromConfig を既定言語 (ja) に確定させる
   mockedReadFileSync.mockImplementation(() => {
     throw new Error("no config");
@@ -132,6 +136,8 @@ describe("setTokenCommand - トークン値の非出力", () => {
     await runSetTokenCommand();
 
     expect(mockedWriteAuthToken).toHaveBeenCalledWith(sentinel);
+    // 失敗パスに落ちると非漏洩チェックが空振りするため、成功パスを通ったことを保証する
+    expect(consoleSpy.log).toHaveBeenCalledWith(t("setToken.saved"));
 
     const allOutput = [
       ...consoleSpy.log.mock.calls,
