@@ -14,6 +14,7 @@ import { exec, commandExists, ShellError } from "../utils/shell.js";
 import { renderPlist } from "../utils/plist.js";
 import { setLanguage, t, loadLanguageFromConfig } from "../i18n/index.js";
 import { loadConfig, ConfigValidationError } from "../worker/config.js";
+import { readAuthToken } from "../utils/auth-token.js";
 
 const STANDARD_PATHS = ["/usr/local/bin", "/usr/bin", "/bin"];
 const REQUIRED_COMMANDS = ["node", "git", "gh", "claude"];
@@ -120,6 +121,10 @@ export async function installCommand(
       console.log(
         t("install.complete", { minutes: String(intervalMinutes) }),
       );
+    }
+
+    if (readAuthToken() === null) {
+      console.log(t("install.tokenNotConfigured"));
     }
   } catch (error) {
     if (error instanceof ConfigValidationError) {
