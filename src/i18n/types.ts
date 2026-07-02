@@ -38,6 +38,7 @@ export interface MessageKeys {
   "install.complete": string;
   "install.configValidationError": string;
   "install.unexpectedError": string;
+  "install.tokenNotConfigured": string;
 
   // uninstall command
   "uninstall.deleted": string;
@@ -45,6 +46,13 @@ export interface MessageKeys {
   "uninstall.complete": string;
   "uninstall.confirmDeleteAll": string;
   "uninstall.deletedAll": string;
+
+  // set-token command
+  "setToken.instructions": string;
+  "setToken.prompt": string;
+  "setToken.emptyError": string;
+  "setToken.writeFailed": string;
+  "setToken.saved": string;
 
   // repository-prompt (shared helper)
   "prompt.enterOwner": string;
@@ -76,4 +84,5 @@ export interface MessageKeys {
   "cli.descriptionReinstall": string;
   "cli.optionReinstallLocal": string;
   "cli.descriptionWorker": string;
+  "cli.descriptionSetToken": string;
 }

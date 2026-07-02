@@ -48,14 +48,25 @@ const jaMessages: MessageKeys = {
     "\nインストールが完了しました。{minutes}分ごとにワーカーが実行されます。",
   "install.configValidationError": "Error: config.yml のバリデーションに失敗しました: {message}",
   "install.unexpectedError": "予期しないエラーが発生しました:",
+  "install.tokenNotConfigured":
+    "ヒント: Claude 認証トークンが未設定です。launchd の無人実行で 401 を避けるには `sabori-flow set-token` を検討してください。",
 
   // uninstall command
   "uninstall.deleted": "削除しました: {path}",
   "uninstall.notRegistered": "LaunchAgent は登録されていません。",
   "uninstall.complete": "\nアンインストールが完了しました。",
   "uninstall.confirmDeleteAll":
-    "{dir} を完全に削除しますか? (config.yml, プロンプト, ログを含む)",
+    "{dir} を完全に削除しますか? (config.yml, プロンプト, ログ, 認証トークンを含む)",
   "uninstall.deletedAll": "削除しました: {dir}",
+
+  // set-token command
+  "setToken.instructions":
+    "別のターミナルで `claude setup-token` を実行し、発行された long-lived トークンを貼り付けてください。",
+  "setToken.prompt": "Claude 認証トークンを貼り付けてください:",
+  "setToken.emptyError": "トークンを入力してください",
+  "setToken.writeFailed": "Error: 認証トークンの保存に失敗しました。",
+  "setToken.saved":
+    "\n認証トークンを保存しました。次回の定期実行から使用されます (reload 不要)。",
 
   // repository-prompt (shared helper)
   "prompt.enterOwner": "リポジトリの owner を入力してください:",
@@ -99,6 +110,7 @@ const jaMessages: MessageKeys = {
   "cli.optionReinstallLocal": "ローカルビルドのワーカーを登録します",
   "cli.descriptionWorker":
     "ワーカーを実行します（通常は launchd から自動的に呼び出されます）",
+  "cli.descriptionSetToken": "Claude 認証トークンを設定します",
 };
 
 const enMessages: MessageKeys = {
@@ -142,14 +154,25 @@ const enMessages: MessageKeys = {
     "\nInstallation complete. The worker will run every {minutes} minutes.",
   "install.configValidationError": "Error: config.yml validation failed: {message}",
   "install.unexpectedError": "Unexpected error:",
+  "install.tokenNotConfigured":
+    "Hint: No Claude auth token is configured. To avoid 401 errors during unattended launchd runs, consider running `sabori-flow set-token`.",
 
   // uninstall command
   "uninstall.deleted": "Deleted: {path}",
   "uninstall.notRegistered": "LaunchAgent is not registered.",
   "uninstall.complete": "\nUninstall complete.",
   "uninstall.confirmDeleteAll":
-    "Delete {dir} completely? (includes config.yml, prompts, and logs)",
+    "Delete {dir} completely? (includes config.yml, prompts, logs, and the auth token)",
   "uninstall.deletedAll": "Deleted: {dir}",
+
+  // set-token command
+  "setToken.instructions":
+    "Run `claude setup-token` in another terminal, then paste the issued long-lived token below.",
+  "setToken.prompt": "Paste the Claude auth token:",
+  "setToken.emptyError": "Token must not be empty",
+  "setToken.writeFailed": "Error: Failed to save the auth token.",
+  "setToken.saved":
+    "\nAuth token saved. It will be used from the next scheduled run (no reload needed).",
 
   // repository-prompt (shared helper)
   "prompt.enterOwner": "Enter repository owner:",
@@ -192,6 +215,7 @@ const enMessages: MessageKeys = {
   "cli.optionReinstallLocal": "Register local build worker",
   "cli.descriptionWorker":
     "Run the worker (normally called automatically by launchd)",
+  "cli.descriptionSetToken": "Set the Claude auth token",
 };
 
 export const messages: Record<Language, MessageKeys> = {
