@@ -17,7 +17,6 @@ export async function setTokenCommand(): Promise<void> {
         input.trim() !== "" || t("setToken.emptyError"),
     });
   } catch {
-    // Ctrl+C — 静かに終了
     return;
   }
 
