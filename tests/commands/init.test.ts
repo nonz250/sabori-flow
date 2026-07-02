@@ -137,6 +137,11 @@ let consoleSpy: { log: ReturnType<typeof vi.spyOn> };
 beforeEach(() => {
   vi.restoreAllMocks();
 
+  // restoreAllMocks / clearMocks は vi.fn() ファクトリの Once キューをリセットしないため、
+  // 前テストが仕込んだ未消費の Once（Ctrl+C テストの reject 等）が後続に漏れるのを防ぐ
+  mockedConfirm.mockReset();
+  mockedSetTokenCommand.mockReset();
+
   // paths のモック関数は restoreAllMocks でリセットされるため毎回再設定
   mockedGetBaseDir.mockReturnValue("/mock/config/dir");
   mockedGetConfigPath.mockReturnValue("/mock/config/dir/config.yml");
