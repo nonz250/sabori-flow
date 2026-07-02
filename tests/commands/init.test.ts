@@ -23,6 +23,10 @@ vi.mock("../../src/commands/helpers/repository-prompt.js", () => ({
   promptRepository: vi.fn(),
 }));
 
+vi.mock("../../src/commands/set-token.js", () => ({
+  setTokenCommand: vi.fn(),
+}));
+
 vi.mock("../../src/worker/prompt.js", () => ({
   TEMPLATE_FILES: {
     plan: "plan.md",
@@ -46,6 +50,7 @@ import fs from "fs";
 import { confirm, select, input } from "@inquirer/prompts";
 import { promptRepository } from "../../src/commands/helpers/repository-prompt.js";
 import type { RepositoryInput } from "../../src/commands/helpers/repository-prompt.js";
+import { setTokenCommand } from "../../src/commands/set-token.js";
 import { getBaseDir, getConfigPath, getUserPromptsDir, getDefaultPromptsDir } from "../../src/utils/paths.js";
 import { Autonomy } from "../../src/worker/models.js";
 import type { Language } from "../../src/i18n/types.js";
@@ -55,6 +60,7 @@ const mockedConfirm = vi.mocked(confirm);
 const mockedSelect = vi.mocked(select);
 const mockedInput = vi.mocked(input);
 const mockedPromptRepository = vi.mocked(promptRepository);
+const mockedSetTokenCommand = vi.mocked(setTokenCommand);
 const mockedGetBaseDir = vi.mocked(getBaseDir);
 const mockedGetConfigPath = vi.mocked(getConfigPath);
 const mockedGetUserPromptsDir = vi.mocked(getUserPromptsDir);
@@ -231,6 +237,76 @@ describe("initCommand - 正常完了時のメッセージ", () => {
     expect(installMessage).toBeDefined();
     expect(installMessage![0]).toContain("sabori-flow install");
     expect(installMessage![0]).not.toContain("npx sabori-flow install");
+  });
+});
+
+describe("initCommand - 認証トークン設定ステップ", () => {
+  it("setTokenNow に Yes で setTokenCommand を実行し、その後 install 案内も出力する", async () => {
+    mockExistsSyncForConfig(false);
+    mockedPromptRepository.mockResolvedValueOnce(makeRepoInput());
+    mockedConfirm
+      .mockResolvedValueOnce(false) // 別リポジトリ追加: No
+      .mockResolvedValueOnce(true); // トークン設定: Yes
+
+    await runInitCommand();
+
+    expect(mockedSetTokenCommand).toHaveBeenCalledTimes(1);
+    expect(consoleSpy.log).toHaveBeenCalledWith(
+      expect.stringContaining("sabori-flow install"),
+    );
+  });
+
+  it("setTokenNow に No で setTokenCommand を呼ばず、スキップ案内と install 案内を出力する", async () => {
+    mockExistsSyncForConfig(false);
+    mockedPromptRepository.mockResolvedValueOnce(makeRepoInput());
+    mockedConfirm
+      .mockResolvedValueOnce(false) // 別リポジトリ追加: No
+      .mockResolvedValueOnce(false); // トークン設定: No
+
+    await runInitCommand();
+
+    expect(mockedSetTokenCommand).not.toHaveBeenCalled();
+    expect(consoleSpy.log).toHaveBeenCalledWith(
+      expect.stringContaining("sabori-flow set-token"),
+    );
+    expect(consoleSpy.log).toHaveBeenCalledWith(
+      expect.stringContaining("sabori-flow install"),
+    );
+  });
+
+  it("setTokenNow の確認が中断された場合、config は保存済みで setTokenCommand も install 案内も実行しない", async () => {
+    mockExistsSyncForConfig(false);
+    mockedPromptRepository.mockResolvedValueOnce(makeRepoInput());
+    mockedConfirm
+      .mockResolvedValueOnce(false) // 別リポジトリ追加: No
+      .mockRejectedValueOnce(new Error("prompt was closed")); // トークン設定: Ctrl+C
+
+    await runInitCommand();
+
+    expect(mockedFs.writeFileSync).toHaveBeenCalledTimes(1);
+    expect(mockedSetTokenCommand).not.toHaveBeenCalled();
+    expect(consoleSpy.log).not.toHaveBeenCalledWith(
+      expect.stringContaining("sabori-flow install"),
+    );
+  });
+
+  it("setTokenNow の確認は default: true で行われる", async () => {
+    mockExistsSyncForConfig(false);
+    mockedPromptRepository.mockResolvedValueOnce(makeRepoInput());
+    mockedConfirm
+      .mockResolvedValueOnce(false) // 別リポジトリ追加: No
+      .mockResolvedValueOnce(false); // トークン設定: No
+
+    await runInitCommand();
+
+    const setTokenConfirmCall = mockedConfirm.mock.calls.find((call) => {
+      const msg = (call[0] as { message?: unknown }).message;
+      return typeof msg === "string" && msg.includes("トークン");
+    });
+    expect(setTokenConfirmCall).toBeDefined();
+    expect((setTokenConfirmCall![0] as { default?: boolean }).default).toBe(
+      true,
+    );
   });
 });
 
