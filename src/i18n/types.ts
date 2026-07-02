@@ -11,6 +11,8 @@ export interface MessageKeys {
   "init.addAnotherRepo": string;
   "init.configCreated": string;
   "init.runInstallNext": string;
+  "init.setTokenNow": string;
+  "init.tokenSkipped": string;
   "init.templateExists": string;
   "init.templateSkipped": string;
   "init.templatesCopied": string;

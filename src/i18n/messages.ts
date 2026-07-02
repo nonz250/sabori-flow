@@ -9,6 +9,9 @@ const jaMessages: MessageKeys = {
   "init.configCreated": "\nconfig.yml を作成しました: {path}",
   "init.runInstallNext":
     "次は `sabori-flow install` を実行してください。",
+  "init.setTokenNow": "Claude 認証トークンを今すぐ設定しますか?",
+  "init.tokenSkipped":
+    "後で `sabori-flow set-token` で設定できます。",
   "init.templateExists": "{file} は既に存在します。上書きしますか?",
   "init.templateSkipped": "スキップしました: {file}",
   "init.templatesCopied":
@@ -120,6 +123,8 @@ const enMessages: MessageKeys = {
   "init.addAnotherRepo": "Add another repository?",
   "init.configCreated": "\nconfig.yml created: {path}",
   "init.runInstallNext": "Next, run `sabori-flow install`.",
+  "init.setTokenNow": "Set the Claude auth token now?",
+  "init.tokenSkipped": "You can set it later with `sabori-flow set-token`.",
   "init.templateExists": "{file} already exists. Overwrite?",
   "init.templateSkipped": "Skipped: {file}",
   "init.templatesCopied": "\nPrompt templates copied to: {dir}",
