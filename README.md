@@ -135,6 +135,8 @@ npx sabori-flow set-token
 
 The token is saved to `~/.sabori-flow/auth-token` (mode `0600`) and passed to the worker's `claude` runs via `CLAUDE_CODE_OAUTH_TOKEN`, so it stays out of `config.yml` and the launchd plist. No `reinstall` or reload is needed -- the next scheduled run picks it up.
 
+`sabori-flow init` also offers to set the token at the end of its prompts, so first-time setup can cover it in one pass. Use `set-token` if you skipped it there or want to change the token later.
+
 ### Uninstall
 
 ```bash

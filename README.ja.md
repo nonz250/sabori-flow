@@ -135,6 +135,8 @@ npx sabori-flow set-token
 
 トークンは `~/.sabori-flow/auth-token`（パーミッション `0600`）に保存され、worker の `claude` 実行時に `CLAUDE_CODE_OAUTH_TOKEN` として渡されます。`config.yml` や launchd の plist には載りません。`reinstall` や reload は不要で、次回の定期実行から反映されます。
 
+`sabori-flow init` の対話の最後でもトークン設定を促されるため、初回セットアップの流れの中で設定できます。そこでスキップした場合や、後からトークンを変更したい場合に `set-token` を使います。
+
 ### アンインストール
 
 ```bash
