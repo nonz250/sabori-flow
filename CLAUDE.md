@@ -130,10 +130,13 @@ src/
 | 用途 | パス |
 |---|---|
 | 設定ファイル | `~/.sabori-flow/config.yml` |
+| 認証トークン | `~/.sabori-flow/auth-token` |
 | プロンプトテンプレート | `~/.sabori-flow/prompts/` |
 | ログ | `~/.sabori-flow/logs/` |
 | git worktree | `~/.sabori-flow/worktrees/<owner>/<repo>/issue-<番号>-<タイムスタンプ>/` |
 | plist バックアップ | `~/.sabori-flow/com.github.sabori-flow.plist` |
+
+認証トークンは config.yml には保存せず、`sabori-flow set-token` 経由で `auth-token`（0600）に保存する。worker は起動時に読み込み、`claude` 実行時のみ `CLAUDE_CODE_OAUTH_TOKEN` として渡す（未設定時は claude の credentials.json にフォールバック）。
 
 ### プロンプトテンプレート
 

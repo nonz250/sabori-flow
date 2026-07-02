@@ -121,13 +121,27 @@ npx sabori-flow add
 
 owner、repo、ローカルパスを対話的に入力し、`config.yml` にエントリを追加します。同じ owner/repo が既に存在する場合は上書き確認が表示されます。
 
+### Claude 認証トークンの設定（無人実行では推奨）
+
+worker が Claude Max の OAuth 認証情報（`~/.claude/.credentials.json`）を対話利用の Claude Code と共有すると、リフレッシュトークンのローテーション競合で worker 側のトークンが無効化され、無人実行時に `401` エラーが発生することがあります。これを避けるには、専用の long-lived トークンを発行して保存します。
+
+```bash
+# 1. 別のターミナルで long-lived トークンを発行
+claude setup-token
+
+# 2. 保存する（プロンプトに貼り付け。入力はマスクされる）
+npx sabori-flow set-token
+```
+
+トークンは `~/.sabori-flow/auth-token`（パーミッション `0600`）に保存され、worker の `claude` 実行時に `CLAUDE_CODE_OAUTH_TOKEN` として渡されます。`config.yml` や launchd の plist には載りません。`reinstall` や reload は不要で、次回の定期実行から反映されます。
+
 ### アンインストール
 
 ```bash
 npx sabori-flow uninstall
 ```
 
-launchd からの登録解除と plist の削除が行われます。`~/.sabori-flow/` 全体（設定、プロンプト、ログ）を削除するかどうかの確認も表示されます。
+launchd からの登録解除と plist の削除が行われます。`~/.sabori-flow/` 全体（設定、プロンプト、ログ、認証トークン）を削除するかどうかの確認も表示されます。
 
 ## 使い方
 

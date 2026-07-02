@@ -30,3 +30,5 @@ execution:
 
 # Display language
 # language: ja  # ja / en (default: ja)
+
+# The Claude auth token is NOT stored here. Set it via `sabori-flow set-token` (saved to ~/.sabori-flow/auth-token) to avoid 401s during unattended runs.
