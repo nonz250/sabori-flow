@@ -40,7 +40,7 @@ export interface RunClaudeOptions {
  * The prompt is supplied via stdin so the CLI runs non-interactively.
  *
  * @param prompt - prompt string passed to the Claude Code CLI
- * @param options - optional cwd, timeoutMs, autonomy
+ * @param options - optional cwd, timeoutMs, autonomy, authToken
  * @returns ProcessResult (success, stdout, stderr)
  * @throws ExecutorError - on timeout or unexpected execution failures
  */
