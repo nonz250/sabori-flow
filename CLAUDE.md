@@ -109,6 +109,7 @@ src/
   - `tests/worker/helpers/factories.ts`: テスト用ファクトリ（`makeIssue()`, `makeRepoConfig()` など）
   - `tests/worker/helpers/mock-deps.ts`: DI 用モック生成（`createMockPipelineDeps()`, `createMockWorkerDeps()`）
 - 方針: 依存性注入 + vitest の `vi.fn()` によるモックベースの単体テスト
+- 注意: `vi.mock` ファクトリ由来の `vi.fn()` は `restoreAllMocks` / `clearMocks` では実装（`mockImplementation`）がリセットされない。テスト内で throw 等を仕込むモックは `beforeEach` で `mockReset()` して既定を再設定する（`tests/commands/install.test.ts`, `tests/commands/set-token.test.ts` 参照）
 - カバレッジ除外: `src/index.ts`, `src/worker.ts`（エントリポイント）
 
 ### npm スクリプト
