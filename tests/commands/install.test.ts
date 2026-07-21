@@ -42,6 +42,10 @@ vi.mock("../../src/worker/config.js", () => ({
   },
 }));
 
+vi.mock("../../src/utils/auth-token.js", () => ({
+  readAuthToken: vi.fn(),
+}));
+
 vi.mock("../../src/utils/paths.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../../src/utils/paths.js")>();
   return {
@@ -61,6 +65,7 @@ import fs from "fs";
 import { exec, commandExists, ShellError } from "../../src/utils/shell.js";
 import { renderPlist } from "../../src/utils/plist.js";
 import { loadConfig, ConfigValidationError } from "../../src/worker/config.js";
+import { readAuthToken } from "../../src/utils/auth-token.js";
 import {
   getConfigPath,
   getLogsDir,
@@ -73,6 +78,7 @@ const mockedExec = vi.mocked(exec);
 const mockedCommandExists = vi.mocked(commandExists);
 const mockedRenderPlist = vi.mocked(renderPlist);
 const mockedLoadConfig = vi.mocked(loadConfig);
+const mockedReadAuthToken = vi.mocked(readAuthToken);
 const mockedGetConfigPath = vi.mocked(getConfigPath);
 const mockedGetLogsDir = vi.mocked(getLogsDir);
 const mockedGetBaseDir = vi.mocked(getBaseDir);
@@ -90,6 +96,14 @@ beforeEach(() => {
   mockedGetLogsDir.mockReturnValue("/mock/data/logs");
   mockedGetBaseDir.mockReturnValue("/mock/data");
   mockedGetPlistGeneratedPath.mockReturnValue("/mock/data/com.github.sabori-flow.plist");
+  // restoreAllMocks は vi.fn() ファクトリの実装をリセットしないため、fs 書き込み系
+  // モックを毎回 no-op に戻す（前テストが仕込んだ throw 実装が漏れるのを防ぐ）
+  mockedFs.mkdirSync.mockReset();
+  mockedFs.writeFileSync.mockReset();
+  mockedFs.copyFileSync.mockReset();
+  mockedFs.chmodSync.mockReset();
+  // 既定はトークン設定済みとし、hint を検証するテストのみ null に上書きする
+  mockedReadAuthToken.mockReturnValue("existing-token");
 
   consoleSpy = {
     log: vi.spyOn(console, "log").mockImplementation(() => {}),
@@ -675,5 +689,30 @@ describe("installCommand - ログディレクトリは getLogsDir() 固定で決
       { recursive: true, mode: 0o700 },
     );
     expect(mockedRenderPlist.mock.calls[0][1].logDir).toBe("/mock/data/logs");
+  });
+});
+
+describe("installCommand - 認証トークン未設定時の hint", () => {
+  it("トークンが未設定 (null) の場合、set-token を案内する hint を出力する", async () => {
+    setupNormalFlow();
+    mockedReadAuthToken.mockReturnValue(null);
+
+    await runInstallCommand();
+
+    expect(consoleSpy.log).toHaveBeenCalledWith(
+      expect.stringContaining("set-token"),
+    );
+  });
+
+  it("トークンが設定済みの場合、hint を出力しない", async () => {
+    setupNormalFlow();
+    mockedReadAuthToken.mockReturnValue("sk-ant-oat01-example");
+
+    await runInstallCommand();
+
+    const hintCalls = consoleSpy.log.mock.calls.filter(
+      (call) => typeof call[0] === "string" && call[0].includes("set-token"),
+    );
+    expect(hintCalls).toHaveLength(0);
   });
 });

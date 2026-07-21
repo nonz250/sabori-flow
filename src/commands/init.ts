@@ -12,6 +12,7 @@ import {
   type RepositoryInput,
   promptRepository,
 } from "./helpers/repository-prompt.js";
+import { setTokenCommand } from "./set-token.js";
 import { setLanguage, t } from "../i18n/index.js";
 import type { Language } from "../i18n/types.js";
 import { Autonomy } from "../worker/models.js";
@@ -165,6 +166,11 @@ export async function initCommand(): Promise<void> {
     fs.writeFileSync(getConfigPath(), yamlStr, { encoding: "utf-8", mode: 0o600 });
 
     console.log(t("init.configCreated", { path: getConfigPath() }));
+    if (await confirm({ message: t("init.setTokenNow"), default: true })) {
+      await setTokenCommand();
+    } else {
+      console.log(t("init.tokenSkipped"));
+    }
     console.log(t("init.runInstallNext"));
   } catch {
     // Ctrl+C — 静かに終了

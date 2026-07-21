@@ -121,13 +121,29 @@ npx sabori-flow add
 
 This interactively prompts for owner, repo, and local path, then appends the entry to `config.yml`. If the same owner/repo already exists, you will be asked whether to overwrite it.
 
+### Setting the Claude Auth Token (recommended for unattended runs)
+
+When the worker shares the Claude Max OAuth credentials (`~/.claude/.credentials.json`) with interactive Claude Code, refresh-token rotation races can invalidate the worker's token and cause `401` errors during unattended runs. To avoid this, issue a dedicated long-lived token and store it:
+
+```bash
+# 1. In another terminal, issue a long-lived token
+claude setup-token
+
+# 2. Store it (paste the token when prompted; input is masked)
+npx sabori-flow set-token
+```
+
+The token is saved to `~/.sabori-flow/auth-token` (mode `0600`) and passed to the worker's `claude` runs via `CLAUDE_CODE_OAUTH_TOKEN`, so it stays out of `config.yml` and the launchd plist. No `reinstall` or reload is needed -- the next scheduled run picks it up.
+
+`sabori-flow init` also offers to set the token at the end of its prompts, so first-time setup can cover it in one pass. Use `set-token` if you skipped it there or want to change the token later.
+
 ### Uninstall
 
 ```bash
 npx sabori-flow uninstall
 ```
 
-This unregisters from launchd and removes the plist file. You will be prompted whether to delete `~/.sabori-flow/` entirely (config, prompts, and logs).
+This unregisters from launchd and removes the plist file. You will be prompted whether to delete `~/.sabori-flow/` entirely (config, prompts, logs, and the auth token).
 
 ## Usage
 

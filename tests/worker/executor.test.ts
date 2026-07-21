@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("../../src/worker/process.js", async (importOriginal) => {
   const original =
@@ -395,6 +395,64 @@ describe("runClaude", () => {
 
       expect(mockLoggerInstance.warn).not.toHaveBeenCalled();
       expect(mockLoggerInstance.info).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("authToken オプション", () => {
+    const ENV_KEY = "CLAUDE_CODE_OAUTH_TOKEN";
+    let savedEnv: string | undefined;
+
+    beforeEach(() => {
+      savedEnv = process.env[ENV_KEY];
+      delete process.env[ENV_KEY];
+    });
+
+    afterEach(() => {
+      if (savedEnv === undefined) {
+        delete process.env[ENV_KEY];
+      } else {
+        process.env[ENV_KEY] = savedEnv;
+      }
+    });
+
+    it("authToken 指定時、runCommand の env に CLAUDE_CODE_OAUTH_TOKEN が渡される", async () => {
+      mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
+
+      await runClaude("prompt text", { authToken: "sk-ant-oat01-example" });
+
+      const options = mockedRunCommand.mock.calls[0][2];
+      expect(options?.env).toEqual(
+        expect.objectContaining({ CLAUDE_CODE_OAUTH_TOKEN: "sk-ant-oat01-example" }),
+      );
+    });
+
+    it("authToken 未指定時、runCommand に env が渡されない", async () => {
+      mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
+
+      await runClaude("prompt text");
+
+      const options = mockedRunCommand.mock.calls[0][2];
+      expect(options?.env).toBeUndefined();
+    });
+
+    it("authToken 指定時も process.env は変異しない", async () => {
+      mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
+
+      await runClaude("prompt text", { authToken: "sk-ant-oat01-example" });
+
+      expect(process.env[ENV_KEY]).toBeUndefined();
+    });
+
+    it("authToken 指定時、env は既存の process.env を継承する", async () => {
+      process.env.SABORI_TEST_MARKER = "marker-value";
+      mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
+
+      await runClaude("prompt text", { authToken: "sk-ant-oat01-example" });
+
+      const options = mockedRunCommand.mock.calls[0][2];
+      expect(options?.env?.SABORI_TEST_MARKER).toBe("marker-value");
+
+      delete process.env.SABORI_TEST_MARKER;
     });
   });
 });

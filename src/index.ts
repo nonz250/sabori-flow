@@ -5,6 +5,7 @@ import { addCommand } from "./commands/add.js";
 import { initCommand } from "./commands/init.js";
 import { installCommand } from "./commands/install.js";
 import { reinstallCommand } from "./commands/reinstall.js";
+import { setTokenCommand } from "./commands/set-token.js";
 import { uninstallCommand } from "./commands/uninstall.js";
 import { setLanguage, loadLanguageFromConfig, t } from "./i18n/index.js";
 import { getConfigPath } from "./utils/paths.js";
@@ -47,6 +48,11 @@ program
   .description(t("cli.descriptionReinstall"))
   .option("--local", t("cli.optionReinstallLocal"))
   .action((options) => reinstallCommand(options));
+
+program
+  .command("set-token")
+  .description(t("cli.descriptionSetToken"))
+  .action(setTokenCommand);
 
 program
   .command("worker")

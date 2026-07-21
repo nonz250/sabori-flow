@@ -29,7 +29,7 @@ export interface PipelineDeps {
   buildPrompt: (issue: Issue, repoConfig: RepositoryConfig, language: Language) => string;
   runClaude: (
     prompt: string,
-    options: { cwd: string; autonomy?: Autonomy; timeoutMs?: number },
+    options: { cwd: string; autonomy?: Autonomy; timeoutMs?: number; authToken?: string },
   ) => Promise<ProcessResult>;
   transitionToInProgress: (
     repo: string,
@@ -101,6 +101,7 @@ export async function processIssue(
   issue: Issue,
   repoConfig: RepositoryConfig,
   executionConfig: ExecutionConfig,
+  authToken: string | null,
   deps: PipelineDeps = defaultDeps,
 ): Promise<boolean> {
   const repo = repoFullName(repoConfig);
@@ -164,6 +165,7 @@ export async function processIssue(
             cwd: worktreePath,
             autonomy: executionConfig.autonomy,
             timeoutMs: executionConfig.timeoutMinutes * MS_PER_MINUTE,
+            authToken: authToken ?? undefined,
           });
         } catch (error: unknown) {
           const errorMessage = error instanceof Error ? error.message : String(error);

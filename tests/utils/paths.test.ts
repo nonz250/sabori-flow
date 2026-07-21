@@ -69,6 +69,15 @@ describe("getWorktreesDir", () => {
   });
 });
 
+describe("getAuthTokenPath", () => {
+  it("~/.sabori-flow/auth-token を返す", async () => {
+    const { getAuthTokenPath } = await import("../../src/utils/paths.js");
+    expect(getAuthTokenPath()).toBe(
+      path.join("/mock/home", ".sabori-flow", "auth-token"),
+    );
+  });
+});
+
 describe("パッケージ内部リソースパス", () => {
   it("getConfigExamplePath は PACKAGE_ROOT/config.yml.example を返す", async () => {
     const { getConfigExamplePath, PACKAGE_ROOT } = await import(

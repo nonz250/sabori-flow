@@ -3,7 +3,7 @@ import {
   ProcessTimeoutError,
   ProcessExecutionError,
 } from "./process.js";
-import type { ProcessResult } from "./process.js";
+import type { ProcessResult, RunCommandOptions } from "./process.js";
 import { Autonomy } from "./models.js";
 
 export class ExecutorError extends Error {
@@ -31,6 +31,7 @@ export interface RunClaudeOptions {
   readonly cwd?: string;
   readonly timeoutMs?: number;
   readonly autonomy?: Autonomy;
+  readonly authToken?: string;
 }
 
 /**
@@ -39,7 +40,7 @@ export interface RunClaudeOptions {
  * The prompt is supplied via stdin so the CLI runs non-interactively.
  *
  * @param prompt - prompt string passed to the Claude Code CLI
- * @param options - optional cwd, timeoutMs, autonomy
+ * @param options - optional cwd, timeoutMs, autonomy, authToken
  * @returns ProcessResult (success, stdout, stderr)
  * @throws ExecutorError - on timeout or unexpected execution failures
  */
@@ -53,16 +54,23 @@ export async function runClaude(
   const autonomyFlags = resolveClaudeAutonomyFlags(autonomy);
   const args = ["-p", ...autonomyFlags];
 
+  const runOptions: RunCommandOptions = {
+    input: prompt,
+    cwd: options?.cwd,
+    timeoutMs,
+  };
+  if (options?.authToken) {
+    // Scope the dedicated long-lived token to the claude child only. It avoids
+    // 401s from credentials.json refresh-rotation races during unattended runs,
+    // and keeps the secret out of the gh/git children the worker also spawns.
+    runOptions.env = {
+      ...process.env,
+      CLAUDE_CODE_OAUTH_TOKEN: options.authToken,
+    };
+  }
+
   try {
-    return await runCommand(
-      "claude",
-      args,
-      {
-        input: prompt,
-        cwd: options?.cwd,
-        timeoutMs,
-      },
-    );
+    return await runCommand("claude", args, runOptions);
   } catch (error: unknown) {
     if (error instanceof ProcessTimeoutError) {
       throw new ExecutorTimeoutError(

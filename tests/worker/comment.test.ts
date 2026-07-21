@@ -426,6 +426,22 @@ describe("sanitizeOutput", () => {
     expect(result).toContain("[REDACTED]");
   });
 
+  it("Anthropic OAuth トークン (sk-ant-oat01-...) がマスキングされる", () => {
+    const secret = "sk-ant-oat01-" + "A".repeat(40);
+    const text = `CLAUDE_CODE_OAUTH_TOKEN=${secret}`;
+    const result = sanitizeOutput(text);
+    expect(result).not.toContain(secret);
+    expect(result).toContain("[REDACTED]");
+  });
+
+  it("Anthropic OAuth リフレッシュトークン (sk-ant-ort01-...) がマスキングされる", () => {
+    const secret = "sk-ant-ort01-" + "B".repeat(40);
+    const text = `refresh: ${secret}`;
+    const result = sanitizeOutput(text);
+    expect(result).not.toContain(secret);
+    expect(result).toContain("[REDACTED]");
+  });
+
   it("sk-ant-api03- 以外の短い sk- で始まる文字列は誤検知されない", () => {
     // 先頭 sk- の後の文字数が 20 未満なので OpenAI パターンにもマッチしない
     const tooShort = "sk-short";

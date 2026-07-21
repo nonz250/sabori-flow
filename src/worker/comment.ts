@@ -57,6 +57,9 @@ const SECRET_PATTERNS: RegExp[] = [
   // Anthropic API key
   /sk-ant-api03-[A-Za-z0-9_\-]{64,}/g,
 
+  // Anthropic OAuth token
+  /sk-ant-(?:oat|ort|sid)[0-9]{2}-[A-Za-z0-9_\-]{20,}/g,
+
   // OpenAI API key (sk-... or sk-proj-...), upper-bounded to avoid over-matching
   /sk-(?:proj-)?[A-Za-z0-9_\-]{20,200}/g,
 

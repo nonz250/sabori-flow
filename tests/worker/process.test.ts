@@ -57,6 +57,24 @@ describe("runCommand", () => {
     });
   });
 
+  it("env オプションが spawn に渡される", async () => {
+    const child = createMockChildProcess();
+    mockedSpawn.mockReturnValue(child);
+
+    const customEnv = { ...process.env, CUSTOM_VAR: "value" };
+    const promise = runCommand("echo", ["hi"], { env: customEnv });
+
+    child.emit("close", 0);
+    await promise;
+
+    expect(mockedSpawn).toHaveBeenCalledWith("echo", ["hi"], {
+      cwd: undefined,
+      stdio: ["pipe", "pipe", "pipe"],
+      detached: true,
+      env: customEnv,
+    });
+  });
+
   it("exit code 非0 で success=false, stdout/stderr を返す", async () => {
     const child = createMockChildProcess();
     mockedSpawn.mockReturnValue(child);

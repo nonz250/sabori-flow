@@ -89,6 +89,11 @@ export function getWorktreesDir(): string {
   return path.join(getBaseDir(), "worktrees");
 }
 
+/** ~/.sabori-flow/auth-token */
+export function getAuthTokenPath(): string {
+  return path.join(getBaseDir(), "auth-token");
+}
+
 /** plist テンプレートのパス（PLIST_TEMPLATE_PATH と同値） */
 export function getPlistTemplatePath(): string {
   return PLIST_TEMPLATE_PATH;
