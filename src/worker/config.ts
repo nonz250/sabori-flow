@@ -14,6 +14,10 @@ import { expandTilde } from "../utils/paths.js";
 import type { Language } from "../i18n/types.js";
 import { SUPPORTED_LANGUAGES, DEFAULT_LANGUAGE } from "../i18n/types.js";
 
+// ---------- YAML parse options (shared with config-inspect) ----------
+
+export const CONFIG_YAML_PARSE_OPTIONS = { maxAliasCount: 100 } as const;
+
 // ---------- Custom error ----------
 
 export class ConfigValidationError extends Error {
@@ -87,7 +91,7 @@ export function loadConfig(configPath: string): AppConfig {
 
   let data: unknown;
   try {
-    data = YAML.parse(rawText, { maxAliasCount: 100 });
+    data = YAML.parse(rawText, CONFIG_YAML_PARSE_OPTIONS);
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : String(e);
     throw new ConfigValidationError(`Failed to parse YAML: ${message}`);

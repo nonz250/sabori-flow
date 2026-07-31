@@ -6,6 +6,7 @@ import { initCommand } from "./commands/init.js";
 import { installCommand } from "./commands/install.js";
 import { reinstallCommand } from "./commands/reinstall.js";
 import { setTokenCommand } from "./commands/set-token.js";
+import { showCommand } from "./commands/show.js";
 import { uninstallCommand } from "./commands/uninstall.js";
 import { setLanguage, loadLanguageFromConfig, t } from "./i18n/index.js";
 import { getConfigPath } from "./utils/paths.js";
@@ -53,6 +54,12 @@ program
   .command("set-token")
   .description(t("cli.descriptionSetToken"))
   .action(setTokenCommand);
+
+program
+  .command("show")
+  .description(t("cli.descriptionShow"))
+  .option("--verbose", t("cli.optionShowVerbose"))
+  .action((options) => showCommand(options));
 
 program
   .command("worker")

@@ -77,6 +77,14 @@ export interface MessageKeys {
   "prompt.autonomyDescAuto": string;
   "prompt.autonomyDescFull": string;
 
+  // show command
+  "show.configNotFound": string;
+  "show.runInitFirst": string;
+  "show.header": string;
+  "show.defaultLegend": string;
+  "show.configValidationError": string;
+  "show.unexpectedError": string;
+
   // cli descriptions
   "cli.descriptionAdd": string;
   "cli.descriptionInit": string;
@@ -87,4 +95,6 @@ export interface MessageKeys {
   "cli.optionReinstallLocal": string;
   "cli.descriptionWorker": string;
   "cli.descriptionSetToken": string;
+  "cli.descriptionShow": string;
+  "cli.optionShowVerbose": string;
 }

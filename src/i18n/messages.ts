@@ -102,6 +102,17 @@ const jaMessages: MessageKeys = {
   "prompt.autonomyDescFull":
     "警告: マシン上でほぼ任意の操作を許可します。必要性を慎重に検討してください",
 
+  // show command
+  "show.configNotFound": "Error: config.yml が見つかりません。",
+  "show.runInitFirst":
+    "先に `sabori-flow init` を実行してください。",
+  "show.header": "設定ファイル: {path}",
+  "show.defaultLegend":
+    "* は config.yml に記述がなく、デフォルト値が適用された項目です。LABELS / PRIORITY 列の default はデフォルト値と一致、custom は異なることを示します。",
+  "show.configValidationError":
+    "Error: config.yml のバリデーションに失敗しました: {message}",
+  "show.unexpectedError": "予期しないエラーが発生しました:",
+
   // cli descriptions
   "cli.descriptionAdd": "既存の config.yml にリポジトリを追加します",
   "cli.descriptionInit": "対話的に config.yml を作成します",
@@ -114,6 +125,9 @@ const jaMessages: MessageKeys = {
   "cli.descriptionWorker":
     "ワーカーを実行します（通常は launchd から自動的に呼び出されます）",
   "cli.descriptionSetToken": "Claude 認証トークンを設定します",
+  "cli.descriptionShow": "config.yml の実効設定を表示します",
+  "cli.optionShowVerbose":
+    "ラベル定義を含むすべての項目を展開して表示します",
 };
 
 const enMessages: MessageKeys = {
@@ -209,6 +223,16 @@ const enMessages: MessageKeys = {
   "prompt.autonomyDescFull":
     "Warning: allows nearly any operation on your machine. Use with caution.",
 
+  // show command
+  "show.configNotFound": "Error: config.yml not found.",
+  "show.runInitFirst": "Run `sabori-flow init` first.",
+  "show.header": "Config file: {path}",
+  "show.defaultLegend":
+    "* = not set in config.yml; the default value is applied. In the LABELS / PRIORITY columns, default means it matches the built-in default, custom means it differs.",
+  "show.configValidationError":
+    "Error: config.yml validation failed: {message}",
+  "show.unexpectedError": "Unexpected error:",
+
   // cli descriptions
   "cli.descriptionAdd": "Add a repository to existing config.yml",
   "cli.descriptionInit": "Create config.yml interactively",
@@ -221,6 +245,9 @@ const enMessages: MessageKeys = {
   "cli.descriptionWorker":
     "Run the worker (normally called automatically by launchd)",
   "cli.descriptionSetToken": "Set the Claude auth token",
+  "cli.descriptionShow": "Display the effective configuration",
+  "cli.optionShowVerbose":
+    "Expand all fields including label definitions",
 };
 
 export const messages: Record<Language, MessageKeys> = {
