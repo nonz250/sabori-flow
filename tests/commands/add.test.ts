@@ -402,3 +402,97 @@ describe("addCommand - 重複: 上書き No", () => {
     expect(consoleSpy.log).toHaveBeenCalledWith("中断しました。");
   });
 });
+
+// ---------- Comment preservation ----------
+
+function getWrittenRaw(): string {
+  const call = mockedWriteFileSync.mock.calls[0];
+  return call[1] as string;
+}
+
+describe("addCommand - コメント保持: ファイル先頭のコメント", () => {
+  it("先頭コメントが書き込み後も残る", async () => {
+    const rawYaml = [
+      "# my custom note",
+      "repositories:",
+      "  - owner: existing-owner",
+      "    repo: existing-repo",
+      "    local_path: /tmp/existing-owner/existing-repo",
+      "",
+    ].join("\n");
+    const repoInput = makeRepoInput();
+
+    mockedExistsSync.mockReturnValue(true);
+    mockedReadFileSync.mockReturnValue(rawYaml);
+    mockedPromptRepository.mockResolvedValue(repoInput);
+
+    await runAddCommand();
+
+    expect(mockedWriteFileSync).toHaveBeenCalledTimes(1);
+    const written = getWrittenRaw();
+    expect(written).toContain("# my custom note");
+
+    const parsed = YAML.parse(written) as Record<string, unknown>;
+    const repos = parsed.repositories as Array<Record<string, unknown>>;
+    expect(repos).toHaveLength(2);
+    expect(repos[1].owner).toBe("test-owner");
+  });
+});
+
+describe("addCommand - コメント保持: 行コメント・末尾コメント", () => {
+  it("repositories エントリや execution セクションのコメントが残る", async () => {
+    const rawYaml = [
+      "repositories:",
+      "  - owner: existing-owner # owner comment",
+      "    repo: existing-repo",
+      "    local_path: /tmp/existing-owner/existing-repo",
+      "execution:",
+      "  # parallel execution setting",
+      "  max_parallel: 2 # keep this low",
+      "",
+    ].join("\n");
+    const repoInput = makeRepoInput();
+
+    mockedExistsSync.mockReturnValue(true);
+    mockedReadFileSync.mockReturnValue(rawYaml);
+    mockedPromptRepository.mockResolvedValue(repoInput);
+
+    await runAddCommand();
+
+    expect(mockedWriteFileSync).toHaveBeenCalledTimes(1);
+    const written = getWrittenRaw();
+    expect(written).toContain("# owner comment");
+    expect(written).toContain("# parallel execution setting");
+    expect(written).toContain("# keep this low");
+  });
+});
+
+describe("addCommand - コメント保持: 未知のトップレベルキー", () => {
+  it("独自キーが書き込み後も残る", async () => {
+    const rawYaml = [
+      "notes: foo",
+      "repositories:",
+      "  - owner: existing-owner",
+      "    repo: existing-repo",
+      "    local_path: /tmp/existing-owner/existing-repo",
+      "",
+    ].join("\n");
+    const repoInput = makeRepoInput();
+
+    mockedExistsSync.mockReturnValue(true);
+    mockedReadFileSync.mockReturnValue(rawYaml);
+    mockedPromptRepository.mockResolvedValue(repoInput);
+
+    await runAddCommand();
+
+    expect(mockedWriteFileSync).toHaveBeenCalledTimes(1);
+    const written = getWrittenRaw();
+
+    const parsed = YAML.parse(written) as Record<string, unknown>;
+    expect(parsed.notes).toBe("foo");
+
+    const repos = parsed.repositories as Array<Record<string, unknown>>;
+    expect(repos).toHaveLength(2);
+    expect(repos[1].owner).toBe("test-owner");
+  });
+});
