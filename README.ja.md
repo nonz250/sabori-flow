@@ -181,6 +181,8 @@ flowchart LR
 
 処理が失敗すると `failed` ラベルが付き、Issue に失敗コメントが投稿されます。
 
+impl フェーズは、Issue に紐づく PR が作られないまま終了した場合も失敗になります。紐づけは PR 本文のクローズキーワード（`close <issue_url>`。同梱の impl テンプレートが Claude に記載を指示しています）に依存し、PR のベースはデフォルトブランチである必要があります。
+
 1. `~/.sabori-flow/logs/worker.log` で詳細を確認
 2. 必要に応じて Issue の内容を修正
 3. `failed` ラベルを外して、再度 `claude/plan` または `claude/impl` を付ける

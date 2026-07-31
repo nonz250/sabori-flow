@@ -50,6 +50,7 @@ src/
     worktree.ts      # git worktree ライフサイクル管理
     label.ts         # ラベル遷移操作
     comment.ts       # Issue コメント投稿
+    linked-pr.ts     # Issue に紐づく PR の取得（impl の完了検証）
     logger.ts        # 軽量ロガー
     process.ts       # child_process ラッパー
   utils/             # 共有ユーティリティ
@@ -68,6 +69,7 @@ src/
    - git worktree 作成（`~/.sabori-flow/worktrees/<owner>/<repo>/issue-<番号>-<タイムスタンプ>/` に `origin/<default_branch>` を起点にブランチを作成）
    - プロンプト生成（テンプレート + Issue 情報）
    - `claude -p` を worktree 内で実行（`execution.autonomy` に応じてフラグを付与）
+   - impl のみ: Issue に紐づく PR の存在を検証（0 件なら失敗扱い。検証自体が失敗した場合は WARNING を残して成功扱い）
    - 成功: 出力サニタイズ後、done ラベル + 成功コメント / 失敗: failed ラベル + 構造化された失敗診断コメント（カテゴリ、stderr、stdout、exit code 等）
    - worktree 削除（finally）
 
@@ -79,7 +81,7 @@ src/
 ### エラーハンドリング 3 段階
 
 - **レベル 1**: trigger→in-progress 失敗 → 即中断、次回リトライ可能
-- **レベル 2**: プロンプト生成/CLI 実行失敗 → failed 遷移 + 構造化された失敗診断コメント（`FailureDiagnostics` → `formatFailureDiagnostics()` でフォーマット）
+- **レベル 2**: プロンプト生成/CLI 実行失敗/impl の PR 未作成 → failed 遷移 + 構造化された失敗診断コメント（`FailureDiagnostics` → `formatFailureDiagnostics()` でフォーマット）
 - **レベル 3**: 後処理（done/failed ラベル遷移、コメント投稿）失敗 → ログ WARNING のみ
 
 `:failed` に遷移した Issue は trigger ラベルが剥がれるため、次回フェッチ対象から外れる (自動リトライされない)。再実行するにはユーザーが手動で trigger ラベル (`claude/plan` 等) を再付与する必要がある。

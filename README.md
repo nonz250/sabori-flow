@@ -181,6 +181,8 @@ flowchart LR
 
 When processing fails, a `failed` label is applied and a failure comment is posted to the Issue.
 
+The impl phase also fails when a run finishes without a pull request linked to the Issue. Linking relies on a closing keyword (`close <issue_url>`, which the bundled impl template instructs Claude to include) in a pull request that targets the default branch.
+
 1. Check `~/.sabori-flow/logs/worker.log` for details
 2. Fix the Issue content as needed
 3. Remove the `failed` label and re-apply `claude/plan` or `claude/impl`

@@ -855,6 +855,17 @@ describe("formatFailureDiagnostics", () => {
     expect(result).toContain("auto mode classifier");
   });
 
+  it("IMPL_NO_LINKED_PR カテゴリが正しいラベルで表示される", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.IMPL_NO_LINKED_PR,
+      summary: "No linked PR found",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain("**Category:** No Linked Pull Request");
+  });
+
   it("全フィールドが設定されている場合、すべてのセクションが出力に含まれる", () => {
     const diag: FailureDiagnostics = {
       category: FailureCategory.CLI_NON_ZERO_EXIT,
