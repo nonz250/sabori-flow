@@ -3,6 +3,7 @@ import {
   lstatSync,
   mkdirSync,
   readdirSync,
+  renameSync,
   unlinkSync,
 } from "node:fs";
 import { join } from "node:path";
@@ -98,6 +99,8 @@ export function rotateOldLogs(): void {
     return;
   }
 
+  rotateCurrentLog(globalConfig.logDir);
+
   try {
     const entries = readdirSync(globalConfig.logDir);
     const cutoff = new Date();
@@ -138,6 +141,30 @@ export function resetLoggerForTest(): void {
 }
 
 // ---------- Internal helpers ----------
+
+function formatLocalDate(date: Date): string {
+  const pad2 = (n: number): string => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
+function rotateCurrentLog(logDir: string): void {
+  const logPath = join(logDir, LOG_FILE_NAME);
+  try {
+    const stat = lstatSync(logPath);
+    if (stat.isSymbolicLink()) {
+      console.warn(`[logger] WARNING: Skipping symbolic link: ${LOG_FILE_NAME}`);
+      return;
+    }
+    const lastWriteDate = formatLocalDate(stat.mtime);
+    if (lastWriteDate >= formatLocalDate(new Date())) {
+      return;
+    }
+    // Overwrites an existing same-day rotated file; duplicate same-day logs have no retention value.
+    renameSync(logPath, `${logPath}.${lastWriteDate}`);
+  } catch {
+    // Ignore rotation errors (including ENOENT on first run)
+  }
+}
 
 function formatLocalISOTimestamp(date: Date): string {
   const pad2 = (n: number): string => String(n).padStart(2, "0");
