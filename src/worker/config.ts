@@ -1,5 +1,6 @@
 import { readFileSync, realpathSync } from "node:fs";
 import YAML from "yaml";
+import { YAML_PARSE_OPTIONS } from "../utils/yaml.js";
 
 import {
   Autonomy,
@@ -59,7 +60,7 @@ export function loadConfig(configPath: string): AppConfig {
 
   let data: unknown;
   try {
-    data = YAML.parse(rawText, { maxAliasCount: 100 });
+    data = YAML.parse(rawText, YAML_PARSE_OPTIONS);
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : String(e);
     throw new ConfigValidationError(`Failed to parse YAML: ${message}`);

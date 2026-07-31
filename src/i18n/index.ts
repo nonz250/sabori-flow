@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import YAML from "yaml";
+import { YAML_PARSE_OPTIONS } from "../utils/yaml.js";
 import type { Language, MessageKeys } from "./types.js";
 import { DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES } from "./types.js";
 import { messages } from "./messages.js";
@@ -38,7 +39,7 @@ export function t(
 export function loadLanguageFromConfig(configPath: string): Language {
   try {
     const raw = readFileSync(configPath, "utf-8");
-    const data = YAML.parse(raw, { maxAliasCount: 100 }) as unknown;
+    const data = YAML.parse(raw, YAML_PARSE_OPTIONS) as unknown;
     if (data !== null && typeof data === "object" && !Array.isArray(data)) {
       const record = data as Record<string, unknown>;
       const lang = record["language"];
