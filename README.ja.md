@@ -121,6 +121,16 @@ npx sabori-flow add
 
 owner、repo、ローカルパスを対話的に入力し、`config.yml` にエントリを追加します。同じ owner/repo が既に存在する場合は上書き確認が表示されます。
 
+### 既存設定の更新
+
+新しいバージョンの sabori-flow で設定キーが追加された場合、`migrate` を実行すると `config.yml` に不足しているキーだけを埋められます。
+
+```bash
+npx sabori-flow migrate
+```
+
+不足しているキーだけを対話的に埋めます（それぞれデフォルト値が初期値として提示されます）。ファイルに既に存在する値の検証や修復は行いません。コメントやツールが認識しないキーはそのまま保持されます。変更前に `~/.sabori-flow/config.yml.bak-<タイムスタンプ>` へバックアップを作成します。`config.yml` が既に最新の場合は、その旨を表示してファイルには一切触れずに終了します。`execution.interval_minutes` が変わった場合は実行後に `npx sabori-flow reinstall` を促されます。変わらなければ reinstall は不要です。インストール済みのバージョンより新しいバージョンの sabori-flow が書いた `config.yml` の場合、`migrate` は変更を行わず中断します。
+
 ### Claude 認証トークンの設定（無人実行では推奨）
 
 worker が Claude Max の OAuth 認証情報（`~/.claude/.credentials.json`）を対話利用の Claude Code と共有すると、リフレッシュトークンのローテーション競合で worker 側のトークンが無効化され、無人実行時に `401` エラーが発生することがあります。これを避けるには、専用の long-lived トークンを発行して保存します。
@@ -226,6 +236,8 @@ launchctl start com.github.sabori-flow
 設定ファイルは `~/.sabori-flow/config.yml` に保存されます。`config.yml.example` を参考に作成するか、`npx sabori-flow init` で対話的に生成できます。
 
 ```yaml
+schema_version: 1
+
 repositories:
   - owner: nonz250
     repo: example-app
@@ -257,6 +269,7 @@ language: ja
 
 | キー | 説明 |
 |------|------|
+| `schema_version` | 設定スキーマのバージョン。`init` と `migrate` が書き込む。手動で編集しないこと |
 | `repositories[].owner` | リポジトリオーナー |
 | `repositories[].repo` | リポジトリ名 |
 | `repositories[].local_path` | ローカルのクローン先パス |

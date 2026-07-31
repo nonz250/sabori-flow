@@ -121,6 +121,16 @@ npx sabori-flow add
 
 This interactively prompts for owner, repo, and local path, then appends the entry to `config.yml`. If the same owner/repo already exists, you will be asked whether to overwrite it.
 
+### Updating an Existing Configuration
+
+When a newer version of sabori-flow adds config keys, run `migrate` to fill in the ones your `config.yml` is missing:
+
+```bash
+npx sabori-flow migrate
+```
+
+It only fills in missing keys interactively (each with its default preselected); it does not validate or repair values that already exist in the file. Comments and keys the tool does not recognize are preserved. A backup is written to `~/.sabori-flow/config.yml.bak-<timestamp>` before anything is changed. If `config.yml` is already up to date, `migrate` says so and exits without touching the file. If `execution.interval_minutes` changes, `migrate` tells you to run `npx sabori-flow reinstall` afterward; if it doesn't, no reinstall is needed. If `config.yml` was written by a newer version of sabori-flow than the one currently installed, `migrate` aborts without making changes.
+
 ### Setting the Claude Auth Token (recommended for unattended runs)
 
 When the worker shares the Claude Max OAuth credentials (`~/.claude/.credentials.json`) with interactive Claude Code, refresh-token rotation races can invalidate the worker's token and cause `401` errors during unattended runs. To avoid this, issue a dedicated long-lived token and store it:
@@ -226,6 +236,8 @@ If you have upgraded from an earlier version, the old `<repo-parent>/.sabori-flo
 The configuration file is stored at `~/.sabori-flow/config.yml`. Create it based on `config.yml.example`, or generate it interactively with `npx sabori-flow init`.
 
 ```yaml
+schema_version: 1
+
 repositories:
   - owner: nonz250
     repo: example-app
@@ -257,6 +269,7 @@ language: ja
 
 | Key | Description |
 |-----|-------------|
+| `schema_version` | Config schema version. Written by `init` and `migrate`; do not edit manually |
 | `repositories[].owner` | Repository owner |
 | `repositories[].repo` | Repository name |
 | `repositories[].local_path` | Local path to the cloned repository |

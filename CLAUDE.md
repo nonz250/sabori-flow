@@ -36,9 +36,10 @@ src/
   index.ts          # CLI エントリポイント
   worker.ts         # ワーカーエントリポイント
   commands/          # CLI コマンド
-    init.ts, install.ts, uninstall.ts, add.ts
+    init.ts, install.ts, uninstall.ts, add.ts, migrate.ts
     helpers/
       repository-prompt.ts  # 対話入力の共通ロジック（init/add で共有）
+      migration-steps.ts    # config.yml の欠落キー検出（純粋関数、migrate が使用）
   worker/            # ワーカー本体
     main.ts          # メインロジック、並列実行制御
     config.ts        # config.yml 読み込み・バリデーション
@@ -55,6 +56,7 @@ src/
     process.ts       # child_process ラッパー
   utils/             # 共有ユーティリティ
     paths.ts         # ~/.sabori-flow/ ベースのパス解決 + expandTilde（チルダ展開）
+    yaml.ts          # YAML.parse/parseDocument 共通オプション（maxAliasCount）
     plist.ts, shell.ts, config-defaults.ts
 ```
 
@@ -103,6 +105,8 @@ src/
 
 詳細はソースコード内の各モジュールを参照のこと。
 
+`~/.sabori-flow/` は `init` / `install` が `mode: 0o700` で作成する。`config.yml` の更新書き込み（`add` / `migrate`）はこの前提に立ち、シンボリックリンク追従防止のための `wx` フラグを使わない単純上書きにしている。`migrate` のバックアップファイル書き込みのみ `wx`（`O_CREAT|O_EXCL`）を使い、既存バックアップの上書きとリンク先への書き込みを防ぐ。
+
 ### テスト
 
 - フレームワーク: vitest
@@ -138,6 +142,7 @@ src/
 | ログ | `~/.sabori-flow/logs/` |
 | git worktree | `~/.sabori-flow/worktrees/<owner>/<repo>/issue-<番号>-<タイムスタンプ>/` |
 | plist バックアップ | `~/.sabori-flow/com.github.sabori-flow.plist` |
+| config.yml バックアップ（migrate 実行時） | `~/.sabori-flow/config.yml.bak-<タイムスタンプ>`（世代管理・自動削除なし） |
 
 認証トークンは config.yml には保存せず、`sabori-flow set-token` 経由で `auth-token`（0600）に保存する。worker は起動時に読み込み、`claude` 実行時のみ `CLAUDE_CODE_OAUTH_TOKEN` として渡す（未設定時は claude の credentials.json にフォールバック）。
 
@@ -153,6 +158,7 @@ src/
 
 ### config.yml の設定項目
 
+- `schema_version`: 設定スキーマのバージョン（整数）。`init` は常に最新値を書き込み、`add` は書き換えない（後述の `migrate` 参照）。worker はこのキーを一切参照しない
 - `repositories`: 対象リポジトリ一覧（必須、1 件以上）
 - `repositories[].default_branch`: デフォルトブランチ名（文字列、デフォルト: `main`）。worktree 作成時に `origin/<default_branch>` を起点として使用
 - `execution.max_parallel`: 並列実行数（整数、1-10、デフォルト: 1）
@@ -165,6 +171,17 @@ src/
 - `execution.interval_minutes`: スケジュール実行間隔（整数、10-1440分、デフォルト: 60）
 - `execution.timeout_minutes`: Claude CLI 実行タイムアウト（整数、1-240分、デフォルト: 60）
 - `language`: CLI メッセージおよびプロンプトテンプレートの言語（`ja` / `en`、デフォルト: `ja`）
+
+### config.yml のマイグレーション（`sabori-flow migrate`）
+
+`sabori-flow migrate` は、インストール済みバージョンが認識する設定キーのうち `config.yml` に欠落しているものだけを対話的に補完するコマンド。
+
+- 適用可否はスキーマバージョンではなく「そのキーが実ファイルに実在するか」で判定する。`add` が `schema_version` を更新しないため、バージョンゲート方式だと `add` で追加されたリポジトリの欠落キーを永久に拾えなくなる
+- 欠落キーの補完のみを行う。存在するが無効な値（例: `default_branch: ""`）は対象外で、そのまま `loadConfig` の検証に委ねる
+- `config.yml` は `YAML.parseDocument()` の Document API で部分編集する。コメント・未知キー・整形はそのまま保持される（`YAML.stringify()` によるラウンドトリップは使わない）。`add` コマンドも同方式
+- 書き込み前に `~/.sabori-flow/config.yml.bak-<タイムスタンプ>` へバックアップを作成する（世代管理なし）
+- `execution.interval_minutes` の実効値が変化した場合のみ `reinstall` の実行を促す（plist の `StartInterval` はこのキーにのみ依存するため）
+- インストール済みバージョンより新しい `schema_version` が記録されている場合は、何も変更せず中断する
 
 ## コーディング規約
 

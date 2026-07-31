@@ -1,8 +1,11 @@
+# schema_version: 1  # Config schema version. Written by `init` and `migrate`; do not edit manually
+
 # Target repositories
 repositories:
   - owner: your-org
     repo: example-app
     local_path: /Users/you/projects/example-app
+    # default_branch: main  # Default branch used as the worktree starting point (default: main)
     labels:
       plan:
         trigger: claude/plan
