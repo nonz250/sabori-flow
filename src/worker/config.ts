@@ -31,9 +31,17 @@ const BRANCH_NAME_PATTERN = /^[a-zA-Z0-9._\/-]+$/;
 const DEFAULT_BRANCH_DEFAULT = "main";
 const PHASE_LABEL_KEYS = ["trigger", "in_progress", "done", "failed"] as const;
 
+const MAX_PARALLEL_MIN = 1;
+const MAX_PARALLEL_MAX = 10;
+const MAX_ISSUES_PER_REPO_MIN = 1;
+const MAX_ISSUES_PER_REPO_MAX = 20;
+
+export const INTERVAL_MINUTES_MIN = 10;
+export const INTERVAL_MINUTES_MAX = 1440;
+
 const TIMEOUT_MINUTES_DEFAULT = 60;
-const TIMEOUT_MINUTES_MIN = 1;
-const TIMEOUT_MINUTES_MAX = 240;
+export const TIMEOUT_MINUTES_MIN = 1;
+export const TIMEOUT_MINUTES_MAX = 240;
 
 // ---------- Public API ----------
 
@@ -365,15 +373,15 @@ function parseExecution(raw: unknown): Omit<ExecutionConfig, "language"> {
     );
   }
 
-  if (rawMaxParallel < 1) {
+  if (rawMaxParallel < MAX_PARALLEL_MIN) {
     throw new ConfigValidationError(
-      `execution.max_parallel: must be >= 1, got ${rawMaxParallel}`,
+      `execution.max_parallel: must be >= ${MAX_PARALLEL_MIN}, got ${rawMaxParallel}`,
     );
   }
 
-  if (rawMaxParallel > 10) {
+  if (rawMaxParallel > MAX_PARALLEL_MAX) {
     throw new ConfigValidationError(
-      `execution.max_parallel: must be <= 10, got ${rawMaxParallel}`,
+      `execution.max_parallel: must be <= ${MAX_PARALLEL_MAX}, got ${rawMaxParallel}`,
     );
   }
 
@@ -387,15 +395,15 @@ function parseExecution(raw: unknown): Omit<ExecutionConfig, "language"> {
     );
   }
 
-  if (rawMaxIssuesPerRepo < 1) {
+  if (rawMaxIssuesPerRepo < MAX_ISSUES_PER_REPO_MIN) {
     throw new ConfigValidationError(
-      `execution.max_issues_per_repo: must be >= 1, got ${rawMaxIssuesPerRepo}`,
+      `execution.max_issues_per_repo: must be >= ${MAX_ISSUES_PER_REPO_MIN}, got ${rawMaxIssuesPerRepo}`,
     );
   }
 
-  if (rawMaxIssuesPerRepo > 20) {
+  if (rawMaxIssuesPerRepo > MAX_ISSUES_PER_REPO_MAX) {
     throw new ConfigValidationError(
-      `execution.max_issues_per_repo: must be <= 20, got ${rawMaxIssuesPerRepo}`,
+      `execution.max_issues_per_repo: must be <= ${MAX_ISSUES_PER_REPO_MAX}, got ${rawMaxIssuesPerRepo}`,
     );
   }
 
@@ -426,15 +434,15 @@ function parseExecution(raw: unknown): Omit<ExecutionConfig, "language"> {
     );
   }
 
-  if (rawIntervalMinutes < 10) {
+  if (rawIntervalMinutes < INTERVAL_MINUTES_MIN) {
     throw new ConfigValidationError(
-      `execution.interval_minutes: must be >= 10, got ${rawIntervalMinutes}`,
+      `execution.interval_minutes: must be >= ${INTERVAL_MINUTES_MIN}, got ${rawIntervalMinutes}`,
     );
   }
 
-  if (rawIntervalMinutes > 1440) {
+  if (rawIntervalMinutes > INTERVAL_MINUTES_MAX) {
     throw new ConfigValidationError(
-      `execution.interval_minutes: must be <= 1440, got ${rawIntervalMinutes}`,
+      `execution.interval_minutes: must be <= ${INTERVAL_MINUTES_MAX}, got ${rawIntervalMinutes}`,
     );
   }
 
