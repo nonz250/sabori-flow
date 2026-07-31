@@ -290,7 +290,7 @@ describe("runClaude", () => {
   });
 
   describe("autonomy オプション", () => {
-    it("autonomy 未指定時は --dangerously-skip-permissions が含まれない", async () => {
+    it("autonomy 未指定時は追加フラグが含まれない", async () => {
       mockedRunCommand.mockResolvedValue({
         success: true,
         stdout: "",
@@ -301,10 +301,9 @@ describe("runClaude", () => {
 
       const args = mockedRunCommand.mock.calls[0][1];
       expect(args).toEqual(["-p"]);
-      expect(args).not.toContain("--dangerously-skip-permissions");
     });
 
-    it("autonomy が full の場合 --dangerously-skip-permissions が含まれる", async () => {
+    it("autonomy が full の場合 --permission-mode auto が含まれる", async () => {
       mockedRunCommand.mockResolvedValue({
         success: true,
         stdout: "",
@@ -314,10 +313,10 @@ describe("runClaude", () => {
       await runClaude("prompt text", { autonomy: "full" });
 
       const args = mockedRunCommand.mock.calls[0][1];
-      expect(args).toContain("--dangerously-skip-permissions");
+      expect(args).toEqual(["-p", "--permission-mode", "auto"]);
     });
 
-    it("autonomy が sandboxed の場合 --dangerously-skip-permissions が含まれない", async () => {
+    it("autonomy が sandboxed の場合は追加フラグが含まれない", async () => {
       mockedRunCommand.mockResolvedValue({
         success: true,
         stdout: "",
@@ -328,10 +327,9 @@ describe("runClaude", () => {
 
       const args = mockedRunCommand.mock.calls[0][1];
       expect(args).toEqual(["-p"]);
-      expect(args).not.toContain("--dangerously-skip-permissions");
     });
 
-    it("autonomy が interactive の場合 --dangerously-skip-permissions が含まれない", async () => {
+    it("autonomy が interactive の場合は追加フラグが含まれない", async () => {
       mockedRunCommand.mockResolvedValue({
         success: true,
         stdout: "",
@@ -342,7 +340,6 @@ describe("runClaude", () => {
 
       const args = mockedRunCommand.mock.calls[0][1];
       expect(args).toEqual(["-p"]);
-      expect(args).not.toContain("--dangerously-skip-permissions");
     });
 
     it("autonomy が auto の場合 --permission-mode と auto が隣接して含まれる", async () => {
@@ -356,10 +353,9 @@ describe("runClaude", () => {
 
       const args = mockedRunCommand.mock.calls[0][1];
       expect(args).toEqual(["-p", "--permission-mode", "auto"]);
-      expect(args).not.toContain("--dangerously-skip-permissions");
     });
 
-    it("autonomy が auto の場合は full のフラグと異なる", async () => {
+    it("autonomy が full と auto は現状同じ --permission-mode auto フラグを返す", async () => {
       mockedRunCommand.mockResolvedValue({
         success: true,
         stdout: "",
@@ -374,9 +370,8 @@ describe("runClaude", () => {
       await runClaude("prompt text", { autonomy: "full" });
       const fullArgs = mockedRunCommand.mock.calls[0][1];
 
-      expect(autoArgs).not.toEqual(fullArgs);
-      expect(autoArgs).toContain("--permission-mode");
-      expect(fullArgs).toContain("--dangerously-skip-permissions");
+      expect(autoArgs).toEqual(fullArgs);
+      expect(autoArgs).toEqual(["-p", "--permission-mode", "auto"]);
     });
 
     it("runClaude は autonomy ログを直接出力しない (config ロード時に一括出力)", async () => {
@@ -458,9 +453,10 @@ describe("runClaude", () => {
 });
 
 describe("resolveClaudeAutonomyFlags", () => {
-  it("full の場合 --dangerously-skip-permissions を返す", () => {
+  it("full の場合 ['--permission-mode', 'auto'] を返す", () => {
     expect(resolveClaudeAutonomyFlags("full")).toEqual([
-      "--dangerously-skip-permissions",
+      "--permission-mode",
+      "auto",
     ]);
   });
 
@@ -479,9 +475,9 @@ describe("resolveClaudeAutonomyFlags", () => {
     expect(resolveClaudeAutonomyFlags("interactive")).toEqual([]);
   });
 
-  it("auto と full は異なるフラグ配列を返す", () => {
-    expect(resolveClaudeAutonomyFlags("auto")).not.toEqual(
-      resolveClaudeAutonomyFlags("full"),
+  it("full と auto は同じフラグ配列を返す", () => {
+    expect(resolveClaudeAutonomyFlags("full")).toEqual(
+      resolveClaudeAutonomyFlags("auto"),
     );
   });
 });
@@ -491,7 +487,17 @@ describe("resolveAutonomyLogMessage", () => {
     const result = resolveAutonomyLogMessage("full");
     expect(result).not.toBeNull();
     expect(result?.level).toBe("warn");
-    expect(result?.message).toContain("--dangerously-skip-permissions");
+    expect(result?.message).toContain("--permission-mode auto");
+    expect(result?.message).toContain("Max/Team/Enterprise");
+    expect(result?.message).toContain("v2.1.83+");
+  });
+
+  it("full と auto はメッセージ内容もログレベルも異なる", () => {
+    const fullResult = resolveAutonomyLogMessage("full");
+    const autoResult = resolveAutonomyLogMessage("auto");
+    expect(fullResult?.level).toBe("warn");
+    expect(autoResult?.level).toBe("info");
+    expect(fullResult?.message).not.toBe(autoResult?.message);
   });
 
   it("auto の場合 info レベルで auto 向けメッセージを返す", () => {
