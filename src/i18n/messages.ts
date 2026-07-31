@@ -118,6 +118,38 @@ const jaMessages: MessageKeys = {
     "Error: config.yml のバリデーションに失敗しました: {message}",
   "show.unexpectedError": "予期しないエラーが発生しました:",
 
+  // migrate command
+  "migrate.configNotFound": "Error: config.yml が見つかりません。",
+  "migrate.runInitFirst":
+    "先に `sabori-flow init` を実行してください。",
+  "migrate.configParseFailed":
+    "Error: config.yml の解析に失敗しました。YAML の構文を確認してください。",
+  "migrate.configFormatInvalid": "Error: config.yml の形式が不正です。トップレベルはマッピングである必要があります。",
+  "migrate.repositoriesInvalid":
+    "Error: config.yml に repositories が定義されていないか、形式が不正です。",
+  "migrate.schemaVersionNewer":
+    "Error: config.yml の schema_version ({recorded}) はこのバージョンがサポートする上限 ({supported}) より新しいです。sabori-flow を更新してください。",
+  "migrate.alreadyUpToDate": "config.yml は最新です。変更はありません。",
+  "migrate.keyAdded": "  - {key}",
+  "migrate.confirmApply": "上記の変更を config.yml に適用しますか?",
+  "migrate.aborted": "中断しました。config.yml は変更されていません。",
+  "migrate.backupFailed":
+    "Error: バックアップの作成に失敗しました。config.yml は変更されていません。",
+  "migrate.configWriteFailed":
+    "Error: config.yml の書き込みに失敗しました。バックアップ: {backupPath}",
+  "migrate.invalidValuesNotRepaired":
+    "欠落キーのみ補完しました。既存値の妥当性は検証していません。",
+  "migrate.reinstallRequired":
+    "interval_minutes が変更されました。反映するには `sabori-flow reinstall` を実行してください。",
+  "migrate.reinstallNotRequired":
+    "interval_minutes は変更されていません。reinstall は不要です。",
+  "migrate.complete": "config.yml のマイグレーションが完了しました。",
+
+  // migrate prompts
+  "prompt.enterDefaultBranch": "{repo} のデフォルトブランチを入力してください:",
+  "prompt.autoImplAfterPlan":
+    "{repo}: Plan 完了後に自動で impl ラベルを付与しますか?",
+
   // cli descriptions
   "cli.descriptionAdd": "既存の config.yml にリポジトリを追加します",
   "cli.descriptionInit": "対話的に config.yml を作成します",
@@ -133,6 +165,7 @@ const jaMessages: MessageKeys = {
   "cli.descriptionShow": "config.yml の実効設定を表示します",
   "cli.optionShowVerbose":
     "ラベル定義を含むすべての項目を展開して表示します",
+  "cli.descriptionMigrate": "config.yml を最新スキーマに対話的にマイグレーションします",
 };
 
 const enMessages: MessageKeys = {
@@ -243,6 +276,37 @@ const enMessages: MessageKeys = {
     "Error: config.yml validation failed: {message}",
   "show.unexpectedError": "Unexpected error:",
 
+  // migrate command
+  "migrate.configNotFound": "Error: config.yml not found.",
+  "migrate.runInitFirst": "Run `sabori-flow init` first.",
+  "migrate.configParseFailed":
+    "Error: Failed to parse config.yml. Please check the YAML syntax.",
+  "migrate.configFormatInvalid": "Error: config.yml format is invalid. The top level must be a mapping.",
+  "migrate.repositoriesInvalid":
+    "Error: repositories is not defined or has an invalid format in config.yml.",
+  "migrate.schemaVersionNewer":
+    "Error: config.yml schema_version ({recorded}) is newer than the supported maximum ({supported}). Please update sabori-flow.",
+  "migrate.alreadyUpToDate": "config.yml is already up to date. No changes needed.",
+  "migrate.keyAdded": "  - {key}",
+  "migrate.confirmApply": "Apply the above changes to config.yml?",
+  "migrate.aborted": "Aborted. config.yml was not modified.",
+  "migrate.backupFailed":
+    "Error: Failed to create backup. config.yml was not modified.",
+  "migrate.configWriteFailed":
+    "Error: Failed to write config.yml. Backup: {backupPath}",
+  "migrate.invalidValuesNotRepaired":
+    "Only missing keys were filled in. Existing values were not validated.",
+  "migrate.reinstallRequired":
+    "interval_minutes was changed. Run `sabori-flow reinstall` to apply.",
+  "migrate.reinstallNotRequired":
+    "interval_minutes was not changed. No reinstall needed.",
+  "migrate.complete": "config.yml migration complete.",
+
+  // migrate prompts
+  "prompt.enterDefaultBranch": "Enter the default branch for {repo}:",
+  "prompt.autoImplAfterPlan":
+    "{repo}: Automatically add impl label after Plan completion?",
+
   // cli descriptions
   "cli.descriptionAdd": "Add a repository to existing config.yml",
   "cli.descriptionInit": "Create config.yml interactively",
@@ -258,6 +322,7 @@ const enMessages: MessageKeys = {
   "cli.descriptionShow": "Display the effective configuration",
   "cli.optionShowVerbose":
     "Expand all fields including label definitions",
+  "cli.descriptionMigrate": "Interactively migrate config.yml to the latest schema",
 };
 
 export const messages: Record<Language, MessageKeys> = {
