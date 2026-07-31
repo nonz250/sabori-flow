@@ -35,6 +35,9 @@ vi.mock("../../src/worker/prompt.js", () => ({
   },
 }));
 
+vi.mock("../../src/worker/prompt-migration.js", () => ({
+  migrateFlatPromptTemplates: vi.fn(),
+}));
 
 vi.mock("../../src/utils/paths.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../../src/utils/paths.js")>();
@@ -43,6 +46,7 @@ vi.mock("../../src/utils/paths.js", async (importOriginal) => {
     getBaseDir: vi.fn().mockReturnValue("/mock/config/dir"),
     getConfigPath: vi.fn().mockReturnValue("/mock/config/dir/config.yml"),
     getUserPromptsDir: vi.fn().mockReturnValue("/mock/config/dir/prompts"),
+    getUserPromptsLanguageDir: vi.fn().mockReturnValue("/mock/config/dir/prompts/ja"),
     getDefaultPromptsDir: vi.fn().mockReturnValue("/mock/package/prompts"),
   };
 });
@@ -52,7 +56,8 @@ import { confirm, select, input } from "@inquirer/prompts";
 import { promptRepository } from "../../src/commands/helpers/repository-prompt.js";
 import type { RepositoryInput } from "../../src/commands/helpers/repository-prompt.js";
 import { setTokenCommand } from "../../src/commands/set-token.js";
-import { getBaseDir, getConfigPath, getUserPromptsDir, getDefaultPromptsDir } from "../../src/utils/paths.js";
+import { getBaseDir, getConfigPath, getUserPromptsDir, getUserPromptsLanguageDir, getDefaultPromptsDir } from "../../src/utils/paths.js";
+import { migrateFlatPromptTemplates } from "../../src/worker/prompt-migration.js";
 import { Autonomy } from "../../src/worker/models.js";
 import type { Language } from "../../src/i18n/types.js";
 
@@ -65,7 +70,9 @@ const mockedSetTokenCommand = vi.mocked(setTokenCommand);
 const mockedGetBaseDir = vi.mocked(getBaseDir);
 const mockedGetConfigPath = vi.mocked(getConfigPath);
 const mockedGetUserPromptsDir = vi.mocked(getUserPromptsDir);
+const mockedGetUserPromptsLanguageDir = vi.mocked(getUserPromptsLanguageDir);
 const mockedGetDefaultPromptsDir = vi.mocked(getDefaultPromptsDir);
+const mockedMigrateFlatPromptTemplates = vi.mocked(migrateFlatPromptTemplates);
 
 // ---------- Helpers ----------
 
@@ -147,7 +154,9 @@ beforeEach(() => {
   mockedGetBaseDir.mockReturnValue("/mock/config/dir");
   mockedGetConfigPath.mockReturnValue("/mock/config/dir/config.yml");
   mockedGetUserPromptsDir.mockReturnValue("/mock/config/dir/prompts");
+  mockedGetUserPromptsLanguageDir.mockReturnValue("/mock/config/dir/prompts/ja");
   mockedGetDefaultPromptsDir.mockReturnValue("/mock/package/prompts");
+  mockedMigrateFlatPromptTemplates.mockReset();
 
   // 言語 / autonomy / interval_minutes / timeout_minutes のデフォルト応答
   setupInitPrompts();
@@ -468,9 +477,9 @@ describe("initCommand - テンプレートコピー", () => {
 
     await runInitCommand();
 
-    // prompts ディレクトリが作成される
+    // prompts 言語ディレクトリが作成される
     expect(mockedFs.mkdirSync).toHaveBeenCalledWith(
-      "/mock/config/dir/prompts",
+      "/mock/config/dir/prompts/ja",
       { recursive: true, mode: 0o700 },
     );
     // テンプレートファイルがコピーされる（spec.md, plan.md, impl.md）
@@ -606,8 +615,33 @@ describe("initCommand - テンプレートコピー", () => {
     await runInitCommand();
 
     expect(mockedFs.mkdirSync).toHaveBeenCalledWith(
-      "/mock/config/dir/prompts",
+      "/mock/config/dir/prompts/ja",
       { recursive: true, mode: 0o700 },
     );
+  });
+
+  it("migrateFlatPromptTemplates is called with the selected language", async () => {
+    mockExistsSyncForConfig(false);
+    mockedPromptRepository.mockResolvedValueOnce(makeRepoInput());
+    mockedConfirm.mockResolvedValueOnce(false);
+
+    await runInitCommand();
+
+    expect(mockedMigrateFlatPromptTemplates).toHaveBeenCalledOnce();
+    expect(mockedMigrateFlatPromptTemplates).toHaveBeenCalledWith("ja");
+  });
+
+  it("migrateFlatPromptTemplates is called before copyFileSync", async () => {
+    mockExistsSyncForConfig(false);
+    mockedPromptRepository.mockResolvedValueOnce(makeRepoInput());
+    mockedConfirm.mockResolvedValueOnce(false);
+
+    await runInitCommand();
+
+    const migrationOrder = mockedMigrateFlatPromptTemplates.mock.invocationCallOrder[0];
+    const copyOrders = mockedFs.copyFileSync.mock.invocationCallOrder;
+    for (const copyOrder of copyOrders) {
+      expect(migrationOrder).toBeLessThan(copyOrder);
+    }
   });
 });

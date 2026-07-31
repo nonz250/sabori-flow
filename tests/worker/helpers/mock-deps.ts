@@ -50,6 +50,7 @@ export function createMockWorkerDeps(
     resumeSpecReview: vi.fn().mockResolvedValue({ outcome: "deferred", claudeExecuted: false }),
     ensureLabelsExist: vi.fn().mockResolvedValue(undefined),
     readAuthToken: vi.fn().mockReturnValue(null),
+    migrateFlatPromptTemplates: vi.fn(),
     ...overrides,
   };
 }
