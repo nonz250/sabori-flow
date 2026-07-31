@@ -31,7 +31,7 @@ describe("fetchLinkedPullRequestNumbers", () => {
     mockedRunCommand.mockResolvedValueOnce({
       success: true,
       stdout: JSON.stringify({
-        closedByPullRequestsReferences: [{ number: 960 }],
+        closedByPullRequestsReferences: [{ number: 123 }],
       }),
       stderr: "",
     });
@@ -57,7 +57,7 @@ describe("fetchLinkedPullRequestNumbers", () => {
     mockedRunCommand.mockResolvedValueOnce({
       success: true,
       stdout: JSON.stringify({
-        closedByPullRequestsReferences: [{ number: 960 }],
+        closedByPullRequestsReferences: [{ number: 123 }],
       }),
       stderr: "",
     });
@@ -67,7 +67,7 @@ describe("fetchLinkedPullRequestNumbers", () => {
       42,
     );
 
-    expect(result).toEqual([960]);
+    expect(result).toEqual([123]);
     expect(mockedRunCommand).toHaveBeenCalledTimes(1);
   });
 
@@ -110,7 +110,7 @@ describe("fetchLinkedPullRequestNumbers", () => {
       mockedRunCommand.mockResolvedValueOnce({
         success: true,
         stdout: JSON.stringify({
-          closedByPullRequestsReferences: [{ number: 960 }],
+          closedByPullRequestsReferences: [{ number: 123 }],
         }),
         stderr: "",
       });
@@ -122,7 +122,7 @@ describe("fetchLinkedPullRequestNumbers", () => {
       await vi.advanceTimersByTimeAsync(EMPTY_RESULT_RETRY_DELAY_MS);
       const result = await promise;
 
-      expect(result).toEqual([960]);
+      expect(result).toEqual([123]);
       expect(mockedRunCommand).toHaveBeenCalledTimes(2);
     });
 

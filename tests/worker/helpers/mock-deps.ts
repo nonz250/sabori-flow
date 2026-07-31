@@ -25,7 +25,7 @@ export function createMockPipelineDeps(
     addImplTriggerLabel: vi.fn().mockResolvedValue(undefined),
     postSuccessComment: vi.fn().mockResolvedValue(undefined),
     postFailureComment: vi.fn().mockResolvedValue(undefined),
-    fetchLinkedPullRequestNumbers: vi.fn().mockResolvedValue([960]),
+    fetchLinkedPullRequestNumbers: vi.fn().mockResolvedValue([123]),
     withWorktree: vi.fn().mockImplementation(
       async (
         _repoConfig: Pick<RepositoryConfig, "owner" | "repo" | "localPath" | "defaultBranch">,

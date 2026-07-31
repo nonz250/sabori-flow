@@ -95,12 +95,13 @@ export const defaultDeps: PipelineDeps = {
  *   1. PhaseLabels 解決: issue.phase から plan/impl のラベル定義を取得
  *   2. ラベル遷移 trigger -> in-progress
  *   3. worktree 作成 -> プロンプト生成 -> Claude CLI 実行 -> worktree 削除
- *   4-A. 成功: done 遷移 + 成功コメント
- *   4-B. 失敗: failed 遷移 + 失敗コメント
+ *   4. impl のみ: Issue に紐づく PR の存在を検証
+ *   5-A. 成功: done 遷移 + 成功コメント
+ *   5-B. 失敗: failed 遷移 + 失敗コメント
  *
  * エラーハンドリング:
  *   - レベル 1: trigger->in-progress 失敗 -> return false（次回リトライ可能）
- *   - レベル 2: プロンプト生成/CLI 実行失敗 -> failed 遷移 + 失敗コメント + return false
+ *   - レベル 2: プロンプト生成/CLI 実行失敗/impl の PR 未作成 -> failed 遷移 + 失敗コメント + return false
  *   - レベル 3: 後処理失敗 -> ログ WARNING のみ、結果は変えない
  */
 export async function processIssue(
