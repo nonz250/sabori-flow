@@ -257,6 +257,26 @@ describe("migrateCommand - backup write failure", () => {
   });
 });
 
+// ---------- Tests: Ctrl+C during prompt ----------
+
+describe("migrateCommand - Ctrl+C during prompt", () => {
+  it("does not write config or backup and produces no success messages", async () => {
+    mockedExistsSync.mockReturnValue(true);
+    mockedReadFileSync.mockReturnValue(MINIMAL_CONFIG);
+    setupDefaults();
+    // First interactive prompt rejects (simulating Ctrl+C)
+    mockedSelect.mockRejectedValueOnce(new Error("prompt was closed"));
+
+    await runMigrateCommand();
+
+    expect(mockedWriteFileSync).not.toHaveBeenCalled();
+    // No success / completion messages should appear
+    const logMessages = consoleSpy.log.mock.calls.map((c) => c[0] as string);
+    expect(logMessages.some((m) => m.includes("complete") || m.includes("reinstall"))).toBe(false);
+    expect(consoleSpy.error).not.toHaveBeenCalled();
+  });
+});
+
 // ---------- Tests: already up to date ----------
 
 describe("migrateCommand - already up to date", () => {
@@ -523,5 +543,29 @@ describe("migrateCommand - config write failure", () => {
       (m) => m.includes("config.yml") && m.includes(".bak-"),
     );
     expect(writeError).toBeDefined();
+  });
+});
+
+// ---------- Tests: unknown key preservation ----------
+
+describe("migrateCommand - unknown key preservation", () => {
+  it("preserves unknown top-level keys in written output", async () => {
+    const configWithUnknown = `\
+custom_note: "hello"
+repositories:
+  - owner: acme
+    repo: app
+    local_path: /tmp/acme/app
+`;
+    mockedExistsSync.mockReturnValue(true);
+    mockedReadFileSync.mockReturnValue(configWithUnknown);
+    setupDefaults();
+
+    await runMigrateCommand();
+
+    const cw = configWriteCall();
+    expect(cw).toBeDefined();
+    expect(cw!.content).toContain("custom_note");
+    expect(cw!.content).toContain("hello");
   });
 });

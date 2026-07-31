@@ -168,9 +168,9 @@ export async function migrateCommand(): Promise<void> {
 
     const intervalAfter = readIntervalMinutes(doc);
 
-    // ~/.sabori-flow is created with 0700 by init. Within that directory,
-    // atomic rename is not feasible for YAML round-tripping, and the wx
-    // flag on the backup above already guards against timestamp collisions.
+    // ~/.sabori-flow is created with 0700 by init. The backup written
+    // above with the wx flag provides a recovery path if this write is
+    // interrupted, so a temp-file-plus-rename pattern is not necessary.
     try {
       writeFileSync(getConfigPath(), doc.toString(), { encoding: "utf-8", mode: 0o600 });
     } catch {
