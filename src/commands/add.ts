@@ -1,9 +1,8 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { confirm } from "@inquirer/prompts";
 import YAML, { isMap, isSeq } from "yaml";
-import type { ParseOptions, DocumentOptions, SchemaOptions, YAMLSeq } from "yaml";
+import type { YAMLSeq } from "yaml";
 import { getConfigPath } from "../utils/paths.js";
-import { YAML_PARSE_OPTIONS } from "../utils/yaml.js";
 import {
   getDefaultLabels,
   getDefaultPriorityLabels,
@@ -25,10 +24,9 @@ export async function addCommand(): Promise<void> {
 
     // 2. Read + parse as Document (preserves comments)
     const raw = readFileSync(getConfigPath(), "utf-8");
-    const doc = YAML.parseDocument(
-      raw,
-      YAML_PARSE_OPTIONS as ParseOptions & DocumentOptions & SchemaOptions,
-    );
+    // parseDocument does not resolve aliases (no toJS() call in this module),
+    // so maxAliasCount does not apply here; it protects YAML.parse() elsewhere.
+    const doc = YAML.parseDocument(raw);
     if (doc.errors.length > 0) {
       console.error(t("add.configReadFailed"));
       return;

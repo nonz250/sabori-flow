@@ -1,8 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { input, select, confirm } from "@inquirer/prompts";
-import YAML, { type ParseOptions, type DocumentOptions, type SchemaOptions } from "yaml";
+import YAML from "yaml";
 import { getConfigPath, getConfigBackupPath } from "../utils/paths.js";
-import { YAML_PARSE_OPTIONS } from "../utils/yaml.js";
 import { setLanguage, t, loadLanguageFromConfig } from "../i18n/index.js";
 import {
   collectPendingSteps,
@@ -47,9 +46,9 @@ export async function migrateCommand(): Promise<void> {
 
     const raw = readFileSync(getConfigPath(), "utf-8");
 
-    // parseDocument does not throw on invalid YAML; it collects errors
-    // in doc.errors instead. An explicit length check is required.
-    const doc = YAML.parseDocument(raw, YAML_PARSE_OPTIONS as ParseOptions & DocumentOptions & SchemaOptions);
+    // parseDocument does not resolve aliases (no toJS() call in this module),
+    // so maxAliasCount does not apply here; it protects YAML.parse() elsewhere.
+    const doc = YAML.parseDocument(raw);
     if (doc.errors.length > 0) {
       console.error(t("migrate.configParseFailed"));
       return;
