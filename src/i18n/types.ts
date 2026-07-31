@@ -77,6 +77,28 @@ export interface MessageKeys {
   "prompt.autonomyDescAuto": string;
   "prompt.autonomyDescFull": string;
 
+  // migrate command
+  "migrate.configNotFound": string;
+  "migrate.runInitFirst": string;
+  "migrate.configParseFailed": string;
+  "migrate.configFormatInvalid": string;
+  "migrate.repositoriesInvalid": string;
+  "migrate.schemaVersionNewer": string;
+  "migrate.alreadyUpToDate": string;
+  "migrate.keyAdded": string;
+  "migrate.confirmApply": string;
+  "migrate.aborted": string;
+  "migrate.backupFailed": string;
+  "migrate.configWriteFailed": string;
+  "migrate.invalidValuesNotRepaired": string;
+  "migrate.reinstallRequired": string;
+  "migrate.reinstallNotRequired": string;
+  "migrate.complete": string;
+
+  // migrate prompts
+  "prompt.enterDefaultBranch": string;
+  "prompt.autoImplAfterPlan": string;
+
   // cli descriptions
   "cli.descriptionAdd": string;
   "cli.descriptionInit": string;
@@ -87,4 +109,5 @@ export interface MessageKeys {
   "cli.optionReinstallLocal": string;
   "cli.descriptionWorker": string;
   "cli.descriptionSetToken": string;
+  "cli.descriptionMigrate": string;
 }

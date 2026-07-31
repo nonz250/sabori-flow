@@ -4,6 +4,7 @@ import { Command } from "commander";
 import { addCommand } from "./commands/add.js";
 import { initCommand } from "./commands/init.js";
 import { installCommand } from "./commands/install.js";
+import { migrateCommand } from "./commands/migrate.js";
 import { reinstallCommand } from "./commands/reinstall.js";
 import { setTokenCommand } from "./commands/set-token.js";
 import { uninstallCommand } from "./commands/uninstall.js";
@@ -31,6 +32,11 @@ program
   .command("init")
   .description(t("cli.descriptionInit"))
   .action(initCommand);
+
+program
+  .command("migrate")
+  .description(t("cli.descriptionMigrate"))
+  .action(migrateCommand);
 
 program
   .command("install")
