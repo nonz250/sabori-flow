@@ -50,6 +50,7 @@ src/
     worktree.ts      # git worktree ライフサイクル管理
     label.ts         # ラベル遷移操作
     comment.ts       # Issue コメント投稿
+    linked-pr.ts     # Issue に紐づく PR の取得（impl の完了検証）
     logger.ts        # 軽量ロガー
     process.ts       # child_process ラッパー
   utils/             # 共有ユーティリティ
