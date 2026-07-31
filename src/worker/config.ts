@@ -28,7 +28,7 @@ export class ConfigValidationError extends Error {
 const OWNER_REPO_PATTERN = /^[a-zA-Z0-9._-]+$/;
 const LABEL_PATTERN = /^[a-zA-Z0-9./:_ -]+$/;
 const BRANCH_NAME_PATTERN = /^[a-zA-Z0-9._\/-]+$/;
-const DEFAULT_BRANCH_DEFAULT = "main";
+export const DEFAULT_BRANCH_DEFAULT = "main";
 const PHASE_LABEL_KEYS = ["trigger", "in_progress", "done", "failed"] as const;
 
 const MAX_PARALLEL_MIN = 1;
@@ -479,7 +479,7 @@ function parseExecution(raw: unknown): Omit<ExecutionConfig, "language"> {
 
 // ---------- Helpers ----------
 
-function validateBranchName(value: string, prefix: string): string {
+export function validateBranchName(value: string, prefix: string): string {
   if (!BRANCH_NAME_PATTERN.test(value)) {
     throw new ConfigValidationError(
       `${prefix}: invalid characters in '${value}'`,
