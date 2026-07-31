@@ -94,6 +94,10 @@ export function getAuthTokenPath(): string {
   return path.join(getBaseDir(), "auth-token");
 }
 
+export function getConfigBackupPath(timestamp: string): string {
+  return path.join(getBaseDir(), `config.yml.bak-${timestamp}`);
+}
+
 /** plist テンプレートのパス（PLIST_TEMPLATE_PATH と同値） */
 export function getPlistTemplatePath(): string {
   return PLIST_TEMPLATE_PATH;

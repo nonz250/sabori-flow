@@ -17,6 +17,12 @@ import { setLanguage, t } from "../i18n/index.js";
 import type { Language } from "../i18n/types.js";
 import { Autonomy } from "../worker/models.js";
 import { TEMPLATE_FILES } from "../worker/prompt.js";
+import {
+  INTERVAL_MINUTES_MIN,
+  INTERVAL_MINUTES_MAX,
+  TIMEOUT_MINUTES_MIN,
+  TIMEOUT_MINUTES_MAX,
+} from "../worker/config.js";
 
 function buildConfigData(
   repos: RepositoryInput[],
@@ -135,10 +141,10 @@ export async function initCommand(): Promise<void> {
     // interval_minutes 入力
     const intervalMinutesStr = await input({
       message: t("prompt.intervalMinutes"),
-      default: "60",
+      default: String(getDefaultExecution().interval_minutes),
       validate: (v) => {
         const n = Number(v);
-        if (!Number.isInteger(n) || n < 10 || n > 1440) {
+        if (!Number.isInteger(n) || n < INTERVAL_MINUTES_MIN || n > INTERVAL_MINUTES_MAX) {
           return t("prompt.intervalMinutesValidation");
         }
         return true;
@@ -149,10 +155,10 @@ export async function initCommand(): Promise<void> {
     // timeout_minutes 入力
     const timeoutMinutesStr = await input({
       message: t("prompt.timeoutMinutes"),
-      default: "60",
+      default: String(getDefaultExecution().timeout_minutes),
       validate: (v) => {
         const n = Number(v);
-        if (!Number.isInteger(n) || n < 1 || n > 240) {
+        if (!Number.isInteger(n) || n < TIMEOUT_MINUTES_MIN || n > TIMEOUT_MINUTES_MAX) {
           return t("prompt.timeoutMinutesValidation");
         }
         return true;

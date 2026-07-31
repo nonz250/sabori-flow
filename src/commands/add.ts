@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { confirm } from "@inquirer/prompts";
-import YAML from "yaml";
+import YAML, { isMap, isSeq } from "yaml";
+import type { YAMLSeq } from "yaml";
 import { getConfigPath } from "../utils/paths.js";
 import {
   getDefaultLabels,
@@ -21,37 +22,44 @@ export async function addCommand(): Promise<void> {
       return;
     }
 
-    // 2. Read + parse
-    let config: unknown;
-    try {
-      const raw = readFileSync(getConfigPath(), "utf-8");
-      config = YAML.parse(raw, { maxAliasCount: 100 });
-    } catch {
+    // 2. Read + parse as Document (preserves comments)
+    const raw = readFileSync(getConfigPath(), "utf-8");
+    // parseDocument does not resolve aliases (no toJS() call in this module),
+    // so maxAliasCount does not apply here; it protects YAML.parse() elsewhere.
+    const doc = YAML.parseDocument(raw);
+    if (doc.errors.length > 0) {
       console.error(t("add.configReadFailed"));
       return;
     }
 
     // 3. Structure validation
-    if (typeof config !== "object" || config === null) {
+    if (!isMap(doc.contents)) {
       console.error(t("add.configFormatInvalid"));
       return;
     }
-    const configObj = config as Record<string, unknown>;
-    if (!Array.isArray(configObj.repositories)) {
+    const seq = doc.get("repositories");
+    if (!isSeq(seq)) {
       console.error(t("add.repositoriesInvalid"));
       return;
     }
-    const repositories = configObj.repositories as Array<
-      Record<string, unknown>
-    >;
 
     // 4. 対話入力
     const repoInput = await promptRepository();
 
     // 5. 重複チェック
-    const duplicateIndex = repositories.findIndex(
-      (r) => r.owner === repoInput.owner && r.repo === repoInput.repo,
-    );
+    const repoSeq = seq as YAMLSeq;
+    let duplicateIndex = -1;
+    for (let i = 0; i < repoSeq.items.length; i++) {
+      const item = repoSeq.items[i];
+      if (
+        isMap(item) &&
+        item.get("owner") === repoInput.owner &&
+        item.get("repo") === repoInput.repo
+      ) {
+        duplicateIndex = i;
+        break;
+      }
+    }
     if (duplicateIndex !== -1) {
       const overwrite = await confirm({
         message: t("add.duplicateOverwrite", { owner: repoInput.owner, repo: repoInput.repo }),
@@ -61,7 +69,7 @@ export async function addCommand(): Promise<void> {
         console.log(t("add.aborted"));
         return;
       }
-      repositories.splice(duplicateIndex, 1);
+      repoSeq.delete(duplicateIndex);
     }
 
     // 6. 新エントリ構築 + 追加
@@ -73,11 +81,11 @@ export async function addCommand(): Promise<void> {
       labels: getDefaultLabels(),
       priority_labels: getDefaultPriorityLabels(),
     };
-    repositories.push(newEntry);
+    repoSeq.add(doc.createNode(newEntry));
 
     // 7. 書き戻し
     try {
-      writeFileSync(getConfigPath(), YAML.stringify(configObj), { encoding: "utf-8", mode: 0o600 });
+      writeFileSync(getConfigPath(), doc.toString(), { encoding: "utf-8", mode: 0o600 });
     } catch {
       console.error(t("add.configWriteFailed"));
       return;
