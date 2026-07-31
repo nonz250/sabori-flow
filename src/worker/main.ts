@@ -5,6 +5,7 @@ import { loadConfig } from "./config.js";
 import { fetchIssues } from "./fetcher.js";
 import { processIssue, resumeSpecReview } from "./pipeline.js";
 import { resolveAutonomyLogMessage } from "./executor.js";
+import { migrateFlatPromptTemplates } from "./prompt-migration.js";
 import { configureLogger, createLogger, rotateOldLogs } from "./logger.js";
 import { getConfigPath, getLogsDir } from "../utils/paths.js";
 import { readAuthToken } from "../utils/auth-token.js";
@@ -13,6 +14,7 @@ import {
   ProcessTimeoutError,
   ProcessExecutionError,
 } from "./process.js";
+import type { Language } from "../i18n/types.js";
 
 const logger = createLogger("main");
 
@@ -46,6 +48,7 @@ export interface WorkerDeps {
     labels: readonly string[],
   ) => Promise<void>;
   readAuthToken: () => string | null;
+  migrateFlatPromptTemplates: (language: Language) => void;
 }
 
 export const defaultWorkerDeps: WorkerDeps = {
@@ -55,6 +58,7 @@ export const defaultWorkerDeps: WorkerDeps = {
   resumeSpecReview,
   ensureLabelsExist,
   readAuthToken,
+  migrateFlatPromptTemplates,
 };
 
 // ---------- Step definitions ----------
@@ -311,6 +315,8 @@ export async function workerMain(
     "config.yml を読み込みました (リポジトリ数: %s)",
     appConfig.repositories.length,
   );
+
+  deps.migrateFlatPromptTemplates(appConfig.language);
 
   const autonomyLog = resolveAutonomyLogMessage(appConfig.execution.autonomy);
   if (autonomyLog !== null) {
