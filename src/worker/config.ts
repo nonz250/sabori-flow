@@ -35,7 +35,7 @@ const BRANCH_NAME_PATTERN = /^[a-zA-Z0-9._\/-]+$/;
 // local_path is echoed verbatim in the `show` command and log output, so
 // control characters are rejected here for display/log safety.
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/;
-const DEFAULT_BRANCH_DEFAULT = "main";
+export const DEFAULT_BRANCH_DEFAULT = "main";
 const PHASE_LABEL_KEYS = ["trigger", "in_progress", "done", "failed"] as const;
 const SPEC_LABEL_KEYS = [...PHASE_LABEL_KEYS, "review", "approved", "needs_human"] as const;
 
@@ -602,7 +602,7 @@ function validateAgent(value: string, prefix: string): Agent {
 
 // ---------- Helpers ----------
 
-function validateBranchName(value: string, prefix: string): string {
+export function validateBranchName(value: string, prefix: string): string {
   if (!BRANCH_NAME_PATTERN.test(value)) {
     throw new ConfigValidationError(
       `${prefix}: invalid characters in '${value}'`,
