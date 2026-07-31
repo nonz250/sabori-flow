@@ -267,7 +267,7 @@ language: ja
 | `repositories[].priority_labels` | Priority labels. Issues with labels higher in the list are processed first |
 | `execution.max_parallel` | Number of parallel executions. Default is `1` (sequential) |
 | `execution.max_issues_per_repo` | Maximum number of issues to process per repository. Default is `1` |
-| `execution.autonomy` | CLI autonomy level: `interactive` (requires user approval for each action — recommended default), `auto` (Claude Code's `--permission-mode auto`; classifier blocks only dangerous actions — recommended for unattended launchd runs, requires Claude Code v2.1.83+ and a Max/Team/Enterprise plan), `full` (`--dangerously-skip-permissions`, unrestricted), `sandboxed` (reserved for future non-Claude CLIs such as OpenAI Codex; currently falls back to interactive). Default is `interactive` |
+| `execution.autonomy` | CLI autonomy level: `interactive` (requires user approval for each action — recommended default), `auto` (Claude Code's `--permission-mode auto`; classifier blocks only dangerous actions — recommended for unattended launchd runs, requires Claude Code v2.1.83+ and a Max/Team/Enterprise plan), `full` (the engine's most autonomous mode; on Claude Code it resolves to `--permission-mode auto`, the same as `auto`, with the same v2.1.83+/Max-Team-Enterprise plan requirement), `sandboxed` (reserved for future non-Claude CLIs such as OpenAI Codex; currently falls back to interactive). Default is `interactive` |
 | `execution.interval_minutes` | Scheduled execution interval in minutes (10-1440). Default is `60` |
 | `execution.timeout_minutes` | Claude CLI execution timeout in minutes (1-240). Default is `60` |
 | `language` | Language for CLI messages and prompt templates (`ja` / `en`). Default is `ja` |
@@ -276,10 +276,10 @@ language: ja
 
 ## Security
 
-By default, this tool runs Claude Code CLI in `interactive` mode, which requires user approval for each action. For unattended launchd runs you have two autonomous options, from safer to riskier:
+By default, this tool runs Claude Code CLI in `interactive` mode, which requires user approval for each action. Unattended launchd runs block on those approval prompts, so they need an autonomous level:
 
 - `execution.autonomy: auto` — Claude Code's `--permission-mode auto`. A classifier blocks dangerous actions (deploys, mass deletions, etc.) and auto-approves the rest. Requires Claude Code v2.1.83+ and a Max/Team/Enterprise plan.
-- `execution.autonomy: full` — passes `--dangerously-skip-permissions`, allowing nearly arbitrary operations on your machine. Use only when `auto` is not available.
+- `execution.autonomy: full` — means "the most autonomous mode the engine supports". On Claude Code it resolves to the same `--permission-mode auto` flags as `auto`, with the same v2.1.83+/Max-Team-Enterprise plan requirement; it no longer passes `--dangerously-skip-permissions`.
 
 By default, the `npx` installation fetches packages from the npm registry at runtime. If the npm package were compromised, malicious code could be executed automatically by the scheduler.
 
