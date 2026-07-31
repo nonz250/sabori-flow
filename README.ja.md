@@ -208,6 +208,20 @@ impl フェーズは、Issue に紐づく PR が作られないまま終了し�
 2. 必要に応じて Issue の内容を修正
 3. `failed` ラベルを外して、trigger ラベル（`ai/spec`、`ai/plan`、`ai/impl`）を再度付ける
 
+### 現在の設定を確認する
+
+```bash
+npx sabori-flow show
+```
+
+config.yml の実効設定（デフォルト適用後の値）を見やすく表示します。`config.yml` に明示的に記述されていない値には `*` マークが付きます。
+
+`--verbose` を付けるとラベル定義の展開や、ローカルパスの解決前後の表示が含まれます。
+
+```bash
+npx sabori-flow show --verbose
+```
+
 ### 運用
 
 **登録状況の確認:**

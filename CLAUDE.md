@@ -36,12 +36,14 @@ src/
   index.ts          # CLI エントリポイント
   worker.ts         # ワーカーエントリポイント
   commands/          # CLI コマンド
-    init.ts, install.ts, uninstall.ts, add.ts
+    init.ts, install.ts, uninstall.ts, add.ts, show.ts
     helpers/
       repository-prompt.ts  # 対話入力の共通ロジック（init/add で共有）
+      config-render.ts      # show コマンドの表示整形（純粋関数）
   worker/            # ワーカー本体
     main.ts          # メインロジック、STEPS ループ、並列実行制御
     config.ts        # config.yml 読み込み・バリデーション
+    config-inspect.ts # config.yml の実効値と由来の判定（show コマンド用）
     models.ts        # データモデル（interface, enum）
     fetcher.ts       # gh api で Issue 取得・優先度ソート
     pipeline.ts      # 1 Issue の処理パイプライン + resumeSpecReview（DI パターン）
