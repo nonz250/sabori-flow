@@ -90,7 +90,7 @@ export async function runClaude(
 /**
  * Resolve Claude Code CLI flags from an autonomy level.
  *
- * - full        -> --dangerously-skip-permissions
+ * - full        -> --permission-mode auto (the engine's most autonomous mode; currently identical to auto on Claude Code)
  * - auto        -> --permission-mode auto
  * - sandboxed   -> no flags (Claude Code does not support it; reserved for future non-Claude CLIs)
  * - interactive -> no flags
@@ -98,7 +98,11 @@ export async function runClaude(
 export function resolveClaudeAutonomyFlags(autonomy: Autonomy): readonly string[] {
   switch (autonomy) {
     case Autonomy.FULL:
-      return ["--dangerously-skip-permissions"];
+      // 'full' means "the most autonomous mode this engine supports", not a
+      // fixed flag. Claude Code has no mode more permissive than the
+      // classifier-gated 'auto', so it resolves to the same flags here; a
+      // future non-Claude engine can diverge.
+      return ["--permission-mode", "auto"];
     case Autonomy.AUTO:
       return ["--permission-mode", "auto"];
     case Autonomy.SANDBOXED:
@@ -133,7 +137,7 @@ export function resolveAutonomyLogMessage(
       return {
         level: "warn",
         message:
-          "autonomy is set to 'full'. Claude Code CLI will run with --dangerously-skip-permissions.",
+          "autonomy is set to 'full'. Claude Code CLI will run with --permission-mode auto, the same as 'auto' on this engine — it no longer bypasses permission checks. Requires Claude Code v2.1.83+ and a Max/Team/Enterprise plan.",
       };
     case Autonomy.AUTO:
       return {
