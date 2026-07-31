@@ -78,6 +78,10 @@ describe("FailureCategory", () => {
     expect(FailureCategory.CLI_PERMISSION_DENIED).toBe("cli_permission_denied");
   });
 
+  it("IMPL_NO_LINKED_PR の値が 'impl_no_linked_pr' である", () => {
+    expect(FailureCategory.IMPL_NO_LINKED_PR).toBe("impl_no_linked_pr");
+  });
+
   it("WORKTREE_CREATION の値が 'worktree_creation' である", () => {
     expect(FailureCategory.WORKTREE_CREATION).toBe("worktree_creation");
   });

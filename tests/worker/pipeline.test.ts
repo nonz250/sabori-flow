@@ -722,4 +722,93 @@ describe("processIssue", () => {
       expect(deps.addImplTriggerLabel).not.toHaveBeenCalled();
     });
   });
+
+  // -----------------------------------------------------------------------
+  // impl の完了検証 (PR 紐づけ)
+  // -----------------------------------------------------------------------
+
+  describe("impl の完了検証 (PR 紐づけ)", () => {
+    it("impl で PR が紐づいている場合は done 遷移と成功コメントが呼ばれ true が返る", async () => {
+      const issue = makeIssue({ phase: Phase.IMPL });
+      const repoConfig = makeRepoConfig();
+
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+
+      expect(result).toBe(true);
+      expect(deps.fetchLinkedPullRequestNumbers).toHaveBeenCalledOnce();
+      expect(deps.fetchLinkedPullRequestNumbers).toHaveBeenCalledWith(
+        "testowner/testrepo",
+        42,
+      );
+      expect(deps.transitionToDone).toHaveBeenCalledOnce();
+      expect(deps.postSuccessComment).toHaveBeenCalledOnce();
+    });
+
+    it("impl で PR が 0 件の場合は failed 遷移 + 失敗コメントが呼ばれ false が返る", async () => {
+      const issue = makeIssue({ phase: Phase.IMPL });
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValue([]);
+
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+
+      expect(result).toBe(false);
+      expect(deps.transitionToFailed).toHaveBeenCalledOnce();
+      expect(deps.transitionToFailed).toHaveBeenCalledWith(
+        "testowner/testrepo",
+        42,
+        IMPL_LABELS,
+      );
+      expect(deps.postFailureComment).toHaveBeenCalledOnce();
+      expect(deps.transitionToDone).not.toHaveBeenCalled();
+      expect(deps.postSuccessComment).not.toHaveBeenCalled();
+    });
+
+    it("impl で PR が 0 件の場合の失敗コメントに No Linked Pull Request と stdout/stderr が含まれ Exit Code は含まれない", async () => {
+      const issue = makeIssue({ phase: Phase.IMPL });
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValue([]);
+      vi.mocked(deps.runClaude).mockResolvedValue(
+        makeProcessResult({
+          stdout: "Created branch impl-42",
+          stderr: "warning: ref not found",
+        }),
+      );
+
+      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+
+      const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
+      expect(failureMessage).toContain("No Linked Pull Request");
+      expect(failureMessage).toContain("Created branch impl-42");
+      expect(failureMessage).toContain("warning: ref not found");
+      expect(failureMessage).not.toContain("Exit Code");
+    });
+
+    it("impl で PR 問い合わせが throw した場合は検証をスキップし done に進む", async () => {
+      const issue = makeIssue({ phase: Phase.IMPL });
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.fetchLinkedPullRequestNumbers).mockRejectedValue(
+        new Error("API error"),
+      );
+
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+
+      expect(result).toBe(true);
+      expect(deps.transitionToDone).toHaveBeenCalledOnce();
+      expect(deps.postSuccessComment).toHaveBeenCalledOnce();
+      expect(deps.transitionToFailed).not.toHaveBeenCalled();
+      expect(deps.postFailureComment).not.toHaveBeenCalled();
+    });
+
+    it("plan フェーズでは PR 検証をスキップし done に進む", async () => {
+      const issue = makeIssue({ phase: Phase.PLAN });
+      const repoConfig = makeRepoConfig();
+
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+
+      expect(result).toBe(true);
+      expect(deps.fetchLinkedPullRequestNumbers).not.toHaveBeenCalled();
+      expect(deps.transitionToDone).toHaveBeenCalledOnce();
+      expect(deps.postSuccessComment).toHaveBeenCalledOnce();
+    });
+  });
 });
