@@ -2,6 +2,8 @@ import { fileURLToPath } from "node:url";
 import path, { dirname, resolve } from "node:path";
 import { homedir } from "node:os";
 
+import type { Language } from "../i18n/types.js";
+
 // ESM で __dirname を代替
 // src/utils/ → ../../ = package root
 // ビルド後: dist/utils/ → ../../ = package root
@@ -70,9 +72,14 @@ export function getDefaultPromptsDir(): string {
   return DEFAULT_PROMPTS_DIR;
 }
 
-/** ~/.sabori-flow/prompts — ユーザーカスタムプロンプトディレクトリ */
+/** ~/.sabori-flow/prompts — 言語別ディレクトリの親 */
 export function getUserPromptsDir(): string {
   return path.join(getBaseDir(), "prompts");
+}
+
+/** ~/.sabori-flow/prompts/{language} — 言語別ユーザーカスタムプロンプトディレクトリ */
+export function getUserPromptsLanguageDir(language: Language): string {
+  return path.join(getUserPromptsDir(), language);
 }
 
 /** ~/.sabori-flow/logs */

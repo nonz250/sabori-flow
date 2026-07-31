@@ -5,7 +5,7 @@ import { basename, join, resolve } from "node:path";
 import type { Language } from "../i18n/types.js";
 import type { Issue, RepositoryConfig } from "./models.js";
 import { Phase, repoFullName } from "./models.js";
-import { getUserPromptsDir, getDefaultPromptsDir } from "../utils/paths.js";
+import { getUserPromptsLanguageDir, getDefaultPromptsDir } from "../utils/paths.js";
 import { createLogger } from "./logger.js";
 
 /** テンプレート関連のエラー */
@@ -40,7 +40,7 @@ const USER_INPUT_KEYS: ReadonlySet<string> = new Set([
  *
  * テンプレートファイルを読み込み、プレースホルダを展開して返す。
  * 2 段階のフォールバックでテンプレートを解決する:
- *   1. ユーザーディレクトリ (`~/.sabori-flow/prompts/`)
+ *   1. ユーザーディレクトリ (`~/.sabori-flow/prompts/<language>/`)
  *   2. パッケージ同梱のデフォルトテンプレート (`prompts/<language>/`)
  *
  * @throws {PromptTemplateError} テンプレートの読み込みまたは展開に失敗した場合
@@ -50,7 +50,7 @@ export function buildPrompt(
   repoConfig: RepositoryConfig,
   language: Language,
 ): string {
-  const userDir = getUserPromptsDir();
+  const userDir = getUserPromptsLanguageDir(language);
   const defaultDir = join(getDefaultPromptsDir(), language);
   const template = loadTemplate(issue.phase, userDir, defaultDir);
   const variables = buildVariables(issue, repoConfig);
@@ -60,7 +60,7 @@ export function buildPrompt(
 /**
  * 2 段階フォールバックでテンプレートファイルを読み込む。
  *
- *   1. ユーザーディレクトリ (`~/.sabori-flow/prompts/`)
+ *   1. ユーザーディレクトリ (`~/.sabori-flow/prompts/<language>/`)
  *   2. パッケージ同梱のデフォルトディレクトリ (`prompts/<language>/`)
  *
  * @throws {PromptTemplateError} フェーズが未定義、テンプレートが存在しない、
@@ -76,7 +76,7 @@ function loadTemplate(
     throw new PromptTemplateError(`Unknown phase: ${phase}`);
   }
 
-  // 1. ユーザーディレクトリ (~/.sabori-flow/prompts/)
+  // 1. ユーザーディレクトリ (~/.sabori-flow/prompts/<language>/)
   const userPath = resolve(userDir, filename);
   if (existsSync(userPath)) {
     logger.info("Loaded template from user directory: %s", userDir);
