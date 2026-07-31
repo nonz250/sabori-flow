@@ -16,6 +16,7 @@ import {
   formatFailureDiagnostics,
   sanitizeOutput,
 } from "./comment.js";
+import { fetchLinkedPullRequestNumbers } from "./linked-pr.js";
 import { withWorktree, WorktreeError } from "./worktree.js";
 import { createLogger } from "./logger.js";
 
@@ -61,6 +62,10 @@ export interface PipelineDeps {
     num: number,
     message: string,
   ) => Promise<void>;
+  fetchLinkedPullRequestNumbers: (
+    repo: string,
+    num: number,
+  ) => Promise<readonly number[]>;
   withWorktree: <T>(
     repoConfig: Pick<RepositoryConfig, "owner" | "repo" | "localPath" | "defaultBranch">,
     issueNumber: number,
@@ -77,6 +82,7 @@ export const defaultDeps: PipelineDeps = {
   addImplTriggerLabel,
   postSuccessComment,
   postFailureComment,
+  fetchLinkedPullRequestNumbers,
   withWorktree,
 };
 
@@ -210,6 +216,29 @@ export async function processIssue(
           return false;
         }
 
+        // `claude -p` exits 0 when the model stops calling tools, even if
+        // background processes or subagents it spawned are still running.
+        // Exit code alone therefore cannot confirm that impl actually
+        // produced a deliverable.
+        if (
+          issue.phase === Phase.IMPL &&
+          !(await implPullRequestCheckPassed(deps, repo, issue.number))
+        ) {
+          logger.error(
+            "Issue #%s: impl が成功終了しましたが紐づく PR がありません [repo=%s]",
+            issue.number,
+            repo,
+          );
+          handleFailure(deps, repo, issue.number, phaseLabels, {
+            category: FailureCategory.IMPL_NO_LINKED_PR,
+            summary:
+              "Claude Code CLI exited 0, but no pull request is linked to close this issue",
+            stdout: result.stdout,
+            stderr: result.stderr,
+          });
+          return false;
+        }
+
         // 4-A. 成功: done 遷移 + 自動 impl ラベル付与 + 成功コメント（レベル 3）
         let doneTransitionSucceeded = false;
         try {
@@ -326,4 +355,40 @@ function handleFailure(
       );
     },
   );
+}
+
+/**
+ * @returns GitHub が「紐づく PR 0 件」と明示した場合のみ false。
+ *          問い合わせ自体に失敗した場合は WARNING を残して true を返す。
+ *          `:failed` は trigger ラベルを戻さず自動リトライされないため、
+ *          確証が無い限り failed に倒さない。
+ */
+async function implPullRequestCheckPassed(
+  deps: PipelineDeps,
+  repo: string,
+  issueNumber: number,
+): Promise<boolean> {
+  let prNumbers: readonly number[];
+  try {
+    prNumbers = await deps.fetchLinkedPullRequestNumbers(repo, issueNumber);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.warn(
+      "Issue #%s: PR 紐づけの確認に失敗したため検証をスキップします [repo=%s]: %s",
+      issueNumber,
+      repo,
+      errorMessage,
+    );
+    return true;
+  }
+  if (prNumbers.length === 0) {
+    return false;
+  }
+  logger.info(
+    "Issue #%s: 紐づく PR を検出しました [repo=%s, pr=%s]",
+    issueNumber,
+    repo,
+    prNumbers.join(", "),
+  );
+  return true;
 }
