@@ -15,6 +15,7 @@ vi.mock("../../src/worker/logger.js", () => ({
 // paths mock
 vi.mock("../../src/utils/paths.js", () => ({
   getUserPromptsDir: vi.fn(() => "/mock/user/prompts"),
+  getUserPromptsLanguageDir: vi.fn(() => "/mock/user/prompts/ja"),
   getDefaultPromptsDir: vi.fn(() => "/mock/default/prompts"),
 }));
 
@@ -25,12 +26,13 @@ import {
 } from "../../src/worker/prompt.js";
 import { Phase, Priority } from "../../src/worker/models.js";
 import type { Issue, RepositoryConfig } from "../../src/worker/models.js";
-import { getUserPromptsDir, getDefaultPromptsDir } from "../../src/utils/paths.js";
+import { getUserPromptsDir, getUserPromptsLanguageDir, getDefaultPromptsDir } from "../../src/utils/paths.js";
 
 const mockedReadFileSync = vi.mocked(readFileSync);
 const mockedExistsSync = vi.mocked(existsSync);
 const mockedStatSync = vi.mocked(statSync);
 const mockedGetUserPromptsDir = vi.mocked(getUserPromptsDir);
+const mockedGetUserPromptsLanguageDir = vi.mocked(getUserPromptsLanguageDir);
 const mockedGetDefaultPromptsDir = vi.mocked(getDefaultPromptsDir);
 
 // ---------------------------------------------------------------------------
@@ -109,7 +111,7 @@ const BOUNDARY_CLOSE_PATTERN = new RegExp(
   `<!-- BOUNDARY-${UUID_PATTERN} DATA END -->`,
 );
 
-const USER_DIR = "/mock/user/prompts";
+const USER_DIR = "/mock/user/prompts/ja";
 const DEFAULT_DIR = "/mock/default/prompts";
 
 // ---------------------------------------------------------------------------
@@ -132,7 +134,7 @@ function setupDefaultDirMocks(): void {
 describe("buildPrompt - normal cases", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    mockedGetUserPromptsDir.mockReturnValue(USER_DIR);
+    mockedGetUserPromptsLanguageDir.mockReturnValue(USER_DIR);
     mockedGetDefaultPromptsDir.mockReturnValue(DEFAULT_DIR);
   });
 
@@ -246,7 +248,7 @@ describe("buildPrompt - normal cases", () => {
 describe("buildPrompt - error cases", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    mockedGetUserPromptsDir.mockReturnValue(USER_DIR);
+    mockedGetUserPromptsLanguageDir.mockReturnValue(USER_DIR);
     mockedGetDefaultPromptsDir.mockReturnValue(DEFAULT_DIR);
   });
 
@@ -298,7 +300,7 @@ describe("buildPrompt - error cases", () => {
 describe("buildPrompt - random boundary", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    mockedGetUserPromptsDir.mockReturnValue(USER_DIR);
+    mockedGetUserPromptsLanguageDir.mockReturnValue(USER_DIR);
     mockedGetDefaultPromptsDir.mockReturnValue(DEFAULT_DIR);
   });
 
@@ -413,8 +415,8 @@ describe("buildPrompt - integration", () => {
     mockedReadFileSync.mockImplementation(actualFs.readFileSync as typeof readFileSync);
     mockedExistsSync.mockImplementation(actualFs.existsSync as typeof existsSync);
     mockedStatSync.mockImplementation(actualFs.statSync as typeof statSync);
-    // getUserPromptsDir returns a non-existent path so it falls through to package default
-    mockedGetUserPromptsDir.mockReturnValue("/nonexistent/user/prompts");
+    // getUserPromptsLanguageDir returns a non-existent path so it falls through to package default
+    mockedGetUserPromptsLanguageDir.mockReturnValue("/nonexistent/user/prompts");
     // getDefaultPromptsDir returns the real package prompts dir
     const actualPaths = await vi.importActual<typeof import("../../src/utils/paths.js")>("../../src/utils/paths.js");
     mockedGetDefaultPromptsDir.mockReturnValue(actualPaths.getDefaultPromptsDir());
@@ -515,7 +517,7 @@ describe("buildPrompt - user prompt directory", () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
-    mockedGetUserPromptsDir.mockReturnValue(USER_DIR);
+    mockedGetUserPromptsLanguageDir.mockReturnValue(USER_DIR);
     mockedGetDefaultPromptsDir.mockReturnValue(DEFAULT_DIR);
   });
 
@@ -558,7 +560,7 @@ describe("buildPrompt - 2-tier priority", () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
-    mockedGetUserPromptsDir.mockReturnValue(USER_DIR);
+    mockedGetUserPromptsLanguageDir.mockReturnValue(USER_DIR);
     mockedGetDefaultPromptsDir.mockReturnValue(DEFAULT_DIR);
     mockedStatSync.mockReturnValue({ size: 1024, isFile: () => true } as unknown as ReturnType<typeof statSync>);
   });
@@ -589,6 +591,62 @@ describe("buildPrompt - 2-tier priority", () => {
       makeRepoConfig(),
       "ja",
     );
+
+    expect(result).toContain("Repo: testowner/testrepo");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getUserPromptsLanguageDir dispatch tests
+// ---------------------------------------------------------------------------
+
+describe("buildPrompt - language directory dispatch", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    mockedGetUserPromptsLanguageDir.mockReturnValue(USER_DIR);
+    mockedGetDefaultPromptsDir.mockReturnValue(DEFAULT_DIR);
+  });
+
+  it("getUserPromptsLanguageDir is called with the given language", () => {
+    setupDefaultDirMocks();
+    mockedReadFileSync.mockReturnValue(MINIMAL_PLAN_TEMPLATE);
+
+    buildPrompt(makeIssue(), makeRepoConfig(), "ja");
+
+    expect(mockedGetUserPromptsLanguageDir).toHaveBeenCalledWith("ja");
+  });
+
+  it("getUserPromptsLanguageDir is called with 'en' when language=en", () => {
+    mockedGetUserPromptsLanguageDir.mockReturnValue("/mock/user/prompts/en");
+    setupDefaultDirMocks();
+    mockedReadFileSync.mockReturnValue(MINIMAL_PLAN_TEMPLATE);
+
+    buildPrompt(makeIssue(), makeRepoConfig(), "en");
+
+    expect(mockedGetUserPromptsLanguageDir).toHaveBeenCalledWith("en");
+  });
+
+  it("User language directory template takes priority over package default", () => {
+    const USER_LANG_TEMPLATE = "Lang: {issue_title}";
+    mockedExistsSync.mockReturnValue(true);
+    mockedStatSync.mockReturnValue({ size: 1024, isFile: () => true } as unknown as ReturnType<typeof statSync>);
+    mockedReadFileSync.mockReturnValue(USER_LANG_TEMPLATE);
+
+    const result = buildPrompt(makeIssue(), makeRepoConfig(), "ja");
+
+    expect(result).toContain("Lang: Test Issue Title");
+  });
+
+  it("Falls back to package default when language directory has no template", () => {
+    mockedExistsSync.mockImplementation((p) => {
+      const path = String(p);
+      if (path.startsWith(USER_DIR)) return false;
+      return true;
+    });
+    mockedStatSync.mockReturnValue({ size: 1024, isFile: () => true } as unknown as ReturnType<typeof statSync>);
+    mockedReadFileSync.mockReturnValue(MINIMAL_PLAN_TEMPLATE);
+
+    const result = buildPrompt(makeIssue(), makeRepoConfig(), "ja");
 
     expect(result).toContain("Repo: testowner/testrepo");
   });

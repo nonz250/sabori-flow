@@ -2,7 +2,7 @@ import { input, select, confirm } from "@inquirer/prompts";
 import { stringify } from "yaml";
 import fs from "fs";
 import { join, resolve } from "node:path";
-import { getBaseDir, getConfigPath, getUserPromptsDir, getDefaultPromptsDir } from "../utils/paths.js";
+import { getBaseDir, getConfigPath, getUserPromptsLanguageDir, getDefaultPromptsDir } from "../utils/paths.js";
 import {
   getDefaultLabels,
   getDefaultPriorityLabels,
@@ -17,6 +17,7 @@ import { setLanguage, t } from "../i18n/index.js";
 import type { Language } from "../i18n/types.js";
 import { Autonomy } from "../worker/models.js";
 import { TEMPLATE_FILES } from "../worker/prompt.js";
+import { migrateFlatPromptTemplates } from "../worker/prompt-migration.js";
 
 function buildConfigData(
   repos: RepositoryInput[],
@@ -45,8 +46,11 @@ function buildConfigData(
 }
 
 async function copyPromptTemplates(language: Language): Promise<void> {
+  // Migrate before copy so overwrite prompts target user-customized files, not stale flat ones.
+  migrateFlatPromptTemplates(language);
+
   const srcDir = join(getDefaultPromptsDir(), language);
-  const destDir = getUserPromptsDir();
+  const destDir = getUserPromptsLanguageDir(language);
   fs.mkdirSync(destDir, { recursive: true, mode: 0o700 });
 
   for (const filename of Object.values(TEMPLATE_FILES)) {
