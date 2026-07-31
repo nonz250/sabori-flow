@@ -535,7 +535,7 @@ describe("workerMain", () => {
       await workerMain("/path/to/config.yml", deps);
 
       expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
-        "autonomy is set to 'full'. Claude Code CLI will run with --dangerously-skip-permissions.",
+        "autonomy is set to 'full'. Claude Code CLI will run with --permission-mode auto, the same as 'auto' on this engine — it no longer bypasses permission checks. Requires Claude Code v2.1.83+ and a Max/Team/Enterprise plan.",
       );
     });
 

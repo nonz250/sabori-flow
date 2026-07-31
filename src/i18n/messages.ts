@@ -94,13 +94,13 @@ const jaMessages: MessageKeys = {
   "prompt.autonomyChoiceAuto":
     "auto — Claude Code の分類器が危険操作のみブロック",
   "prompt.autonomyChoiceFull":
-    "full — 全許可 (--dangerously-skip-permissions)",
+    "full — エンジンが対応する最も自律的なモード (現状 Claude Code では auto と同じ)",
   "prompt.autonomyDescInteractive":
     "最も安全。ただし launchd での自動実行には向きません (承認待ちで停止します)",
   "prompt.autonomyDescAuto":
     "Claude Code v2.1.83 以降および Max / Team / Enterprise プランが必要です。launchd 自動実行に推奨",
   "prompt.autonomyDescFull":
-    "警告: マシン上でほぼ任意の操作を許可します。必要性を慎重に検討してください",
+    "Claude Code では --permission-mode auto に解決されます (auto と同一)。v2.1.83 以降および Max / Team / Enterprise プランが必要です",
 
   // cli descriptions
   "cli.descriptionAdd": "既存の config.yml にリポジトリを追加します",
@@ -201,13 +201,13 @@ const enMessages: MessageKeys = {
   "prompt.autonomyChoiceAuto":
     "auto — Claude Code's classifier blocks only dangerous actions",
   "prompt.autonomyChoiceFull":
-    "full — unrestricted (--dangerously-skip-permissions)",
+    "full — the engine's most autonomous mode (currently same as auto on Claude Code)",
   "prompt.autonomyDescInteractive":
     "Safest. Not suitable for unattended launchd runs (blocks on approval prompts).",
   "prompt.autonomyDescAuto":
     "Requires Claude Code v2.1.83+ and a Max / Team / Enterprise plan. Recommended for unattended launchd runs.",
   "prompt.autonomyDescFull":
-    "Warning: allows nearly any operation on your machine. Use with caution.",
+    "Resolves to --permission-mode auto on Claude Code (same as auto). Requires Claude Code v2.1.83+ and a Max / Team / Enterprise plan.",
 
   // cli descriptions
   "cli.descriptionAdd": "Add a repository to existing config.yml",

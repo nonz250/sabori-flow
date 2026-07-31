@@ -160,7 +160,7 @@ src/
 - `execution.autonomy`: CLI の自律実行レベル（`interactive` / `auto` / `full` / `sandboxed`、デフォルト: `interactive`）
   - `interactive`: 各操作にユーザー承認が必要。launchd 無人実行には不向き
   - `auto`: Claude Code の `--permission-mode auto`。分類器が危険操作のみブロック (v2.1.83+ / Max・Team・Enterprise プラン必須)
-  - `full`: `--dangerously-skip-permissions`。全許可
+  - `full`: エンジンが対応する最も自律的なモード。Claude Code では `--permission-mode auto` に解決され `auto` と同一 (v2.1.83+ / Max・Team・Enterprise プラン必須)
   - `sandboxed`: 将来の非-Claude CLI (OpenAI Codex 等) 向け予約値。現状は interactive にフォールバック
 - `execution.interval_minutes`: スケジュール実行間隔（整数、10-1440分、デフォルト: 60）
 - `execution.timeout_minutes`: Claude CLI 実行タイムアウト（整数、1-240分、デフォルト: 60）

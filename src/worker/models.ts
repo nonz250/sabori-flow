@@ -21,15 +21,17 @@ export type Priority = (typeof Priority)[keyof typeof Priority];
  * Autonomy level passed to the AI CLI agent.
  *
  * Safety ordering (safer on the left):
- *   interactive > auto > full
+ *   interactive > auto = full
  *
  * - INTERACTIVE: requires user approval for each action. Safest, but
  *   unsuitable for unattended launchd runs (blocks on approval prompts).
  * - AUTO: Claude Code's `--permission-mode auto`. The classifier blocks
  *   only dangerous actions (deploys, mass deletions, etc.) and
  *   auto-approves the rest. Recommended for unattended runs.
- * - FULL: maps to `--dangerously-skip-permissions`. Allows everything;
- *   use with caution.
+ * - FULL: the most autonomous mode the engine supports. On Claude Code
+ *   there is no mode more permissive than `auto`, so it resolves to the
+ *   same `--permission-mode auto` flags; kept as a distinct value so a
+ *   future non-Claude engine can map it differently.
  * - SANDBOXED: reserved value. Claude Code does not support it and
  *   falls back to interactive. Retained for future non-Claude CLIs
  *   (e.g. OpenAI Codex's `--sandbox`).
