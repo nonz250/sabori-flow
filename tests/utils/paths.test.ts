@@ -40,6 +40,22 @@ describe("getUserPromptsDir", () => {
   });
 });
 
+describe("getUserPromptsLanguageDir", () => {
+  it("~/.sabori-flow/prompts/ja を返す (language=ja)", async () => {
+    const { getUserPromptsLanguageDir } = await import("../../src/utils/paths.js");
+    expect(getUserPromptsLanguageDir("ja")).toBe(
+      path.join("/mock/home", ".sabori-flow", "prompts", "ja"),
+    );
+  });
+
+  it("~/.sabori-flow/prompts/en を返す (language=en)", async () => {
+    const { getUserPromptsLanguageDir } = await import("../../src/utils/paths.js");
+    expect(getUserPromptsLanguageDir("en")).toBe(
+      path.join("/mock/home", ".sabori-flow", "prompts", "en"),
+    );
+  });
+});
+
 describe("getLogsDir", () => {
   it("~/.sabori-flow/logs を返す", async () => {
     const { getLogsDir } = await import("../../src/utils/paths.js");

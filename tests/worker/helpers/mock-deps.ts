@@ -49,6 +49,7 @@ export function createMockWorkerDeps(
     fetchIssues: vi.fn().mockResolvedValue([]),
     processIssue: vi.fn().mockResolvedValue(true),
     readAuthToken: vi.fn().mockReturnValue(null),
+    migrateFlatPromptTemplates: vi.fn(),
     ...overrides,
   };
 }
