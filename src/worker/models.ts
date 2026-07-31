@@ -114,6 +114,7 @@ export const FailureCategory = {
   CLI_NON_ZERO_EXIT: "cli_non_zero_exit",
   CLI_TIMEOUT: "cli_timeout",
   CLI_PERMISSION_DENIED: "cli_permission_denied",
+  IMPL_NO_LINKED_PR: "impl_no_linked_pr",
   WORKTREE_CREATION: "worktree_creation",
   GIT_FETCH: "git_fetch",
 } as const;
