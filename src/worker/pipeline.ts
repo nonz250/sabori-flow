@@ -23,7 +23,7 @@ const MS_PER_MINUTE = 60_000;
 // ---------- Dependency Injection ----------
 
 export interface PipelineDeps {
-  buildPrompt: (issue: Issue, repoConfig: RepositoryConfig, language: Language) => string;
+  buildPrompt: (issue: Issue, repoConfig: RepositoryConfig, language: Language, specContext?: string | null) => string;
   runClaude: (
     prompt: string,
     options: { cwd: string; autonomy?: Autonomy; timeoutMs?: number; authToken?: string },

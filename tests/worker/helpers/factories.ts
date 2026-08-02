@@ -64,8 +64,12 @@ export function makeRepoConfig(
 export function makeIssue(overrides?: Partial<Issue>): Issue {
   const phase = overrides?.phase ?? Phase.PLAN;
   const number = overrides?.number ?? 42;
-  const triggerLabel =
-    phase === Phase.PLAN ? "claude/plan" : "claude/impl";
+  const triggerLabelMap: Record<Phase, string> = {
+    [Phase.SPEC]: "claude/spec",
+    [Phase.PLAN]: "claude/plan",
+    [Phase.IMPL]: "claude/impl",
+  };
+  const triggerLabel = triggerLabelMap[phase];
 
   return {
     number,

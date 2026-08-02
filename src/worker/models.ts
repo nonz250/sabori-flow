@@ -4,6 +4,7 @@ import type { Language } from "../i18n/types.js";
 
 /** 処理フェーズ */
 export const Phase = {
+  SPEC: "spec",
   PLAN: "plan",
   IMPL: "impl",
 } as const;

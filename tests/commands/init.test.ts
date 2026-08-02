@@ -29,6 +29,7 @@ vi.mock("../../src/commands/set-token.js", () => ({
 
 vi.mock("../../src/worker/prompt.js", () => ({
   TEMPLATE_FILES: {
+    spec: "spec.md",
     plan: "plan.md",
     impl: "impl.md",
   },
@@ -472,8 +473,12 @@ describe("initCommand - テンプレートコピー", () => {
       "/mock/config/dir/prompts",
       { recursive: true, mode: 0o700 },
     );
-    // テンプレートファイルがコピーされる（plan.md, impl.md）
-    expect(mockedFs.copyFileSync).toHaveBeenCalledTimes(2);
+    // テンプレートファイルがコピーされる（spec.md, plan.md, impl.md）
+    expect(mockedFs.copyFileSync).toHaveBeenCalledTimes(3);
+    expect(mockedFs.copyFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("spec.md"),
+      expect.stringContaining("spec.md"),
+    );
     expect(mockedFs.copyFileSync).toHaveBeenCalledWith(
       expect.stringContaining("plan.md"),
       expect.stringContaining("plan.md"),
@@ -493,7 +498,11 @@ describe("initCommand - テンプレートコピー", () => {
 
     await runInitCommand();
 
-    expect(mockedFs.chmodSync).toHaveBeenCalledTimes(2);
+    expect(mockedFs.chmodSync).toHaveBeenCalledTimes(3);
+    expect(mockedFs.chmodSync).toHaveBeenCalledWith(
+      expect.stringContaining("spec.md"),
+      0o600,
+    );
     expect(mockedFs.chmodSync).toHaveBeenCalledWith(
       expect.stringContaining("plan.md"),
       0o600,
@@ -514,12 +523,13 @@ describe("initCommand - テンプレートコピー", () => {
         return false;
       }
       // テンプレートファイルは存在する
-      if (filePath.endsWith("plan.md") || filePath.endsWith("impl.md")) {
+      if (filePath.endsWith("spec.md") || filePath.endsWith("plan.md") || filePath.endsWith("impl.md")) {
         return true;
       }
       return false;
     });
-    // テンプレート上書き確認: plan.md Yes, impl.md Yes
+    // テンプレート上書き確認: spec.md Yes, plan.md Yes, impl.md Yes
+    mockedConfirm.mockResolvedValueOnce(true);
     mockedConfirm.mockResolvedValueOnce(true);
     mockedConfirm.mockResolvedValueOnce(true);
     mockedPromptRepository.mockResolvedValueOnce(repoInput);
@@ -528,7 +538,12 @@ describe("initCommand - テンプレートコピー", () => {
 
     await runInitCommand();
 
-    // 上書き確認が2回呼ばれる（plan.md, impl.md）
+    // 上書き確認が3回呼ばれる（spec.md, plan.md, impl.md）
+    expect(mockedConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining("spec.md"),
+      }),
+    );
     expect(mockedConfirm).toHaveBeenCalledWith(
       expect.objectContaining({
         message: expect.stringContaining("plan.md"),
@@ -540,7 +555,7 @@ describe("initCommand - テンプレートコピー", () => {
       }),
     );
     // 上書きが許可されたのでコピーされる
-    expect(mockedFs.copyFileSync).toHaveBeenCalledTimes(2);
+    expect(mockedFs.copyFileSync).toHaveBeenCalledTimes(3);
   });
 
   it("上書きを拒否した場合、該当ファイルはスキップされる", async () => {
@@ -552,12 +567,13 @@ describe("initCommand - テンプレートコピー", () => {
       if (filePath === "/mock/config/dir/config.yml") {
         return false;
       }
-      if (filePath.endsWith("plan.md") || filePath.endsWith("impl.md")) {
+      if (filePath.endsWith("spec.md") || filePath.endsWith("plan.md") || filePath.endsWith("impl.md")) {
         return true;
       }
       return false;
     });
-    // テンプレート上書き確認: plan.md No, impl.md No
+    // テンプレート上書き確認: spec.md No, plan.md No, impl.md No
+    mockedConfirm.mockResolvedValueOnce(false);
     mockedConfirm.mockResolvedValueOnce(false);
     mockedConfirm.mockResolvedValueOnce(false);
     mockedPromptRepository.mockResolvedValueOnce(repoInput);
@@ -569,6 +585,9 @@ describe("initCommand - テンプレートコピー", () => {
     // スキップされたのでコピーされない
     expect(mockedFs.copyFileSync).not.toHaveBeenCalled();
     // スキップメッセージが表示される
+    expect(consoleSpy.log).toHaveBeenCalledWith(
+      expect.stringContaining("spec.md"),
+    );
     expect(consoleSpy.log).toHaveBeenCalledWith(
       expect.stringContaining("plan.md"),
     );
