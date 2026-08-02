@@ -109,27 +109,20 @@ export async function processIssue(
   const isSpecTrigger = issue.phase === Phase.SPEC && entryLabel === repoConfig.labels.spec.trigger;
   const isSpecReview = issue.phase === Phase.SPEC && entryLabel === repoConfig.labels.spec.review;
 
-  if (issue.phase === Phase.SPEC || issue.phase === Phase.PLAN || issue.phase === Phase.IMPL) {
-    try {
-      const comments = await deps.fetchIssueComments(repoConfig.owner, repoConfig.repo, issue.number);
-      const thread = deriveSpecThread(comments);
-      specContext = buildSpecContext(thread);
+  try {
+    const comments = await deps.fetchIssueComments(repoConfig.owner, repoConfig.repo, issue.number);
+    const thread = deriveSpecThread(comments);
+    specContext = buildSpecContext(thread);
 
-      if (issue.phase === Phase.SPEC) {
-        specRound = isSpecTrigger ? 1 : thread.round + 1;
-      }
-    } catch (error: unknown) {
-      if (issue.phase === Phase.SPEC) {
-        return handleCommentFetchError(error, deps, repo, issue, repoConfig, isSpecTrigger);
-      }
-      // plan/impl: spec context unavailable, proceed without it
-      logger.warn(
-        "Issue #%s: spec context fetch failed, proceeding without spec [repo=%s]: %s",
-        issue.number,
-        repo,
-        error instanceof Error ? error.message : String(error),
-      );
+    if (issue.phase === Phase.SPEC) {
+      specRound = isSpecTrigger ? 1 : thread.round + 1;
     }
+  } catch (error: unknown) {
+    // Never fall through to claude without the spec. "No spec exists" and
+    // "the spec could not be read" look identical downstream, and impl would
+    // build against unknown acceptance criteria and open a PR — which strips
+    // the trigger label, so the mistake is never retried.
+    return await handleCommentFetchError(error, deps, repo, issue, repoConfig, isSpecTrigger);
   }
 
   // Trigger → in-progress (level 1)
@@ -166,7 +159,7 @@ export async function processIssue(
             repo,
             errorMessage,
           );
-          handleFailure(deps, repo, issue.number, phaseLabels, {
+          await handleFailure(deps, repo, issue.number, phaseLabels, {
             category: FailureCategory.PROMPT_GENERATION,
             summary: "Prompt generation failed",
             errorMessage,
@@ -191,7 +184,7 @@ export async function processIssue(
             errorMessage,
           );
           if (error instanceof ExecutorTimeoutError) {
-            handleFailure(deps, repo, issue.number, phaseLabels, {
+            await handleFailure(deps, repo, issue.number, phaseLabels, {
               category: FailureCategory.CLI_TIMEOUT,
               summary: "Claude Code CLI timed out",
               timeoutMs: error.timeoutMs,
@@ -200,7 +193,7 @@ export async function processIssue(
               stderr: error.stderr,
             });
           } else {
-            handleFailure(deps, repo, issue.number, phaseLabels, {
+            await handleFailure(deps, repo, issue.number, phaseLabels, {
               category: FailureCategory.CLI_EXECUTION_ERROR,
               summary: "Claude Code CLI execution failed",
               errorMessage,
@@ -215,7 +208,7 @@ export async function processIssue(
             issue.number,
             repo,
           );
-          handleFailure(deps, repo, issue.number, phaseLabels, {
+          await handleFailure(deps, repo, issue.number, phaseLabels, {
             category: FailureCategory.CLI_NON_ZERO_EXIT,
             summary: "Claude Code CLI returned a non-zero exit code",
             stderr: result.stderr,
@@ -243,7 +236,7 @@ export async function processIssue(
             issue.number,
             repo,
           );
-          handleFailure(deps, repo, issue.number, phaseLabels, {
+          await handleFailure(deps, repo, issue.number, phaseLabels, {
             category: FailureCategory.IMPL_NO_LINKED_PR,
             summary:
               "Claude Code CLI exited 0, but no pull request is linked to close this issue",
@@ -324,7 +317,7 @@ export async function processIssue(
       category === FailureCategory.GIT_FETCH
         ? "Git fetch failed"
         : "Worktree creation failed";
-    handleFailure(deps, repo, issue.number, phaseLabels, {
+    await handleFailure(deps, repo, issue.number, phaseLabels, {
       category,
       summary,
       errorMessage,
@@ -335,50 +328,56 @@ export async function processIssue(
 
 // ---------- Internal helpers ----------
 
-function handleCommentFetchError(
+async function handleCommentFetchError(
   error: unknown,
   deps: PipelineDeps,
   repo: string,
   issue: Issue,
   repoConfig: RepositoryConfig,
   isSpecTrigger: boolean,
-): StepResult {
+): Promise<StepResult> {
   const errorMessage = error instanceof Error ? error.message : String(error);
   const specLabels = repoConfig.labels.spec;
 
   if (error instanceof IssueCommentsError && error.structural) {
     if (isSpecTrigger) {
-      handleFailure(deps, repo, issue.number, specLabels, {
+      await handleFailure(deps, repo, issue.number, specLabels, {
         category: FailureCategory.CLI_EXECUTION_ERROR,
         summary: "Structural failure fetching Issue comments",
         errorMessage,
       });
     } else {
-      // review route: needs-human + diagnostic
-      deps.applyLabelTransition(repo, issue.number, {
-        add: [specLabels.needsHuman],
-        remove: [specLabels.review],
-      }).catch((e: unknown) => {
+      // review route: needs-human + diagnostic. Label first, so a failed
+      // transition does not leave the Issue reposting the same comment
+      // every cycle.
+      try {
+        await deps.applyLabelTransition(repo, issue.number, {
+          add: [specLabels.needsHuman],
+          remove: [specLabels.review],
+        });
+      } catch (e: unknown) {
         logger.warn(
           "Issue #%s: needs-human ラベル遷移に失敗しました [repo=%s]: %s",
           issue.number,
           repo,
           e instanceof Error ? e.message : String(e),
         );
-      });
+      }
       const formattedMessage = formatFailureDiagnostics({
         category: FailureCategory.CLI_EXECUTION_ERROR,
         summary: "Structural failure fetching Issue comments",
         errorMessage,
       });
-      deps.postFailureComment(repo, issue.number, formattedMessage).catch((e: unknown) => {
+      try {
+        await deps.postFailureComment(repo, issue.number, formattedMessage);
+      } catch (e: unknown) {
         logger.warn(
           "Issue #%s: 診断コメントの投稿に失敗しました [repo=%s]: %s",
           issue.number,
           repo,
           e instanceof Error ? e.message : String(e),
         );
-      });
+      }
     }
     return { outcome: "failure", claudeExecuted: false };
   }
@@ -423,7 +422,7 @@ async function handleSpecSuccess(
       issue.number,
       result.stdout,
     );
-    handleFailure(deps, repo, issue.number, specLabels, {
+    await handleFailure(deps, repo, issue.number, specLabels, {
       category: FailureCategory.SPEC_PROPOSAL_COMMENT,
       summary: "Failed to post spec proposal comment",
       errorMessage,
@@ -455,14 +454,17 @@ async function handleSpecSuccess(
   return { outcome: "success", claudeExecuted: true };
 }
 
-function handleFailure(
+async function handleFailure(
   deps: PipelineDeps,
   repo: string,
   issueNumber: number,
   phaseLabels: PhaseLabels,
   diagnostics: FailureDiagnostics,
-): void {
-  deps.applyLabelTransition(repo, issueNumber, {
+): Promise<void> {
+  // Awaited rather than fire-and-forget: worker.ts calls process.exit() as
+  // soon as the run returns, which would kill an in-flight gh child process
+  // and leave the Issue with neither a failed label nor a diagnostic.
+  await deps.applyLabelTransition(repo, issueNumber, {
     add: [phaseLabels.failed],
     remove: [phaseLabels.inProgress],
   }).catch(
@@ -478,7 +480,7 @@ function handleFailure(
   );
 
   const formattedMessage = formatFailureDiagnostics(diagnostics);
-  deps.postFailureComment(repo, issueNumber, formattedMessage).catch(
+  await deps.postFailureComment(repo, issueNumber, formattedMessage).catch(
     (error: unknown) => {
       const errorMessage = error instanceof Error ? error.message : String(error);
       logger.warn(
