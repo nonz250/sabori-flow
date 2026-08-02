@@ -50,25 +50,25 @@ function makeRepoConfig(
     defaultBranch: "main",
     labels: {
       spec: {
-        trigger: "claude/spec",
-        inProgress: "claude/spec:in-progress",
-        done: "claude/spec:done",
-        failed: "claude/spec:failed",
-        review: "claude/spec:review",
-        approved: "claude/spec:approved",
-        needsHuman: "claude/spec:needs-human",
+        trigger: "test/spec",
+        inProgress: "test/spec/in-progress",
+        done: "test/spec/done",
+        failed: "test/spec/failed",
+        review: "test/spec/review",
+        approved: "test/spec/approved",
+        needsHuman: "test/spec/needs-human",
       },
       plan: {
-        trigger: "claude/plan",
-        inProgress: "claude/plan:in-progress",
-        done: "claude/plan:done",
-        failed: "claude/plan:failed",
+        trigger: "test/plan",
+        inProgress: "test/plan/in-progress",
+        done: "test/plan/done",
+        failed: "test/plan/failed",
       },
       impl: {
-        trigger: "claude/impl",
-        inProgress: "claude/impl:in-progress",
-        done: "claude/impl:done",
-        failed: "claude/impl:failed",
+        trigger: "test/impl",
+        inProgress: "test/impl/in-progress",
+        done: "test/impl/done",
+        failed: "test/impl/failed",
       },
     },
     priorityLabels: ["priority:high", "priority:low"],
@@ -81,7 +81,7 @@ function makeIssue(overrides?: Partial<Issue>): Issue {
     number: 42,
     title: "Test Issue Title",
     body: "This is the issue body.",
-    labels: ["claude/plan"],
+    labels: ["test/plan"],
     url: "https://github.com/testowner/testrepo/issues/42",
     authorAssociation: "OWNER",
     phase: Phase.PLAN,
@@ -537,7 +537,7 @@ describe("buildPrompt - integration", () => {
         title: "Design new module",
         body: "Design the new authentication module.",
         url: "https://github.com/testowner/testrepo/issues/303",
-        labels: ["claude/spec"],
+        labels: ["test/spec"],
       }),
       makeRepoConfig(),
       "ja",
@@ -562,7 +562,7 @@ describe("buildPrompt - integration", () => {
         title: "Design auth module",
         body: "Design the authentication module.",
         url: "https://github.com/testowner/testrepo/issues/304",
-        labels: ["claude/spec"],
+        labels: ["test/spec"],
       }),
       makeRepoConfig(),
       "en",
@@ -584,7 +584,7 @@ describe("buildPrompt - integration", () => {
         title: "T",
         body: "B",
         url: "https://github.com/testowner/testrepo/issues/1",
-        labels: ["claude/spec"],
+        labels: ["test/spec"],
       }),
       makeRepoConfig(),
       "ja",
@@ -745,7 +745,7 @@ describe("buildPrompt - spec phase", () => {
     mockedReadFileSync.mockReturnValue(MINIMAL_SPEC_TEMPLATE);
 
     const result = buildPrompt(
-      makeIssue({ phase: Phase.SPEC, labels: ["claude/spec"] }),
+      makeIssue({ phase: Phase.SPEC, labels: ["test/spec"] }),
       makeRepoConfig(),
       "ja",
     );
@@ -763,7 +763,7 @@ describe("buildPrompt - spec phase", () => {
     const maliciousSpec = "See {issue_url} for details";
 
     const result = buildPrompt(
-      makeIssue({ phase: Phase.SPEC, labels: ["claude/spec"] }),
+      makeIssue({ phase: Phase.SPEC, labels: ["test/spec"] }),
       makeRepoConfig(),
       "ja",
       maliciousSpec,
@@ -783,7 +783,7 @@ describe("buildPrompt - spec phase", () => {
     const specWithDollar = "spec price is $& and $' and $` and $$";
 
     const result = buildPrompt(
-      makeIssue({ phase: Phase.SPEC, labels: ["claude/spec"] }),
+      makeIssue({ phase: Phase.SPEC, labels: ["test/spec"] }),
       makeRepoConfig(),
       "ja",
       specWithDollar,
@@ -798,7 +798,7 @@ describe("buildPrompt - spec phase", () => {
     mockPromptLogger.warn.mockClear();
 
     buildPrompt(
-      makeIssue({ phase: Phase.SPEC, labels: ["claude/spec"] }),
+      makeIssue({ phase: Phase.SPEC, labels: ["test/spec"] }),
       makeRepoConfig(),
       "ja",
       "some spec context",
@@ -816,7 +816,7 @@ describe("buildPrompt - spec phase", () => {
     mockPromptLogger.warn.mockClear();
 
     buildPrompt(
-      makeIssue({ phase: Phase.SPEC, labels: ["claude/spec"] }),
+      makeIssue({ phase: Phase.SPEC, labels: ["test/spec"] }),
       makeRepoConfig(),
       "ja",
       null,
@@ -838,7 +838,7 @@ describe("buildPrompt - spec phase", () => {
       "## Supplementary feedback\n\n### Feedback 1\n\nfeedback text";
 
     const result = buildPrompt(
-      makeIssue({ phase: Phase.SPEC, labels: ["claude/spec"] }),
+      makeIssue({ phase: Phase.SPEC, labels: ["test/spec"] }),
       makeRepoConfig(),
       "ja",
       specContext,

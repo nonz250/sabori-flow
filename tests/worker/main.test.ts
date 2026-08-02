@@ -435,8 +435,8 @@ describe("workerMain", () => {
         makeAppConfig({ execution: { maxIssuesPerRepo: 1 } }),
       );
       vi.mocked(deps.fetchIssues).mockImplementation(async (_repo, _phase, label) => {
-        if (label === "claude/impl") return [makeIssue({ number: 1, phase: Phase.IMPL })];
-        if (label === "claude/plan") return [makeIssue({ number: 2, phase: Phase.PLAN })];
+        if (label === "test/impl") return [makeIssue({ number: 1, phase: Phase.IMPL })];
+        if (label === "test/plan") return [makeIssue({ number: 2, phase: Phase.PLAN })];
         return [];
       });
       vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });

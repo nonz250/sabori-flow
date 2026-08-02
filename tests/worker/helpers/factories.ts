@@ -15,27 +15,27 @@ import { ExecutorTimeoutError } from "../../../src/worker/executor.js";
 // ---------- Label constants ----------
 
 export const SPEC_LABELS: SpecPhaseLabels = {
-  trigger: "claude/spec",
-  inProgress: "claude/spec:in-progress",
-  done: "claude/spec:done",
-  failed: "claude/spec:failed",
-  review: "claude/spec:review",
-  approved: "claude/spec:approved",
-  needsHuman: "claude/spec:needs-human",
+  trigger: "test/spec",
+  inProgress: "test/spec/in-progress",
+  done: "test/spec/done",
+  failed: "test/spec/failed",
+  review: "test/spec/review",
+  approved: "test/spec/approved",
+  needsHuman: "test/spec/needs-human",
 };
 
 export const PLAN_LABELS: PhaseLabels = {
-  trigger: "claude/plan",
-  inProgress: "claude/plan:in-progress",
-  done: "claude/plan:done",
-  failed: "claude/plan:failed",
+  trigger: "test/plan",
+  inProgress: "test/plan/in-progress",
+  done: "test/plan/done",
+  failed: "test/plan/failed",
 };
 
 export const IMPL_LABELS: PhaseLabels = {
-  trigger: "claude/impl",
-  inProgress: "claude/impl:in-progress",
-  done: "claude/impl:done",
-  failed: "claude/impl:failed",
+  trigger: "test/impl",
+  inProgress: "test/impl/in-progress",
+  done: "test/impl/done",
+  failed: "test/impl/failed",
 };
 
 export const DEFAULT_LABELS_CONFIG: LabelsConfig = {
@@ -65,9 +65,9 @@ export function makeIssue(overrides?: Partial<Issue>): Issue {
   const phase = overrides?.phase ?? Phase.PLAN;
   const number = overrides?.number ?? 42;
   const triggerLabelMap: Record<Phase, string> = {
-    [Phase.SPEC]: "claude/spec",
-    [Phase.PLAN]: "claude/plan",
-    [Phase.IMPL]: "claude/impl",
+    [Phase.SPEC]: "test/spec",
+    [Phase.PLAN]: "test/plan",
+    [Phase.IMPL]: "test/impl",
   };
   const triggerLabel = triggerLabelMap[phase];
 

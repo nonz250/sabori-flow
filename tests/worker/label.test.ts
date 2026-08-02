@@ -34,8 +34,8 @@ describe("applyLabelTransition", () => {
     });
 
     await applyLabelTransition("nonz250/example-app", 42, {
-      add: ["claude/plan:in-progress"],
-      remove: ["claude/plan"],
+      add: ["test/plan/in-progress"],
+      remove: ["test/plan"],
     });
 
     expect(mockedRunCommand).toHaveBeenCalledOnce();
@@ -48,9 +48,9 @@ describe("applyLabelTransition", () => {
         "nonz250/example-app",
         "42",
         "--add-label",
-        "claude/plan:in-progress",
+        "test/plan/in-progress",
         "--remove-label",
-        "claude/plan",
+        "test/plan",
       ],
       { timeoutMs: 120_000 },
     );
@@ -64,7 +64,7 @@ describe("applyLabelTransition", () => {
     });
 
     await applyLabelTransition("nonz250/example-app", 42, {
-      add: ["claude/impl"],
+      add: ["test/impl"],
       remove: [],
     });
 
@@ -78,7 +78,7 @@ describe("applyLabelTransition", () => {
         "nonz250/example-app",
         "42",
         "--add-label",
-        "claude/impl",
+        "test/impl",
       ],
       { timeoutMs: 120_000 },
     );
@@ -92,8 +92,8 @@ describe("applyLabelTransition", () => {
     });
 
     await applyLabelTransition("nonz250/example-app", 7, {
-      add: ["claude/plan:done"],
-      remove: ["claude/plan:in-progress"],
+      add: ["test/plan/done"],
+      remove: ["test/plan/in-progress"],
     });
 
     expect(mockedRunCommand).toHaveBeenCalledOnce();
@@ -106,9 +106,9 @@ describe("applyLabelTransition", () => {
         "nonz250/example-app",
         "7",
         "--add-label",
-        "claude/plan:done",
+        "test/plan/done",
         "--remove-label",
-        "claude/plan:in-progress",
+        "test/plan/in-progress",
       ],
       { timeoutMs: 120_000 },
     );
@@ -122,8 +122,8 @@ describe("applyLabelTransition", () => {
     });
 
     await applyLabelTransition("nonz250/example-app", 15, {
-      add: ["claude/plan:failed"],
-      remove: ["claude/plan:in-progress"],
+      add: ["test/plan/failed"],
+      remove: ["test/plan/in-progress"],
     });
 
     expect(mockedRunCommand).toHaveBeenCalledOnce();
@@ -136,9 +136,9 @@ describe("applyLabelTransition", () => {
         "nonz250/example-app",
         "15",
         "--add-label",
-        "claude/plan:failed",
+        "test/plan/failed",
         "--remove-label",
-        "claude/plan:in-progress",
+        "test/plan/in-progress",
       ],
       { timeoutMs: 120_000 },
     );
@@ -183,14 +183,14 @@ describe("applyLabelTransition", () => {
 
     await expect(
       applyLabelTransition("nonz250/example-app", 42, {
-        add: ["claude/plan:in-progress"],
-        remove: ["claude/plan"],
+        add: ["test/plan/in-progress"],
+        remove: ["test/plan"],
       }),
     ).rejects.toThrow(LabelError);
     await expect(
       applyLabelTransition("nonz250/example-app", 42, {
-        add: ["claude/plan:in-progress"],
-        remove: ["claude/plan"],
+        add: ["test/plan/in-progress"],
+        remove: ["test/plan"],
       }),
     ).rejects.toThrow("permission denied");
   });
@@ -200,14 +200,14 @@ describe("applyLabelTransition", () => {
 
     await expect(
       applyLabelTransition("nonz250/example-app", 42, {
-        add: ["claude/plan:in-progress"],
-        remove: ["claude/plan"],
+        add: ["test/plan/in-progress"],
+        remove: ["test/plan"],
       }),
     ).rejects.toThrow(LabelError);
     await expect(
       applyLabelTransition("nonz250/example-app", 42, {
-        add: ["claude/plan:in-progress"],
-        remove: ["claude/plan"],
+        add: ["test/plan/in-progress"],
+        remove: ["test/plan"],
       }),
     ).rejects.toThrow("gh issue edit timed out after 120 seconds");
   });
@@ -219,14 +219,14 @@ describe("applyLabelTransition", () => {
 
     await expect(
       applyLabelTransition("nonz250/example-app", 42, {
-        add: ["claude/plan:in-progress"],
-        remove: ["claude/plan"],
+        add: ["test/plan/in-progress"],
+        remove: ["test/plan"],
       }),
     ).rejects.toThrow(LabelError);
     await expect(
       applyLabelTransition("nonz250/example-app", 42, {
-        add: ["claude/plan:in-progress"],
-        remove: ["claude/plan"],
+        add: ["test/plan/in-progress"],
+        remove: ["test/plan"],
       }),
     ).rejects.toThrow("spawn gh ENOENT");
   });
@@ -241,7 +241,7 @@ describe("ラベル自動作成", () => {
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
       stdout: "",
-      stderr: "failed to update https://github.com/nonz250/example-app/issues/42: 'claude/plan:in-progress' not found\nfailed to update 1 issue",
+      stderr: "failed to update https://github.com/nonz250/example-app/issues/42: 'test/plan/in-progress' not found\nfailed to update 1 issue",
     });
     mockedRunCommand.mockResolvedValueOnce({
       success: true,
@@ -255,8 +255,8 @@ describe("ラベル自動作成", () => {
     });
 
     await applyLabelTransition("nonz250/example-app", 42, {
-      add: ["claude/plan:in-progress"],
-      remove: ["claude/plan"],
+      add: ["test/plan/in-progress"],
+      remove: ["test/plan"],
     });
 
     expect(mockedRunCommand).toHaveBeenCalledTimes(3);
@@ -266,7 +266,7 @@ describe("ラベル自動作成", () => {
       [
         "label",
         "create",
-        "claude/plan:in-progress",
+        "test/plan/in-progress",
         "--repo",
         "nonz250/example-app",
       ],
@@ -282,9 +282,9 @@ describe("ラベル自動作成", () => {
         "nonz250/example-app",
         "42",
         "--add-label",
-        "claude/plan:in-progress",
+        "test/plan/in-progress",
         "--remove-label",
-        "claude/plan",
+        "test/plan",
       ],
       { timeoutMs: 120_000 },
     );
@@ -339,7 +339,7 @@ describe("ラベル自動作成", () => {
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
       stdout: "",
-      stderr: "failed to update https://github.com/nonz250/example-app/issues/42: 'claude/plan:in-progress' not found\nfailed to update 1 issue",
+      stderr: "failed to update https://github.com/nonz250/example-app/issues/42: 'test/plan/in-progress' not found\nfailed to update 1 issue",
     });
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
@@ -354,8 +354,8 @@ describe("ラベル自動作成", () => {
 
     await expect(
       applyLabelTransition("nonz250/example-app", 42, {
-        add: ["claude/plan:in-progress"],
-        remove: ["claude/plan"],
+        add: ["test/plan/in-progress"],
+        remove: ["test/plan"],
       }),
     ).resolves.toBeUndefined();
   });
@@ -364,7 +364,7 @@ describe("ラベル自動作成", () => {
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
       stdout: "",
-      stderr: "failed to update https://github.com/nonz250/example-app/issues/42: 'claude/plan:in-progress' not found\nfailed to update 1 issue",
+      stderr: "failed to update https://github.com/nonz250/example-app/issues/42: 'test/plan/in-progress' not found\nfailed to update 1 issue",
     });
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
@@ -374,8 +374,8 @@ describe("ラベル自動作成", () => {
 
     await expect(
       applyLabelTransition("nonz250/example-app", 42, {
-        add: ["claude/plan:in-progress"],
-        remove: ["claude/plan"],
+        add: ["test/plan/in-progress"],
+        remove: ["test/plan"],
       }),
     ).rejects.toThrow(LabelError);
     expect(mockedRunCommand).toHaveBeenCalledTimes(2);
@@ -385,7 +385,7 @@ describe("ラベル自動作成", () => {
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
       stdout: "",
-      stderr: "failed to update https://github.com/nonz250/example-app/issues/42: 'claude/plan:in-progress' not found\nfailed to update 1 issue",
+      stderr: "failed to update https://github.com/nonz250/example-app/issues/42: 'test/plan/in-progress' not found\nfailed to update 1 issue",
     });
     mockedRunCommand.mockResolvedValueOnce({
       success: true,
@@ -400,8 +400,8 @@ describe("ラベル自動作成", () => {
 
     await expect(
       applyLabelTransition("nonz250/example-app", 42, {
-        add: ["claude/plan:in-progress"],
-        remove: ["claude/plan"],
+        add: ["test/plan/in-progress"],
+        remove: ["test/plan"],
       }),
     ).rejects.toThrow(LabelError);
   });
@@ -410,14 +410,14 @@ describe("ラベル自動作成", () => {
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
       stdout: "",
-      stderr: "failed to update https://github.com/nonz250/example-app/issues/42: 'claude/plan:in-progress' not found\nfailed to update 1 issue",
+      stderr: "failed to update https://github.com/nonz250/example-app/issues/42: 'test/plan/in-progress' not found\nfailed to update 1 issue",
     });
     mockedRunCommand.mockRejectedValueOnce(new ProcessTimeoutError(120_000));
 
     await expect(
       applyLabelTransition("nonz250/example-app", 42, {
-        add: ["claude/plan:in-progress"],
-        remove: ["claude/plan"],
+        add: ["test/plan/in-progress"],
+        remove: ["test/plan"],
       }),
     ).rejects.toThrow(LabelError);
   });
@@ -431,8 +431,8 @@ describe("ラベル自動作成", () => {
 
     await expect(
       applyLabelTransition("nonz250/example-app", 42, {
-        add: ["claude/plan:in-progress"],
-        remove: ["claude/plan"],
+        add: ["test/plan/in-progress"],
+        remove: ["test/plan"],
       }),
     ).rejects.toThrow(LabelError);
     expect(mockedRunCommand).toHaveBeenCalledTimes(1);
@@ -442,14 +442,14 @@ describe("ラベル自動作成", () => {
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
       stdout: "",
-      stderr: "failed to update https://github.com/nonz250/example-app/issues/42: 'claude/plan:in-progress' not found\nfailed to update 1 issue",
+      stderr: "failed to update https://github.com/nonz250/example-app/issues/42: 'test/plan/in-progress' not found\nfailed to update 1 issue",
     });
     mockedRunCommand.mockRejectedValueOnce(new ProcessTimeoutError(120_000));
 
     await expect(
       applyLabelTransition("nonz250/example-app", 42, {
-        add: ["claude/plan:in-progress"],
-        remove: ["claude/plan"],
+        add: ["test/plan/in-progress"],
+        remove: ["test/plan"],
       }),
     ).rejects.toThrow("gh issue edit timed out after 120 seconds");
   });
@@ -458,15 +458,15 @@ describe("ラベル自動作成", () => {
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
       stdout: "",
-      stderr: "failed to update https://github.com/nonz250/example-app/issues/42: 'claude/plan:in-progress' not found\nfailed to update 1 issue",
+      stderr: "failed to update https://github.com/nonz250/example-app/issues/42: 'test/plan/in-progress' not found\nfailed to update 1 issue",
     });
     mockedRunCommand.mockRejectedValueOnce(
       new ProcessExecutionError("spawn gh ENOENT"),
     );
 
     const promise = applyLabelTransition("nonz250/example-app", 42, {
-      add: ["claude/plan:in-progress"],
-      remove: ["claude/plan"],
+      add: ["test/plan/in-progress"],
+      remove: ["test/plan"],
     });
     await expect(promise).rejects.toThrow(LabelError);
     await expect(promise).rejects.toThrow("spawn gh ENOENT");
@@ -476,7 +476,7 @@ describe("ラベル自動作成", () => {
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
       stdout: "",
-      stderr: "failed to update https://github.com/nonz250/example-app/issues/42: 'claude/plan:in-progress' not found\nfailed to update 1 issue",
+      stderr: "failed to update https://github.com/nonz250/example-app/issues/42: 'test/plan/in-progress' not found\nfailed to update 1 issue",
     });
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
@@ -491,8 +491,8 @@ describe("ラベル自動作成", () => {
 
     await expect(
       applyLabelTransition("nonz250/example-app", 42, {
-        add: ["claude/plan:in-progress"],
-        remove: ["claude/plan"],
+        add: ["test/plan/in-progress"],
+        remove: ["test/plan"],
       }),
     ).rejects.toThrow(LabelError);
   });
@@ -506,8 +506,8 @@ describe("ラベル自動作成", () => {
 
     await expect(
       applyLabelTransition("nonz250/example-app", 42, {
-        add: ["claude/plan:in-progress"],
-        remove: ["claude/plan"],
+        add: ["test/plan/in-progress"],
+        remove: ["test/plan"],
       }),
     ).rejects.toThrow(LabelError);
     expect(mockedRunCommand).toHaveBeenCalledTimes(1);

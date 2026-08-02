@@ -201,8 +201,8 @@ describe("addCommand - 正常系: 既存リポジトリがある状態での新�
       repo: "existing-repo",
       local_path: "/tmp/existing-owner/existing-repo",
       labels: {
-        plan: { trigger: "claude/plan" },
-        impl: { trigger: "claude/impl" },
+        plan: { trigger: "test/plan" },
+        impl: { trigger: "test/impl" },
       },
       priority_labels: ["priority:high"],
     };

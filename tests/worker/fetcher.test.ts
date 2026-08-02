@@ -28,25 +28,25 @@ function makeRepoConfig(): RepositoryConfig {
     localPath: "/tmp/nonz250/example-app",
     labels: {
       spec: {
-        trigger: "claude/spec",
-        inProgress: "claude/spec:in-progress",
-        done: "claude/spec:done",
-        failed: "claude/spec:failed",
-        review: "claude/spec:review",
-        approved: "claude/spec:approved",
-        needsHuman: "claude/spec:needs-human",
+        trigger: "test/spec",
+        inProgress: "test/spec/in-progress",
+        done: "test/spec/done",
+        failed: "test/spec/failed",
+        review: "test/spec/review",
+        approved: "test/spec/approved",
+        needsHuman: "test/spec/needs-human",
       },
       plan: {
-        trigger: "claude/plan",
-        inProgress: "claude/plan:in-progress",
-        done: "claude/plan:done",
-        failed: "claude/plan:failed",
+        trigger: "test/plan",
+        inProgress: "test/plan/in-progress",
+        done: "test/plan/done",
+        failed: "test/plan/failed",
       },
       impl: {
-        trigger: "claude/impl",
-        inProgress: "claude/impl:in-progress",
-        done: "claude/impl:done",
-        failed: "claude/impl:failed",
+        trigger: "test/impl",
+        inProgress: "test/impl/in-progress",
+        done: "test/impl/done",
+        failed: "test/impl/failed",
       },
     },
     priorityLabels: ["priority:high", "priority:low"],
@@ -85,7 +85,7 @@ describe("fetchIssues", () => {
   it("gh コマンドに正しい引数が渡される", async () => {
     mockGhSuccess("[]");
 
-    await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
+    await fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan");
 
     expect(mockedRunCommand).toHaveBeenCalledWith(
       "gh",
@@ -95,7 +95,7 @@ describe("fetchIssues", () => {
         "--method",
         "GET",
         "--field",
-        "labels=claude/plan",
+        "labels=test/plan",
         "--field",
         "state=open",
         "--field",
@@ -108,19 +108,19 @@ describe("fetchIssues", () => {
   it("plan フェーズでは plan の trigger ラベルが使われる", async () => {
     mockGhSuccess("[]");
 
-    await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
+    await fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan");
 
     const callArgs = mockedRunCommand.mock.calls[0][1];
-    expect(callArgs).toContain("labels=claude/plan");
+    expect(callArgs).toContain("labels=test/plan");
   });
 
   it("impl フェーズでは impl の trigger ラベルが使われる", async () => {
     mockGhSuccess("[]");
 
-    await fetchIssues(makeRepoConfig(), Phase.IMPL, "claude/impl");
+    await fetchIssues(makeRepoConfig(), Phase.IMPL, "test/impl");
 
     const callArgs = mockedRunCommand.mock.calls[0][1];
-    expect(callArgs).toContain("labels=claude/impl");
+    expect(callArgs).toContain("labels=test/impl");
   });
 
   it("パースとソートが正しく行われる", async () => {
@@ -129,7 +129,7 @@ describe("fetchIssues", () => {
         number: 5,
         title: "Low priority",
         body: "body",
-        labels: [{ name: "claude/plan" }, { name: "priority:low" }],
+        labels: [{ name: "test/plan" }, { name: "priority:low" }],
         html_url: "https://github.com/nonz250/example-app/issues/5",
         author_association: "OWNER",
       },
@@ -137,14 +137,14 @@ describe("fetchIssues", () => {
         number: 3,
         title: "High priority",
         body: "body",
-        labels: [{ name: "claude/plan" }, { name: "priority:high" }],
+        labels: [{ name: "test/plan" }, { name: "priority:high" }],
         html_url: "https://github.com/nonz250/example-app/issues/3",
         author_association: "COLLABORATOR",
       },
     ]);
     mockGhSuccess(rawJson);
 
-    const result = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
+    const result = await fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan");
 
     expect(result).toHaveLength(2);
     expect(result[0].number).toBe(3);
@@ -157,10 +157,10 @@ describe("fetchIssues", () => {
     mockGhFailure("gh: not found");
 
     await expect(
-      fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan"),
+      fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan"),
     ).rejects.toThrow(GitHubCLIError);
     await expect(
-      fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan"),
+      fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan"),
     ).rejects.toThrow("gh: not found");
   });
 
@@ -170,10 +170,10 @@ describe("fetchIssues", () => {
     );
 
     await expect(
-      fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan"),
+      fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan"),
     ).rejects.toThrow(GitHubCLIError);
     await expect(
-      fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan"),
+      fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan"),
     ).rejects.toThrow("gh command timed out after 120 seconds");
   });
 
@@ -185,10 +185,10 @@ describe("fetchIssues", () => {
     mockedRunCommand.mockRejectedValue(execError);
 
     await expect(
-      fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan"),
+      fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan"),
     ).rejects.toThrow(GitHubCLIError);
     await expect(
-      fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan"),
+      fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan"),
     ).rejects.toThrow("spawn gh ENOENT");
   });
 });
@@ -208,21 +208,21 @@ describe("fetchIssues - JSON パース", () => {
         number: 1,
         title: "First issue",
         body: "Body text",
-        labels: [{ name: "claude/plan" }, { name: "priority:high" }],
+        labels: [{ name: "test/plan" }, { name: "priority:high" }],
         html_url: "https://github.com/nonz250/example-app/issues/1",
         author_association: "OWNER",
       },
     ]);
     mockGhSuccess(rawJson);
 
-    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan");
 
     expect(issues).toHaveLength(1);
     const issue = issues[0];
     expect(issue.number).toBe(1);
     expect(issue.title).toBe("First issue");
     expect(issue.body).toBe("Body text");
-    expect(issue.labels).toEqual(["claude/plan", "priority:high"]);
+    expect(issue.labels).toEqual(["test/plan", "priority:high"]);
     expect(issue.url).toBe(
       "https://github.com/nonz250/example-app/issues/1",
     );
@@ -248,7 +248,7 @@ describe("fetchIssues - JSON パース", () => {
     ]);
     mockGhSuccess(rawJson);
 
-    const issues = await fetchIssues(makeRepoConfig(), Phase.IMPL, "claude/impl");
+    const issues = await fetchIssues(makeRepoConfig(), Phase.IMPL, "test/impl");
 
     expect(issues[0].labels).toEqual(["bug", "enhancement", "priority:low"]);
   });
@@ -266,7 +266,7 @@ describe("fetchIssues - JSON パース", () => {
     ]);
     mockGhSuccess(rawJson);
 
-    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan");
 
     expect(issues[0].body).toBeNull();
   });
@@ -275,17 +275,17 @@ describe("fetchIssues - JSON パース", () => {
     mockGhSuccess("not valid json");
 
     await expect(
-      fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan"),
+      fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan"),
     ).rejects.toThrow(IssueParseError);
     await expect(
-      fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan"),
+      fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan"),
     ).rejects.toThrow("Failed to parse JSON");
   });
 
   it("空の JSON 配列は空リストを返す", async () => {
     mockGhSuccess("[]");
 
-    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan");
 
     expect(issues).toEqual([]);
   });
@@ -302,10 +302,10 @@ describe("fetchIssues - JSON パース", () => {
     mockGhSuccess(rawJson);
 
     await expect(
-      fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan"),
+      fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan"),
     ).rejects.toThrow(IssueParseError);
     await expect(
-      fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan"),
+      fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan"),
     ).rejects.toThrow("Missing required field");
   });
 
@@ -321,10 +321,10 @@ describe("fetchIssues - JSON パース", () => {
     mockGhSuccess(rawJson);
 
     await expect(
-      fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan"),
+      fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan"),
     ).rejects.toThrow(IssueParseError);
     await expect(
-      fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan"),
+      fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan"),
     ).rejects.toThrow("Missing required field");
   });
 
@@ -340,10 +340,10 @@ describe("fetchIssues - JSON パース", () => {
     mockGhSuccess(rawJson);
 
     await expect(
-      fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan"),
+      fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan"),
     ).rejects.toThrow(IssueParseError);
     await expect(
-      fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan"),
+      fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan"),
     ).rejects.toThrow("Missing required field");
   });
 });
@@ -370,7 +370,7 @@ describe("fetchIssues - 優先度判定", () => {
     ]);
     mockGhSuccess(rawJson);
 
-    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan");
 
     expect(issues[0].priority).toBe(Priority.HIGH);
   });
@@ -388,7 +388,7 @@ describe("fetchIssues - 優先度判定", () => {
     ]);
     mockGhSuccess(rawJson);
 
-    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan");
 
     expect(issues[0].priority).toBe(Priority.LOW);
   });
@@ -406,7 +406,7 @@ describe("fetchIssues - 優先度判定", () => {
     ]);
     mockGhSuccess(rawJson);
 
-    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan");
 
     expect(issues[0].priority).toBe(Priority.NONE);
   });
@@ -424,7 +424,7 @@ describe("fetchIssues - 優先度判定", () => {
     ]);
     mockGhSuccess(rawJson);
 
-    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan");
 
     expect(issues[0].priority).toBe(Priority.HIGH);
   });
@@ -468,7 +468,7 @@ describe("fetchIssues - ソート", () => {
     ]);
     mockGhSuccess(rawJson);
 
-    const result = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
+    const result = await fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan");
 
     expect(result[0].number).toBe(5);
     expect(result[0].priority).toBe(Priority.HIGH);
@@ -507,7 +507,7 @@ describe("fetchIssues - ソート", () => {
     ]);
     mockGhSuccess(rawJson);
 
-    const result = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
+    const result = await fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan");
 
     expect(result.map((i) => i.number)).toEqual([10, 20, 30]);
   });
@@ -528,14 +528,14 @@ describe("fetchIssues - authorAssociation フィルタリング", () => {
         number: 1,
         title: "Owner issue",
         body: "body",
-        labels: [{ name: "claude/plan" }],
+        labels: [{ name: "test/plan" }],
         html_url: "https://github.com/nonz250/example-app/issues/1",
         author_association: "OWNER",
       },
     ]);
     mockGhSuccess(rawJson);
 
-    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan");
 
     expect(issues).toHaveLength(1);
     expect(issues[0].number).toBe(1);
@@ -547,14 +547,14 @@ describe("fetchIssues - authorAssociation フィルタリング", () => {
         number: 2,
         title: "Member issue",
         body: "body",
-        labels: [{ name: "claude/plan" }],
+        labels: [{ name: "test/plan" }],
         html_url: "https://github.com/nonz250/example-app/issues/2",
         author_association: "MEMBER",
       },
     ]);
     mockGhSuccess(rawJson);
 
-    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan");
 
     expect(issues).toHaveLength(1);
     expect(issues[0].number).toBe(2);
@@ -566,14 +566,14 @@ describe("fetchIssues - authorAssociation フィルタリング", () => {
         number: 3,
         title: "Collaborator issue",
         body: "body",
-        labels: [{ name: "claude/plan" }],
+        labels: [{ name: "test/plan" }],
         html_url: "https://github.com/nonz250/example-app/issues/3",
         author_association: "COLLABORATOR",
       },
     ]);
     mockGhSuccess(rawJson);
 
-    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan");
 
     expect(issues).toHaveLength(1);
     expect(issues[0].number).toBe(3);
@@ -585,14 +585,14 @@ describe("fetchIssues - authorAssociation フィルタリング", () => {
         number: 10,
         title: "External issue",
         body: "body",
-        labels: [{ name: "claude/plan" }],
+        labels: [{ name: "test/plan" }],
         html_url: "https://github.com/nonz250/example-app/issues/10",
         author_association: "NONE",
       },
     ]);
     mockGhSuccess(rawJson);
 
-    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan");
 
     expect(issues).toHaveLength(0);
   });
@@ -603,14 +603,14 @@ describe("fetchIssues - authorAssociation フィルタリング", () => {
         number: 11,
         title: "First timer issue",
         body: "body",
-        labels: [{ name: "claude/plan" }],
+        labels: [{ name: "test/plan" }],
         html_url: "https://github.com/nonz250/example-app/issues/11",
         author_association: "FIRST_TIME_CONTRIBUTOR",
       },
     ]);
     mockGhSuccess(rawJson);
 
-    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan");
 
     expect(issues).toHaveLength(0);
   });
@@ -621,7 +621,7 @@ describe("fetchIssues - authorAssociation フィルタリング", () => {
         number: 1,
         title: "Owner issue",
         body: "body",
-        labels: [{ name: "claude/plan" }],
+        labels: [{ name: "test/plan" }],
         html_url: "https://github.com/nonz250/example-app/issues/1",
         author_association: "OWNER",
       },
@@ -629,7 +629,7 @@ describe("fetchIssues - authorAssociation フィルタリング", () => {
         number: 2,
         title: "External issue",
         body: "body",
-        labels: [{ name: "claude/plan" }],
+        labels: [{ name: "test/plan" }],
         html_url: "https://github.com/nonz250/example-app/issues/2",
         author_association: "NONE",
       },
@@ -637,7 +637,7 @@ describe("fetchIssues - authorAssociation フィルタリング", () => {
         number: 3,
         title: "Member issue",
         body: "body",
-        labels: [{ name: "claude/plan" }],
+        labels: [{ name: "test/plan" }],
         html_url: "https://github.com/nonz250/example-app/issues/3",
         author_association: "MEMBER",
       },
@@ -645,14 +645,14 @@ describe("fetchIssues - authorAssociation フィルタリング", () => {
         number: 4,
         title: "Contributor issue",
         body: "body",
-        labels: [{ name: "claude/plan" }],
+        labels: [{ name: "test/plan" }],
         html_url: "https://github.com/nonz250/example-app/issues/4",
         author_association: "CONTRIBUTOR",
       },
     ]);
     mockGhSuccess(rawJson);
 
-    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan");
 
     expect(issues).toHaveLength(2);
     expect(issues.map((i) => i.number)).toEqual([1, 3]);
@@ -664,13 +664,13 @@ describe("fetchIssues - authorAssociation フィルタリング", () => {
         number: 20,
         title: "No association",
         body: "body",
-        labels: [{ name: "claude/plan" }],
+        labels: [{ name: "test/plan" }],
         html_url: "https://github.com/nonz250/example-app/issues/20",
       },
     ]);
     mockGhSuccess(rawJson);
 
-    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan");
 
     expect(issues).toHaveLength(0);
   });

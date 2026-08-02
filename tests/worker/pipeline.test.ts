@@ -684,7 +684,7 @@ describe("processIssue", () => {
         3,
         "testowner/testrepo",
         42,
-        { add: ["claude/impl"], remove: [] },
+        { add: ["test/impl"], remove: [] },
       );
     });
 
@@ -713,7 +713,7 @@ describe("processIssue", () => {
       const repoConfig = makeRepoConfig({ autoImplAfterPlan: true });
       vi.mocked(deps.applyLabelTransition).mockImplementation(
         async (_repo, _num, transition) => {
-          if (transition.add.includes("claude/impl") && transition.remove.length === 0) {
+          if (transition.add.includes("test/impl") && transition.remove.length === 0) {
             throw new Error("label add failed");
           }
         },
