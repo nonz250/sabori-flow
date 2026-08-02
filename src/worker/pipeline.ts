@@ -125,7 +125,9 @@ export async function processIssue(
     return await handleCommentFetchError(error, deps, repo, issue, repoConfig, entryLabel, isSpecReview);
   }
 
-  // Trigger → in-progress (level 1)
+  // Trigger → in-progress (level 1).
+  // resumeSpecReview's revise path moves the Issue to in-progress itself and
+  // then delegates here, so for that caller the transition is already done.
   if (entryLabel !== phaseLabels.inProgress) {
     try {
       await deps.applyLabelTransition(repo, issue.number, {
@@ -343,6 +345,16 @@ async function handleCommentFetchError(
   const specLabels = repoConfig.labels.spec;
 
   if (error instanceof IssueCommentsError && error.structural) {
+    // Logged before the transition because the diagnostic comment below is
+    // conditional on that transition succeeding. Without this the whole
+    // failure would leave no trace when the label operation also fails.
+    logger.error(
+      "Issue #%s: コメント取得が構造的に失敗しました [repo=%s]: %s",
+      issue.number,
+      repo,
+      errorMessage,
+    );
+
     // The fetch runs before the trigger label is removed, so the entry label
     // has to come off here. Otherwise the Issue keeps matching its queue and
     // reposts the same diagnostic every cycle. The review queue has no
