@@ -157,6 +157,7 @@ export const FailureCategory = {
   IMPL_NO_LINKED_PR: "impl_no_linked_pr",
   WORKTREE_CREATION: "worktree_creation",
   GIT_FETCH: "git_fetch",
+  SPEC_PROPOSAL_COMMENT: "spec_proposal_comment",
 } as const;
 export type FailureCategory = (typeof FailureCategory)[keyof typeof FailureCategory];
 

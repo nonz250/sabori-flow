@@ -83,7 +83,7 @@ describe("postSuccessComment", () => {
         "--body-file",
         "-",
       ],
-      { input: SUCCESS_HEADER + "output text", timeoutMs: 120_000 },
+      { input: SUCCESS_HEADER + "output text\n\n<!-- sabori-flow -->", timeoutMs: 120_000 },
     );
   });
 
@@ -98,7 +98,7 @@ describe("postSuccessComment", () => {
 
     const [, , options] = mockedRunCommand.mock.calls[0];
     const postedBody = options!.input!;
-    expect(postedBody).toBe(SUCCESS_HEADER);
+    expect(postedBody).toBe(SUCCESS_HEADER + "\n\n<!-- sabori-flow -->");
   });
 
   it("gh コマンドが非0終了コードを返した場合 CommentError が throw される", async () => {
@@ -139,7 +139,9 @@ describe("postSuccessComment truncation", () => {
       stdout: "",
       stderr: "",
     });
-    const maxOutputLength = MAX_COMMENT_LENGTH - SUCCESS_HEADER.length;
+    const markerSuffix = "\n\n<!-- sabori-flow -->";
+    const maxOutputLength =
+      MAX_COMMENT_LENGTH - SUCCESS_HEADER.length - markerSuffix.length;
     const longOutput = "A".repeat(maxOutputLength + 1);
 
     await postSuccessComment("nonz250/example-app", 10, longOutput);
@@ -147,7 +149,8 @@ describe("postSuccessComment truncation", () => {
     const [, , options] = mockedRunCommand.mock.calls[0];
     const postedBody = options!.input!;
     expect(postedBody.length).toBeLessThanOrEqual(MAX_COMMENT_LENGTH);
-    expect(postedBody.endsWith(SUCCESS_TRUNCATED_SUFFIX)).toBe(true);
+    expect(postedBody).toContain(SUCCESS_TRUNCATED_SUFFIX);
+    expect(postedBody).toContain("<!-- sabori-flow -->");
   });
 
   it("ヘッダーと出力の合計が正確に上限以内の場合、切り詰めは発生しない", async () => {
@@ -156,7 +159,9 @@ describe("postSuccessComment truncation", () => {
       stdout: "",
       stderr: "",
     });
-    const maxOutputLength = MAX_COMMENT_LENGTH - SUCCESS_HEADER.length;
+    const markerSuffix = "\n\n<!-- sabori-flow -->";
+    const maxOutputLength =
+      MAX_COMMENT_LENGTH - SUCCESS_HEADER.length - markerSuffix.length;
     const exactOutput = "B".repeat(maxOutputLength);
 
     await postSuccessComment("nonz250/example-app", 10, exactOutput);
@@ -212,7 +217,7 @@ describe("postFailureComment", () => {
         "--body-file",
         "-",
       ],
-      { input: FAILURE_HEADER + "error message", timeoutMs: 120_000 },
+      { input: FAILURE_HEADER + "error message\n\n<!-- sabori-flow -->", timeoutMs: 120_000 },
     );
   });
 
@@ -227,7 +232,7 @@ describe("postFailureComment", () => {
 
     const [, , options] = mockedRunCommand.mock.calls[0];
     const postedBody = options!.input!;
-    expect(postedBody).toBe(FAILURE_HEADER);
+    expect(postedBody).toBe(FAILURE_HEADER + "\n\n<!-- sabori-flow -->");
   });
 
   it("gh コマンドが非0終了コードを返した場合 CommentError が throw される", async () => {
@@ -268,7 +273,9 @@ describe("postFailureComment truncation", () => {
       stdout: "",
       stderr: "",
     });
-    const maxOutputLength = MAX_COMMENT_LENGTH - FAILURE_HEADER.length;
+    const markerSuffix = "\n\n<!-- sabori-flow -->";
+    const maxOutputLength =
+      MAX_COMMENT_LENGTH - FAILURE_HEADER.length - markerSuffix.length;
     const longMessage = "E".repeat(maxOutputLength + 1);
 
     await postFailureComment("nonz250/example-app", 20, longMessage);
@@ -276,7 +283,8 @@ describe("postFailureComment truncation", () => {
     const [, , options] = mockedRunCommand.mock.calls[0];
     const postedBody = options!.input!;
     expect(postedBody.length).toBeLessThanOrEqual(MAX_COMMENT_LENGTH);
-    expect(postedBody.endsWith(FAILURE_TRUNCATED_SUFFIX)).toBe(true);
+    expect(postedBody).toContain(FAILURE_TRUNCATED_SUFFIX);
+    expect(postedBody).toContain("<!-- sabori-flow -->");
   });
 
   it("ヘッダーとエラーメッセージの合計が正確に上限以内の場合、切り詰めは発生しない", async () => {
@@ -285,7 +293,9 @@ describe("postFailureComment truncation", () => {
       stdout: "",
       stderr: "",
     });
-    const maxOutputLength = MAX_COMMENT_LENGTH - FAILURE_HEADER.length;
+    const markerSuffix = "\n\n<!-- sabori-flow -->";
+    const maxOutputLength =
+      MAX_COMMENT_LENGTH - FAILURE_HEADER.length - markerSuffix.length;
     const exactMessage = "F".repeat(maxOutputLength);
 
     await postFailureComment("nonz250/example-app", 20, exactMessage);
