@@ -1,8 +1,8 @@
 import type { IssueComment, SpecThread } from "./models.js";
 import { PERMITTED_ASSOCIATIONS } from "./models.js";
 
-const WORKER_COMMENT_MARKER_PREFIX = "<!-- sabori-flow";
-const SPEC_MARKER_PATTERN = /<!-- sabori-flow:spec round=(\d+) -->/g;
+const WORKER_COMMENT_LINE_PATTERN = /^<!-- sabori-flow/m;
+const SPEC_MARKER_PATTERN = /^<!-- sabori-flow:spec round=(\d+) -->\r?$/gm;
 
 export const MAX_SPEC_CONTEXT_LENGTH = 60_000;
 
@@ -31,7 +31,7 @@ export function parseMarker(body: string): number | null {
  * latestProposal を乗っ取れる。両方を要求して双方の穴を塞ぐ。
  */
 function isWorkerComment(comment: IssueComment): boolean {
-  return comment.viewerDidAuthor && comment.body.includes(WORKER_COMMENT_MARKER_PREFIX);
+  return comment.viewerDidAuthor && WORKER_COMMENT_LINE_PATTERN.test(comment.body);
 }
 
 export function deriveSpecThread(comments: readonly IssueComment[]): SpecThread {

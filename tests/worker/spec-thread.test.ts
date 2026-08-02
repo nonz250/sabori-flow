@@ -42,6 +42,23 @@ describe("formatMarker / parseMarker", () => {
     expect(parseMarker(body)).toBe(2);
   });
 
+  it("marker inside quote block (> prefix) → null", () => {
+    expect(parseMarker("> <!-- sabori-flow:spec round=1 -->")).toBeNull();
+  });
+
+  it("marker with CRLF line ending → still matched", () => {
+    expect(parseMarker("<!-- sabori-flow:spec round=1 -->\r")).toBe(1);
+  });
+
+  it("marker in multi-line body with CRLF → matched", () => {
+    const body = "some text\r\n<!-- sabori-flow:spec round=2 -->\r\nmore text";
+    expect(parseMarker(body)).toBe(2);
+  });
+
+  it("ZWSP-escaped marker → null", () => {
+    expect(parseMarker("<!--​ sabori-flow:spec round=1 -->")).toBeNull();
+  });
+
   it("repeated calls on the same body return the same value", () => {
     const body = `${formatMarker(1)}\n\nsome text\n\n${formatMarker(2)}`;
     expect(parseMarker(body)).toBe(2);
@@ -151,16 +168,71 @@ describe("deriveSpecThread", () => {
     expect(result.feedback).toEqual([]);
   });
 
-  it("worker comment after marker (non-spec marker) → not in feedback", () => {
+  it("worker comment after marker (non-spec marker on its own line) → not in feedback", () => {
     const comments = [
       workerComment(1, "proposal"),
       makeComment({
-        body: "success report <!-- sabori-flow -->",
+        body: "success report\n\n<!-- sabori-flow -->",
         viewerDidAuthor: true,
       }),
     ];
     const result = deriveSpecThread(comments);
     expect(result.feedback).toEqual([]);
+  });
+
+  it("inline marker with viewerDidAuthor=true → not a worker comment, appears in feedback", () => {
+    const comments = [
+      workerComment(1, "proposal"),
+      makeComment({
+        body: "success report <!-- sabori-flow -->",
+        viewerDidAuthor: true,
+        authorAssociation: "OWNER",
+      }),
+    ];
+    const result = deriveSpecThread(comments);
+    expect(result.feedback).toEqual(["success report <!-- sabori-flow -->"]);
+  });
+
+  it("quote reply containing marker is treated as feedback, not worker comment", () => {
+    const comments = [
+      workerComment(1, "proposal"),
+      makeComment({
+        body: "Please reconsider the approach.\n\n> proposal\n>\n> <!-- sabori-flow:spec round=1 -->",
+        viewerDidAuthor: true,
+        authorAssociation: "OWNER",
+      }),
+    ];
+    const result = deriveSpecThread(comments);
+    expect(result.round).toBe(1);
+    expect(result.latestProposal).toBe("proposal");
+    expect(result.feedback).toEqual([
+      "Please reconsider the approach.\n\n> proposal\n>\n> <!-- sabori-flow:spec round=1 -->",
+    ]);
+  });
+
+  it("viewerDidAuthor=true OWNER comment without marker → in feedback", () => {
+    const comments = [
+      workerComment(1, "proposal"),
+      makeComment({
+        body: "please fix the authentication section",
+        viewerDidAuthor: true,
+        authorAssociation: "OWNER",
+      }),
+    ];
+    const result = deriveSpecThread(comments);
+    expect(result.feedback).toEqual(["please fix the authentication section"]);
+  });
+
+  it("worker comment with CRLF line endings → still detected", () => {
+    const comments = [
+      makeComment({
+        body: "proposal text\r\n\r\n<!-- sabori-flow:spec round=1 -->\r\n",
+        viewerDidAuthor: true,
+      }),
+    ];
+    const result = deriveSpecThread(comments);
+    expect(result.round).toBe(1);
+    expect(result.latestProposal).toBe("proposal text");
   });
 
   it("MEMBER and COLLABORATOR comments → in feedback", () => {
