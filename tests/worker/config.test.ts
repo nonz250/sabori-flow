@@ -127,7 +127,54 @@ describe("loadConfig - normal", () => {
     expect(result.language).toBe("ja");
     expect(result.execution.language).toBe("ja");
     expect(result.execution.autonomy).toBe("interactive");
-    expect(result.execution.intervalMinutes).toBe(60);
+    expect(result.execution.intervalMinutes).toBe(10);
+  });
+
+  it("labels omitted defaults to ai/*", () => {
+    const yaml = `\
+repositories:
+  - owner: my-org
+    repo: my-repo
+    local_path: /tmp/my-org/my-repo
+    priority_labels:
+      - "priority:high"
+`;
+    mockYaml(yaml);
+    const result = loadConfig("/path/to/config.yml");
+    const repo = result.repositories[0];
+
+    expect(repo.labels.plan.trigger).toBe("ai/plan");
+    expect(repo.labels.plan.inProgress).toBe("ai/plan/in-progress");
+    expect(repo.labels.plan.done).toBe("ai/plan/done");
+    expect(repo.labels.plan.failed).toBe("ai/plan/failed");
+    expect(repo.labels.impl.trigger).toBe("ai/impl");
+    expect(repo.labels.impl.inProgress).toBe("ai/impl/in-progress");
+    expect(repo.labels.impl.done).toBe("ai/impl/done");
+    expect(repo.labels.impl.failed).toBe("ai/impl/failed");
+  });
+
+  it("labels.plan only specified — plan from config, impl defaults", () => {
+    const yaml = `\
+repositories:
+  - owner: my-org
+    repo: my-repo
+    local_path: /tmp/my-org/my-repo
+    labels:
+      plan:
+        trigger: "custom/plan"
+        in_progress: "custom/plan:wip"
+        done: "custom/plan:done"
+        failed: "custom/plan:failed"
+    priority_labels: []
+`;
+    mockYaml(yaml);
+    const result = loadConfig("/path/to/config.yml");
+    const repo = result.repositories[0];
+
+    expect(repo.labels.plan.trigger).toBe("custom/plan");
+    expect(repo.labels.plan.inProgress).toBe("custom/plan:wip");
+    expect(repo.labels.impl.trigger).toBe("ai/impl");
+    expect(repo.labels.impl.inProgress).toBe("ai/impl/in-progress");
   });
 
   it("execution default (max_parallel=1 when execution is omitted)", () => {
@@ -302,7 +349,7 @@ repositories:
 });
 
 describe("loadConfig - labels validation", () => {
-  it("missing plan key", () => {
+  it("missing plan key falls back to default", () => {
     const yaml = `\
 repositories:
   - owner: my-org
@@ -318,9 +365,9 @@ repositories:
 `;
     mockYaml(yaml);
 
-    expect(() => loadConfig("/path/to/config.yml")).toThrow(
-      ConfigValidationError,
-    );
+    const result = loadConfig("/path/to/config.yml");
+    expect(result.repositories[0].labels.plan.trigger).toBe("ai/plan");
+    expect(result.repositories[0].labels.impl.trigger).toBe("impl");
   });
 
   it("missing trigger key", () => {
@@ -610,13 +657,13 @@ describe("loadConfig - execution validation", () => {
   it("interval_minutes デフォルト値 (execution あり)", () => {
     mockYaml(VALID_YAML);
     const result = loadConfig("/path/to/config.yml");
-    expect(result.execution.intervalMinutes).toBe(60);
+    expect(result.execution.intervalMinutes).toBe(10);
   });
 
   it("interval_minutes デフォルト値 (execution 省略)", () => {
     mockYaml(VALID_YAML_NO_EXECUTION);
     const result = loadConfig("/path/to/config.yml");
-    expect(result.execution.intervalMinutes).toBe(60);
+    expect(result.execution.intervalMinutes).toBe(10);
   });
 
   it("interval_minutes が下限値 10 ちょうどの場合は正常", () => {

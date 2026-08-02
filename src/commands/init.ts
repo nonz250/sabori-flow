@@ -4,7 +4,6 @@ import fs from "fs";
 import { join, resolve } from "node:path";
 import { getBaseDir, getConfigPath, getUserPromptsDir, getDefaultPromptsDir } from "../utils/paths.js";
 import {
-  getDefaultLabels,
   getDefaultPriorityLabels,
   getDefaultExecution,
 } from "../utils/config-defaults.js";
@@ -32,7 +31,6 @@ function buildConfigData(
       repo: r.repo,
       local_path: r.local_path,
       auto_impl_after_plan: r.auto_impl_after_plan,
-      labels: getDefaultLabels(),
       priority_labels: getDefaultPriorityLabels(),
     })),
     execution: {
@@ -135,7 +133,7 @@ export async function initCommand(): Promise<void> {
     // interval_minutes 入力
     const intervalMinutesStr = await input({
       message: t("prompt.intervalMinutes"),
-      default: "60",
+      default: "10",
       validate: (v) => {
         const n = Number(v);
         if (!Number.isInteger(n) || n < 10 || n > 1440) {

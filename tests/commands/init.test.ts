@@ -92,7 +92,7 @@ interface InitPromptAnswers {
 function setupInitPrompts(answers: InitPromptAnswers = {}): void {
   const language: Language = answers.language ?? "ja";
   const autonomy: Autonomy = answers.autonomy ?? Autonomy.INTERACTIVE;
-  const intervalMinutes = answers.intervalMinutes ?? "60";
+  const intervalMinutes = answers.intervalMinutes ?? "10";
 
   mockedSelect.mockImplementation(async (config: unknown) => {
     const msg = (config as { message?: unknown }).message;
@@ -316,7 +316,7 @@ describe("initCommand - 認証トークン設定ステップ", () => {
 });
 
 describe("initCommand - 書き込まれる YAML の内容", () => {
-  it("repositories に owner, repo, local_path, labels, priority_labels が含まれる", async () => {
+  it("repositories に owner, repo, local_path, priority_labels が含まれ labels は含まれない", async () => {
     const repoInput = makeRepoInput();
 
     mockExistsSyncForConfig(false);
@@ -337,17 +337,7 @@ describe("initCommand - 書き込まれる YAML の内容", () => {
     expect(repo.owner).toBe("test-owner");
     expect(repo.repo).toBe("test-repo");
     expect(repo.local_path).toBe("/tmp/test-owner/test-repo");
-
-    // labels の構造
-    const labels = repo.labels as Record<string, Record<string, string>>;
-    expect(labels.plan.trigger).toBe("claude/plan");
-    expect(labels.plan.in_progress).toBe("claude/plan:in-progress");
-    expect(labels.plan.done).toBe("claude/plan:done");
-    expect(labels.plan.failed).toBe("claude/plan:failed");
-    expect(labels.impl.trigger).toBe("claude/impl");
-    expect(labels.impl.in_progress).toBe("claude/impl:in-progress");
-    expect(labels.impl.done).toBe("claude/impl:done");
-    expect(labels.impl.failed).toBe("claude/impl:failed");
+    expect(repo).not.toHaveProperty("labels");
 
     // priority_labels の構造
     const priorityLabels = repo.priority_labels as string[];

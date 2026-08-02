@@ -3,7 +3,6 @@ import { confirm } from "@inquirer/prompts";
 import YAML from "yaml";
 import { getConfigPath } from "../utils/paths.js";
 import {
-  getDefaultLabels,
   getDefaultPriorityLabels,
 } from "../utils/config-defaults.js";
 import { promptRepository } from "./helpers/repository-prompt.js";
@@ -70,7 +69,6 @@ export async function addCommand(): Promise<void> {
       repo: repoInput.repo,
       local_path: repoInput.local_path,
       auto_impl_after_plan: repoInput.auto_impl_after_plan,
-      labels: getDefaultLabels(),
       priority_labels: getDefaultPriorityLabels(),
     };
     repositories.push(newEntry);

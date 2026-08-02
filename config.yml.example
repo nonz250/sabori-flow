@@ -3,17 +3,6 @@ repositories:
   - owner: your-org
     repo: example-app
     local_path: /Users/you/projects/example-app
-    labels:
-      plan:
-        trigger: claude/plan
-        in_progress: "claude/plan:in-progress"
-        done: "claude/plan:done"
-        failed: "claude/plan:failed"
-      impl:
-        trigger: claude/impl
-        in_progress: "claude/impl:in-progress"
-        done: "claude/impl:done"
-        failed: "claude/impl:failed"
     priority_labels:
       - priority:high
       - priority:low
@@ -25,10 +14,25 @@ execution:
   # autonomy: interactive    # interactive / auto / full / sandboxed (default: interactive)
   #                          # auto: Claude Code --permission-mode auto (v2.1.83+, Max/Team/Enterprise)
   #                          # sandboxed: reserved for future non-Claude CLIs, currently behaves like interactive
-  # interval_minutes: 60  # Scheduled execution interval in minutes (10-1440, default: 60)
+  # interval_minutes: 10  # Scheduled execution interval in minutes (10-1440, default: 10)
   # timeout_minutes: 60   # Claude CLI execution timeout in minutes (1-240, default: 60)
 
 # Display language
 # language: ja  # ja / en (default: ja)
+
+# Labels default to ai/* when omitted. Override per phase if needed:
+# repositories:
+#   - owner: ...
+#     labels:
+#       plan:
+#         trigger: ai/plan
+#         in_progress: ai/plan/in-progress
+#         done: ai/plan/done
+#         failed: ai/plan/failed
+#       impl:
+#         trigger: ai/impl
+#         in_progress: ai/impl/in-progress
+#         done: ai/impl/done
+#         failed: ai/impl/failed
 
 # The Claude auth token is NOT stored here. Set it via `sabori-flow set-token` (saved to ~/.sabori-flow/auth-token) to avoid 401s during unattended runs.
