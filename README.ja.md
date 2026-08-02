@@ -153,29 +153,50 @@ Issue にラベルを付けるだけです。ワーカーが設定された間�
 
 ```mermaid
 flowchart TD
-    A["claude/plan ラベルを付ける"] --> B["ワーカーが Plan フェーズを実行"]
-    B --> C{"成功 #quest;"}
-    C -- Yes --> D["Issue に plan コメントを投稿"]
-    C -- No --> E["claude/plan#colon;failed ラベルを付与"]
-    D --> F["ユーザーが plan をレビューし claude/impl ラベルを付ける"]
-    F --> G["ワーカーが Impl フェーズを実行"]
-    G --> H{"成功 #quest;"}
-    H -- Yes --> I["Pull Request を作成"]
-    H -- No --> J["claude/impl#colon;failed ラベルを付与"]
+    A["ai/spec ラベルを付ける"] --> B["ワーカーが Spec フェーズを実行"]
+    B --> C["仕様提案がコメントとして投稿される"]
+    C --> D{"人間がレビュー"}
+    D -- "承認 (ai/spec/approved を付与)" --> E["ai/plan ラベルが自動付与"]
+    D -- "修正依頼 (コメントで返信)" --> B
+    D -- "差し戻し上限到達" --> F["ai/spec/needs-human"]
+    E --> G["ワーカーが Plan フェーズを実行"]
+    G --> H["Issue に plan コメントを投稿"]
+    H --> I["ユーザーが ai/impl ラベルを付ける"]
+    I --> J["ワーカーが Impl フェーズを実行"]
+    J --> K["Pull Request を作成"]
 ```
 
 ### ラベル遷移
 
 ```mermaid
 flowchart LR
-    A["claude/plan"] --> B["claude/plan#colon;in-progress"]
-    B --> C["claude/plan#colon;done"]
-    B --> D["claude/plan#colon;failed"]
+    A["ai/spec"] --> B["ai/spec/in-progress"]
+    B --> C["ai/spec/review"]
+    C --> D["ai/spec/done"]
+    C --> E["ai/spec/needs-human"]
+    B --> F["ai/spec/failed"]
 
-    E["claude/impl"] --> F["claude/impl#colon;in-progress"]
-    F --> G["claude/impl#colon;done"]
-    F --> H["claude/impl#colon;failed"]
+    G["ai/plan"] --> H["ai/plan/in-progress"]
+    H --> I["ai/plan/done"]
+    H --> J["ai/plan/failed"]
+
+    K["ai/impl"] --> L["ai/impl/in-progress"]
+    L --> M["ai/impl/done"]
+    L --> N["ai/impl/failed"]
 ```
+
+### Spec フェーズ
+
+spec フェーズでは、計画と実装の前に AI が生成した仕様をレビューできます。
+
+1. Issue に `ai/spec` を付ける
+2. ワーカーが受け入れ条件、前提、未決定事項を含む仕様提案をコメントとして投稿する
+3. 提案をレビューし、以下のいずれかを行う
+   - `ai/spec/approved` を付けて承認する（ワーカーが自動的に `ai/plan` を付与）
+   - コメントで修正を依頼する（ワーカーが修正して再提案、最大 2 回の差し戻し）
+4. 差し戻し上限に達すると `ai/spec/needs-human` が付き、人間の介入が必要になる
+
+spec フェーズはオプションです。`ai/plan` や `ai/impl` を直接付けてスキップすることもできます。
 
 ### 失敗した場合
 
@@ -185,7 +206,7 @@ impl フェーズは、Issue に紐づく PR が作られないまま終了し�
 
 1. `~/.sabori-flow/logs/worker.log` で詳細を確認
 2. 必要に応じて Issue の内容を修正
-3. `failed` ラベルを外して、再度 `claude/plan` または `claude/impl` を付ける
+3. `failed` ラベルを外して、trigger ラベル（`ai/spec`、`ai/plan`、`ai/impl`）を再度付ける
 
 ### 運用
 
@@ -230,17 +251,6 @@ repositories:
   - owner: nonz250
     repo: example-app
     local_path: /path/to/repo
-    labels:
-      plan:
-        trigger: claude/plan
-        in_progress: "claude/plan:in-progress"
-        done: "claude/plan:done"
-        failed: "claude/plan:failed"
-      impl:
-        trigger: claude/impl
-        in_progress: "claude/impl:in-progress"
-        done: "claude/impl:done"
-        failed: "claude/impl:failed"
     priority_labels:
       - priority:high
       - priority:low
@@ -249,26 +259,26 @@ execution:
   max_parallel: 1
   max_issues_per_repo: 1
   autonomy: interactive
-  interval_minutes: 60
+  interval_minutes: 10
   timeout_minutes: 60
 
 language: ja
 ```
+
+ラベルはデフォルトで `ai/*`（例: `ai/spec`、`ai/plan/in-progress`）になります。フェーズごとにカスタマイズするには、リポジトリエントリに `labels` ブロックを追加してください。完全な書式は `config.yml.example` を参照。
 
 | キー | 説明 |
 |------|------|
 | `repositories[].owner` | リポジトリオーナー |
 | `repositories[].repo` | リポジトリ名 |
 | `repositories[].local_path` | ローカルのクローン先パス |
-| `repositories[].labels` | 各フェーズのラベル名（カスタマイズ可能） |
-| `repositories[].labels.plan` | plan フェーズのラベル: `trigger`, `in_progress`, `done`, `failed` |
-| `repositories[].labels.impl` | impl フェーズのラベル: `trigger`, `in_progress`, `done`, `failed` |
+| `repositories[].labels` | 各フェーズのラベル名（省略可、デフォルト `ai/*`） |
 | `repositories[].default_branch` | worktree 作成時の起点となるデフォルトブランチ名。デフォルトは `main` |
 | `repositories[].priority_labels` | 優先度ラベル。リストの上位ほど先に処理される |
 | `execution.max_parallel` | 並列実行数。デフォルトは `1`（逐次実行） |
 | `execution.max_issues_per_repo` | リポジトリあたりの Issue 処理上限。デフォルトは `1` |
 | `execution.autonomy` | CLI の自律実行レベル: `interactive`（各操作にユーザー承認が必要、推奨デフォルト）、`auto`（Claude Code の `--permission-mode auto`。分類器が危険操作のみブロック。launchd 無人実行に推奨。Claude Code v2.1.83 以降および Max / Team / Enterprise プランが必要）、`full`（`--dangerously-skip-permissions`、無制限）、`sandboxed`（将来の非-Claude CLI（OpenAI Codex 等）向け予約値、現状は interactive にフォールバック）。デフォルトは `interactive` |
-| `execution.interval_minutes` | スケジュール実行間隔（分、10-1440）。デフォルトは `60` |
+| `execution.interval_minutes` | スケジュール実行間隔（分、10-1440）。デフォルトは `10` |
 | `execution.timeout_minutes` | Claude CLI の実行タイムアウト（分、1-240）。デフォルトは `60` |
 | `language` | CLI メッセージおよびプロンプトテンプレートの言語（`ja` / `en`）。デフォルトは `ja` |
 
@@ -295,6 +305,15 @@ npm run build
 node dist/index.js init
 node dist/index.js install --local
 ```
+
+### `claude/*` から `ai/*` ラベルへの移行
+
+config.yml で `labels:` ブロックに `claude/*` を明示していた場合、新しいデフォルトに切り替えられます。
+
+1. config.yml から `labels:` ブロックを削除する（デフォルト `ai/*` になる）
+2. 仕掛かりの Issue（trigger ラベルまたは `:in-progress` が付いているもの）がある場合は、手動でラベルを付け替える。終端状態（`:done` / `:failed`）の Issue は移行不要
+3. `interval_minutes` を変更する場合は `sabori-flow reinstall` で plist を再生成する
+4. `~/.sabori-flow/prompts/plan.md` をカスタマイズしている場合は `sabori-flow init` を再実行して `{spec}` 対応のテンプレートを取得する。更新しないと、合意された仕様が plan フェーズに届かない
 
 ## ライセンス
 

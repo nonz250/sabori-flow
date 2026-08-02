@@ -153,29 +153,50 @@ Add a label to an Issue. The worker automatically detects it at the configured i
 
 ```mermaid
 flowchart TD
-    A["Add claude/plan label"] --> B["Worker runs Plan Phase"]
-    B --> C{"Succeeded #quest;"}
-    C -- Yes --> D["Plan comment posted"]
-    C -- No --> E["claude/plan#colon;failed label applied"]
-    D --> F["User reviews plan, adds claude/impl label"]
-    F --> G["Worker runs Impl Phase"]
-    G --> H{"Succeeded #quest;"}
-    H -- Yes --> I["Pull Request created"]
-    H -- No --> J["claude/impl#colon;failed label applied"]
+    A["Add ai/spec label"] --> B["Worker runs Spec Phase"]
+    B --> C["Spec proposal posted as comment"]
+    C --> D{"Human reviews"}
+    D -- "Approve (add ai/spec/approved)" --> E["ai/plan label auto-added"]
+    D -- "Request changes (comment)" --> B
+    D -- "Too many rounds" --> F["ai/spec/needs-human"]
+    E --> G["Worker runs Plan Phase"]
+    G --> H["Plan comment posted"]
+    H --> I["User adds ai/impl label"]
+    I --> J["Worker runs Impl Phase"]
+    J --> K["Pull Request created"]
 ```
 
 ### Label Transitions
 
 ```mermaid
 flowchart LR
-    A["claude/plan"] --> B["claude/plan#colon;in-progress"]
-    B --> C["claude/plan#colon;done"]
-    B --> D["claude/plan#colon;failed"]
+    A["ai/spec"] --> B["ai/spec/in-progress"]
+    B --> C["ai/spec/review"]
+    C --> D["ai/spec/done"]
+    C --> E["ai/spec/needs-human"]
+    B --> F["ai/spec/failed"]
 
-    E["claude/impl"] --> F["claude/impl#colon;in-progress"]
-    F --> G["claude/impl#colon;done"]
-    F --> H["claude/impl#colon;failed"]
+    G["ai/plan"] --> H["ai/plan/in-progress"]
+    H --> I["ai/plan/done"]
+    H --> J["ai/plan/failed"]
+
+    K["ai/impl"] --> L["ai/impl/in-progress"]
+    L --> M["ai/impl/done"]
+    L --> N["ai/impl/failed"]
 ```
+
+### Spec Phase
+
+The spec phase lets you get AI-generated specifications reviewed before planning and implementation begin.
+
+1. Add `ai/spec` to an Issue
+2. The worker posts a spec proposal as a comment with acceptance criteria, assumptions, and open questions
+3. Review the proposal and either:
+   - Add `ai/spec/approved` to accept it (the worker auto-adds `ai/plan`)
+   - Reply with comments to request changes (the worker revises and re-proposes, up to 2 revisions)
+4. If the revision limit is reached, `ai/spec/needs-human` is applied for manual intervention
+
+The spec phase is optional. You can still add `ai/plan` or `ai/impl` directly to skip it.
 
 ### Handling Failures
 
@@ -185,7 +206,7 @@ The impl phase also fails when a run finishes without a pull request linked to t
 
 1. Check `~/.sabori-flow/logs/worker.log` for details
 2. Fix the Issue content as needed
-3. Remove the `failed` label and re-apply `claude/plan` or `claude/impl`
+3. Remove the `failed` label and re-apply the trigger label (`ai/spec`, `ai/plan`, or `ai/impl`)
 
 ### Operations
 
@@ -230,17 +251,6 @@ repositories:
   - owner: nonz250
     repo: example-app
     local_path: /path/to/repo
-    labels:
-      plan:
-        trigger: claude/plan
-        in_progress: "claude/plan:in-progress"
-        done: "claude/plan:done"
-        failed: "claude/plan:failed"
-      impl:
-        trigger: claude/impl
-        in_progress: "claude/impl:in-progress"
-        done: "claude/impl:done"
-        failed: "claude/impl:failed"
     priority_labels:
       - priority:high
       - priority:low
@@ -249,26 +259,26 @@ execution:
   max_parallel: 1
   max_issues_per_repo: 1
   autonomy: interactive
-  interval_minutes: 60
+  interval_minutes: 10
   timeout_minutes: 60
 
 language: ja
 ```
+
+Labels default to `ai/*` (e.g. `ai/spec`, `ai/plan/in-progress`). To customize per phase, add a `labels` block under the repository entry. See `config.yml.example` for the full format.
 
 | Key | Description |
 |-----|-------------|
 | `repositories[].owner` | Repository owner |
 | `repositories[].repo` | Repository name |
 | `repositories[].local_path` | Local path to the cloned repository |
-| `repositories[].labels` | Label names for each phase (customizable) |
-| `repositories[].labels.plan` | Labels for the plan phase: `trigger`, `in_progress`, `done`, `failed` |
-| `repositories[].labels.impl` | Labels for the impl phase: `trigger`, `in_progress`, `done`, `failed` |
+| `repositories[].labels` | Label names for each phase (optional; defaults to `ai/*`) |
 | `repositories[].default_branch` | Default branch name used as worktree starting point. Default is `main` |
 | `repositories[].priority_labels` | Priority labels. Issues with labels higher in the list are processed first |
 | `execution.max_parallel` | Number of parallel executions. Default is `1` (sequential) |
 | `execution.max_issues_per_repo` | Maximum number of issues to process per repository. Default is `1` |
 | `execution.autonomy` | CLI autonomy level: `interactive` (requires user approval for each action — recommended default), `auto` (Claude Code's `--permission-mode auto`; classifier blocks only dangerous actions — recommended for unattended launchd runs, requires Claude Code v2.1.83+ and a Max/Team/Enterprise plan), `full` (`--dangerously-skip-permissions`, unrestricted), `sandboxed` (reserved for future non-Claude CLIs such as OpenAI Codex; currently falls back to interactive). Default is `interactive` |
-| `execution.interval_minutes` | Scheduled execution interval in minutes (10-1440). Default is `60` |
+| `execution.interval_minutes` | Scheduled execution interval in minutes (10-1440). Default is `10` |
 | `execution.timeout_minutes` | Claude CLI execution timeout in minutes (1-240). Default is `60` |
 | `language` | Language for CLI messages and prompt templates (`ja` / `en`). Default is `ja` |
 
@@ -295,6 +305,15 @@ npm run build
 node dist/index.js init
 node dist/index.js install --local
 ```
+
+### Migrating from `claude/*` to `ai/*` labels
+
+If you were using explicit `labels:` in config.yml with the old `claude/*` naming, you can switch to the new defaults:
+
+1. Remove the `labels:` block from config.yml (defaults to `ai/*`)
+2. If there are in-progress Issues (with a trigger or `:in-progress` label), rename those labels manually. Issues in terminal states (`:done` / `:failed`) do not need migration
+3. If you change `interval_minutes`, run `sabori-flow reinstall` to regenerate the plist
+4. If you have customized `~/.sabori-flow/prompts/plan.md`, re-run `sabori-flow init` to get the updated template with `{spec}` support. Without it, the agreed specification will not reach the plan phase
 
 ## License
 
