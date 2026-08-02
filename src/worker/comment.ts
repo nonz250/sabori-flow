@@ -337,7 +337,9 @@ export async function postSuccessComment(
   const maxOutputLength =
     MAX_COMMENT_LENGTH - SUCCESS_HEADER.length - markerSuffix.length;
 
-  let output = claudeOutput;
+  // Worker comments are read back by deriveSpecThread, so a spec marker
+  // appearing in claude's output would make this comment parse as a proposal.
+  let output = escapeWorkerMarkers(claudeOutput);
   if (output.length > maxOutputLength) {
     const truncatedLength = maxOutputLength - SUCCESS_TRUNCATED_SUFFIX.length;
     output = output.slice(0, truncatedLength) + SUCCESS_TRUNCATED_SUFFIX;
@@ -362,7 +364,7 @@ export async function postFailureComment(
   const maxOutputLength =
     MAX_COMMENT_LENGTH - FAILURE_HEADER.length - markerSuffix.length;
 
-  let message = errorMessage;
+  let message = escapeWorkerMarkers(errorMessage);
   if (message.length > maxOutputLength) {
     const truncatedLength = maxOutputLength - FAILURE_TRUNCATED_SUFFIX.length;
     message = message.slice(0, truncatedLength) + FAILURE_TRUNCATED_SUFFIX;

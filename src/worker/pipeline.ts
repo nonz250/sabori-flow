@@ -122,7 +122,7 @@ export async function processIssue(
     // "the spec could not be read" look identical downstream, and impl would
     // build against unknown acceptance criteria and open a PR — which strips
     // the trigger label, so the mistake is never retried.
-    return await handleCommentFetchError(error, deps, repo, issue, repoConfig, isSpecTrigger);
+    return await handleCommentFetchError(error, deps, repo, issue, repoConfig, entryLabel, isSpecReview);
   }
 
   // Trigger → in-progress (level 1)
@@ -334,50 +334,49 @@ async function handleCommentFetchError(
   repo: string,
   issue: Issue,
   repoConfig: RepositoryConfig,
-  isSpecTrigger: boolean,
+  entryLabel: string,
+  isSpecReview: boolean,
 ): Promise<StepResult> {
   const errorMessage = error instanceof Error ? error.message : String(error);
   const specLabels = repoConfig.labels.spec;
 
   if (error instanceof IssueCommentsError && error.structural) {
-    if (isSpecTrigger) {
-      await handleFailure(deps, repo, issue.number, specLabels, {
-        category: FailureCategory.CLI_EXECUTION_ERROR,
-        summary: "Structural failure fetching Issue comments",
-        errorMessage,
-      });
-    } else {
-      // review route: needs-human + diagnostic. Label first, so a failed
-      // transition does not leave the Issue reposting the same comment
-      // every cycle.
-      try {
-        await deps.applyLabelTransition(repo, issue.number, {
-          add: [specLabels.needsHuman],
-          remove: [specLabels.review],
-        });
-      } catch (e: unknown) {
-        logger.warn(
-          "Issue #%s: needs-human ラベル遷移に失敗しました [repo=%s]: %s",
-          issue.number,
-          repo,
-          e instanceof Error ? e.message : String(e),
-        );
-      }
-      const formattedMessage = formatFailureDiagnostics({
-        category: FailureCategory.CLI_EXECUTION_ERROR,
-        summary: "Structural failure fetching Issue comments",
-        errorMessage,
-      });
-      try {
-        await deps.postFailureComment(repo, issue.number, formattedMessage);
-      } catch (e: unknown) {
-        logger.warn(
-          "Issue #%s: 診断コメントの投稿に失敗しました [repo=%s]: %s",
-          issue.number,
-          repo,
-          e instanceof Error ? e.message : String(e),
-        );
-      }
+    // The fetch runs before the trigger label is removed, so the entry label
+    // has to come off here. Otherwise the Issue keeps matching its queue and
+    // reposts the same diagnostic every cycle. The review queue has no
+    // trigger to strip, so it goes to needs-human instead of :failed.
+    const transition = {
+      add: [isSpecReview ? specLabels.needsHuman : repoConfig.labels[issue.phase].failed],
+      remove: [entryLabel],
+    };
+
+    // Label first: if the transition fails, the Issue is retried next cycle
+    // rather than accumulating a duplicate diagnostic each time.
+    try {
+      await deps.applyLabelTransition(repo, issue.number, transition);
+    } catch (e: unknown) {
+      logger.warn(
+        "Issue #%s: コメント取得失敗後のラベル遷移に失敗しました [repo=%s]: %s",
+        issue.number,
+        repo,
+        e instanceof Error ? e.message : String(e),
+      );
+    }
+
+    const formattedMessage = formatFailureDiagnostics({
+      category: FailureCategory.CLI_EXECUTION_ERROR,
+      summary: "Structural failure fetching Issue comments",
+      errorMessage,
+    });
+    try {
+      await deps.postFailureComment(repo, issue.number, formattedMessage);
+    } catch (e: unknown) {
+      logger.warn(
+        "Issue #%s: 診断コメントの投稿に失敗しました [repo=%s]: %s",
+        issue.number,
+        repo,
+        e instanceof Error ? e.message : String(e),
+      );
     }
     return { outcome: "failure", claudeExecuted: false };
   }
@@ -420,7 +419,7 @@ async function handleSpecSuccess(
     logger.error(
       "Issue #%s: spec output (not posted): %s",
       issue.number,
-      result.stdout,
+      sanitizeOutput(result.stdout),
     );
     await handleFailure(deps, repo, issue.number, specLabels, {
       category: FailureCategory.SPEC_PROPOSAL_COMMENT,

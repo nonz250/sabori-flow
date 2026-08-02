@@ -26,7 +26,9 @@ export class ConfigValidationError extends Error {
 // ---------- Validation patterns ----------
 
 const OWNER_REPO_PATTERN = /^[a-zA-Z0-9._-]+$/;
-const LABEL_PATTERN = /^[a-zA-Z0-9./:_ -]+$/;
+// Leading hyphen excluded: label names reach `gh label create <name>` as a
+// positional argument, and a name like `--repo` would be read as a flag.
+const LABEL_PATTERN = /^[a-zA-Z0-9./:_ ][a-zA-Z0-9./:_ -]*$/;
 const BRANCH_NAME_PATTERN = /^[a-zA-Z0-9._\/-]+$/;
 const DEFAULT_BRANCH_DEFAULT = "main";
 const PHASE_LABEL_KEYS = ["trigger", "in_progress", "done", "failed"] as const;
