@@ -3,6 +3,7 @@ import {
   lstatSync,
   mkdirSync,
   readdirSync,
+  renameSync,
   unlinkSync,
 } from "node:fs";
 import { join } from "node:path";
@@ -96,6 +97,29 @@ export function createLogger(name: string): Logger {
 export function rotateOldLogs(): void {
   if (!globalConfig.logDir) {
     return;
+  }
+
+  // Rename worker.log if its last modification date is before today
+  try {
+    const logPath = join(globalConfig.logDir, LOG_FILE_NAME);
+    const stat = lstatSync(logPath);
+    if (stat.isSymbolicLink()) {
+      console.warn(`[logger] WARNING: Skipping symbolic link: ${LOG_FILE_NAME}`);
+    } else {
+      const mtime = stat.mtime;
+      const today = new Date();
+      if (
+        mtime.getFullYear() !== today.getFullYear() ||
+        mtime.getMonth() !== today.getMonth() ||
+        mtime.getDate() !== today.getDate()
+      ) {
+        const dateStr = mtime.toISOString().slice(0, 10);
+        const rotatedName = `${LOG_FILE_NAME}.${dateStr}`;
+        renameSync(logPath, join(globalConfig.logDir, rotatedName));
+      }
+    }
+  } catch {
+    // worker.log does not exist or rename failed — continue to cleanup
   }
 
   try {
