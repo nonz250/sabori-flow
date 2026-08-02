@@ -517,37 +517,15 @@ export async function resumeSpecReview(
   try {
     comments = await deps.fetchIssueComments(repoConfig.owner, repoConfig.repo, issue.number);
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    if (error instanceof IssueCommentsError && error.structural) {
-      // Structural: needs-human + diagnostic (review route has no trigger to strip)
-      deps.applyLabelTransition(repo, issue.number, {
-        add: [specLabels.needsHuman],
-        remove: [specLabels.review],
-      }).catch((e: unknown) => {
-        logger.warn(
-          "Issue #%s: needs-human ラベル遷移に失敗しました [repo=%s]: %s",
-          issue.number, repo, e instanceof Error ? e.message : String(e),
-        );
-      });
-      const formattedMessage = formatFailureDiagnostics({
-        category: FailureCategory.CLI_EXECUTION_ERROR,
-        summary: "Structural failure fetching Issue comments",
-        errorMessage,
-      });
-      deps.postFailureComment(repo, issue.number, formattedMessage).catch((e: unknown) => {
-        logger.warn(
-          "Issue #%s: 診断コメントの投稿に失敗しました [repo=%s]: %s",
-          issue.number, repo, e instanceof Error ? e.message : String(e),
-        );
-      });
-      return { outcome: "failure", claudeExecuted: false };
-    }
-    // Transient: leave labels, retry next cycle
-    logger.warn(
-      "Issue #%s: review 評価のコメント取得に一時的に失敗しました [repo=%s]: %s",
-      issue.number, repo, errorMessage,
+    return await handleCommentFetchError(
+      error,
+      deps,
+      repo,
+      issue,
+      repoConfig,
+      specLabels.review,
+      true,
     );
-    return { outcome: "failure", claudeExecuted: false };
   }
 
   const thread = deriveSpecThread(comments);
