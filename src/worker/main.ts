@@ -139,6 +139,7 @@ async function processRepository(
 
   let anySuccess = false;
   let remaining = executionConfig.maxIssuesPerRepo;
+  const processedIssueNumbers = new Set<number>();
 
   const ctx: StepContext = { repoConfig, executionConfig, deps, authToken };
 
@@ -172,6 +173,15 @@ async function processRepository(
     }
 
     for (const issue of issues) {
+      if (processedIssueNumbers.has(issue.number)) {
+        logger.warn(
+          "[%s] Issue #%s は今サイクルで処理済みのためスキップ",
+          fullName,
+          issue.number,
+        );
+        continue;
+      }
+
       const canRunClaude = remaining > 0;
       if (!canRunClaude && step.requiresQuota) {
         logger.info(
@@ -188,6 +198,7 @@ async function processRepository(
         issue.title,
       );
       const result = await step.run(ctx, issue, canRunClaude);
+      processedIssueNumbers.add(issue.number);
       if (result.outcome === "success") {
         anySuccess = true;
       }

@@ -6,6 +6,7 @@ import {
   makeRepoConfig,
   makeIssue,
   makeAppConfig,
+  SPEC_LABELS,
 } from "./helpers/factories.js";
 import { createMockWorkerDeps } from "./helpers/mock-deps.js";
 import type { WorkerDeps } from "../../src/worker/main.js";
@@ -505,6 +506,54 @@ describe("workerMain", () => {
       const result = await workerMain("/path/to/config.yml", deps);
 
       expect(result).toBe(0);
+      expect(deps.processIssue).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // 同一サイクル内の二重処理防止
+  // -----------------------------------------------------------------------
+
+  describe("同一サイクル内の二重処理防止", () => {
+    it("同じ Issue が複数ステップで取得された場合、2 回目はスキップされ WARNING が出る", async () => {
+      vi.mocked(deps.loadConfig).mockReturnValue(makeAppConfig());
+      const duplicateIssue = makeIssue({
+        number: 42,
+        phase: Phase.SPEC,
+        labels: [SPEC_LABELS.review, SPEC_LABELS.trigger],
+      });
+      vi.mocked(deps.fetchIssues).mockImplementation(async (_repo, _phase, label) => {
+        if (label === SPEC_LABELS.review) return [duplicateIssue];
+        if (label === SPEC_LABELS.trigger) return [duplicateIssue];
+        return [];
+      });
+      vi.mocked(deps.resumeSpecReview).mockResolvedValue({ outcome: "deferred", claudeExecuted: false });
+
+      mockLoggerInstance.warn.mockClear();
+      await workerMain("/path/to/config.yml", deps);
+
+      expect(deps.resumeSpecReview).toHaveBeenCalledTimes(1);
+      expect(deps.processIssue).not.toHaveBeenCalled();
+      expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
+        expect.stringContaining("#%s"),
+        expect.any(String),
+        42,
+      );
+    });
+
+    it("異なる Issue 番号は二重処理防止の対象にならない", async () => {
+      vi.mocked(deps.loadConfig).mockReturnValue(makeAppConfig());
+      vi.mocked(deps.fetchIssues).mockImplementation(async (_repo, _phase, label) => {
+        if (label === SPEC_LABELS.review) return [makeIssue({ number: 10, phase: Phase.SPEC })];
+        if (label === SPEC_LABELS.trigger) return [makeIssue({ number: 20, phase: Phase.SPEC })];
+        return [];
+      });
+      vi.mocked(deps.resumeSpecReview).mockResolvedValue({ outcome: "deferred", claudeExecuted: false });
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
+
+      await workerMain("/path/to/config.yml", deps);
+
+      expect(deps.resumeSpecReview).toHaveBeenCalledTimes(1);
       expect(deps.processIssue).toHaveBeenCalledTimes(1);
     });
   });
