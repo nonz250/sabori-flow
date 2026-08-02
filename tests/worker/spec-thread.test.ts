@@ -260,11 +260,20 @@ describe("buildSpecContext", () => {
       feedback: ["fix this"],
     });
     expect(result).not.toBeNull();
-    expect(result).toContain("## Approved specification");
+    expect(result).toContain("## Latest specification proposal");
     expect(result).toContain("the spec");
-    expect(result).toContain("## Supplementary feedback");
+    expect(result).toContain("## Subsequent feedback");
     expect(result).toContain("fix this");
-    expect(result).toContain("clarifications or amendments");
+  });
+
+  it("does not claim approval status in output", () => {
+    const result = buildSpecContext({
+      round: 1,
+      latestProposal: "the spec",
+      feedback: ["some feedback"],
+    });
+    expect(result).not.toBeNull();
+    expect(result!.toLowerCase()).not.toContain("approved");
   });
 
   it("total exceeds limit → proposal truncated, feedback preserved", () => {
@@ -298,6 +307,6 @@ describe("buildSpecContext", () => {
       feedback: [],
     });
     expect(result).toContain("spec text");
-    expect(result).not.toContain("Supplementary feedback");
+    expect(result).not.toContain("Subsequent feedback");
   });
 });

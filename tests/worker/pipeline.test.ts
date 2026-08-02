@@ -1048,7 +1048,7 @@ describe("processIssue", () => {
       await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels.plan.trigger, deps);
 
       const specCtx = vi.mocked(deps.buildPrompt).mock.calls[0][3];
-      expect(specCtx).toContain("Approved specification");
+      expect(specCtx).toContain("Latest specification proposal");
       expect(specCtx).toContain("agreed specification");
     });
 
@@ -1062,7 +1062,7 @@ describe("processIssue", () => {
       await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels.impl.trigger, deps);
 
       const specCtx = vi.mocked(deps.buildPrompt).mock.calls[0][3];
-      expect(specCtx).toContain("Approved specification");
+      expect(specCtx).toContain("Latest specification proposal");
       expect(specCtx).toContain("agreed specification");
     });
   });

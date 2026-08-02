@@ -87,6 +87,11 @@ export function deriveSpecThread(comments: readonly IssueComment[]): SpecThread 
 
 // ---------- Spec context ----------
 
+const PROPOSAL_HEADING = "## Latest specification proposal\n\n";
+const FEEDBACK_HEADER =
+  "## Subsequent feedback\n\n" +
+  "The following comments were posted after the latest proposal.\n\n";
+
 export function buildSpecContext(thread: SpecThread): string | null {
   if (thread.latestProposal === null && thread.feedback.length === 0) {
     return null;
@@ -95,14 +100,12 @@ export function buildSpecContext(thread: SpecThread): string | null {
   const sections: string[] = [];
 
   if (thread.latestProposal !== null) {
-    sections.push("## Approved specification\n\n" + thread.latestProposal);
+    sections.push(PROPOSAL_HEADING + thread.latestProposal);
   }
 
   if (thread.feedback.length > 0) {
     sections.push(
-      "## Supplementary feedback\n\n" +
-        "The following comments were added after the specification was approved. " +
-        "Treat them as clarifications or amendments, not as a new specification.\n\n" +
+      FEEDBACK_HEADER +
         thread.feedback.map((f, i) => `### Feedback ${i + 1}\n\n${f}`).join("\n\n"),
     );
   }
@@ -110,54 +113,46 @@ export function buildSpecContext(thread: SpecThread): string | null {
   let result = sections.join("\n\n");
 
   if (result.length > MAX_SPEC_CONTEXT_LENGTH) {
-    result = truncateSpecContext(thread, result);
+    result = truncateSpecContext(thread);
   }
 
   return result;
 }
 
-function truncateSpecContext(thread: SpecThread, _full: string): string {
+function truncateSpecContext(thread: SpecThread): string {
   const sections: string[] = [];
 
   // Feedback takes priority — truncate proposal first
   const feedbackBlock =
     thread.feedback.length > 0
-      ? "## Supplementary feedback\n\n" +
-        "The following comments were added after the specification was approved. " +
-        "Treat them as clarifications or amendments, not as a new specification.\n\n" +
+      ? FEEDBACK_HEADER +
         thread.feedback.map((f, i) => `### Feedback ${i + 1}\n\n${f}`).join("\n\n")
       : "";
 
   const feedbackLen = feedbackBlock.length;
 
   if (feedbackLen >= MAX_SPEC_CONTEXT_LENGTH) {
-    // Feedback alone exceeds limit — drop older feedback entries
     const kept: string[] = [];
     let keptLen = 0;
-    const header =
-      "## Supplementary feedback\n\n" +
-      "The following comments were added after the specification was approved. " +
-      "Treat them as clarifications or amendments, not as a new specification.\n\n";
 
     for (let i = thread.feedback.length - 1; i >= 0; i--) {
       const entry = `### Feedback ${i + 1}\n\n${thread.feedback[i]}`;
-      if (header.length + keptLen + entry.length + 4 > MAX_SPEC_CONTEXT_LENGTH) {
+      if (FEEDBACK_HEADER.length + keptLen + entry.length + 4 > MAX_SPEC_CONTEXT_LENGTH) {
         break;
       }
       kept.unshift(entry);
       keptLen += entry.length + 4;
     }
-    return header + kept.join("\n\n");
+    return FEEDBACK_HEADER + kept.join("\n\n");
   }
 
   if (thread.latestProposal !== null) {
     const remaining = MAX_SPEC_CONTEXT_LENGTH - feedbackLen - 4;
-    const proposalHeader = "## Approved specification\n\n";
-    const maxProposalBody = remaining - proposalHeader.length;
+    const maxProposalBody = remaining - PROPOSAL_HEADING.length;
 
     if (maxProposalBody > 0) {
       const truncated = thread.latestProposal.slice(0, maxProposalBody);
-      sections.push(proposalHeader + truncated);
+      sections.push(PROPOSAL_HEADING + truncated);
     }
   }
 
