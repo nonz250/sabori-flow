@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { PhaseLabels } from "../../src/worker/models.js";
 import {
   ProcessTimeoutError,
   ProcessExecutionError,
@@ -15,36 +14,29 @@ vi.mock("../../src/worker/process.js", async (importOriginal) => {
 });
 
 import {
-  transitionToInProgress,
-  transitionToDone,
-  transitionToFailed,
-  addImplTriggerLabel,
+  applyLabelTransition,
   LabelError,
 } from "../../src/worker/label.js";
 import { runCommand } from "../../src/worker/process.js";
 
 const mockedRunCommand = vi.mocked(runCommand);
 
-const phaseLabels: PhaseLabels = {
-  trigger: "claude/plan",
-  inProgress: "claude/plan:in-progress",
-  done: "claude/plan:done",
-  failed: "claude/plan:failed",
-};
-
-describe("transitionToInProgress", () => {
+describe("applyLabelTransition", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("trigger ラベルを削除し in_progress ラベルを追加する gh issue edit が呼ばれる", async () => {
+  it("add と remove のラベルで gh issue edit が呼ばれる", async () => {
     mockedRunCommand.mockResolvedValue({
       success: true,
       stdout: "",
       stderr: "",
     });
 
-    await transitionToInProgress("nonz250/example-app", 42, phaseLabels);
+    await applyLabelTransition("nonz250/example-app", 42, {
+      add: ["claude/plan:in-progress"],
+      remove: ["claude/plan"],
+    });
 
     expect(mockedRunCommand).toHaveBeenCalledOnce();
     expect(mockedRunCommand).toHaveBeenCalledWith(
@@ -64,46 +56,45 @@ describe("transitionToInProgress", () => {
     );
   });
 
-  it("gh コマンドが非0終了コードを返した場合 LabelError が throw される", async () => {
-    mockedRunCommand.mockResolvedValue({
-      success: false,
-      stdout: "",
-      stderr: "label not found",
-    });
-
-    await expect(
-      transitionToInProgress("nonz250/example-app", 42, phaseLabels),
-    ).rejects.toThrow(LabelError);
-    await expect(
-      transitionToInProgress("nonz250/example-app", 42, phaseLabels),
-    ).rejects.toThrow("label not found");
-  });
-
-  it("タイムアウト時に LabelError が throw される", async () => {
-    mockedRunCommand.mockRejectedValue(new ProcessTimeoutError(120_000));
-
-    await expect(
-      transitionToInProgress("nonz250/example-app", 42, phaseLabels),
-    ).rejects.toThrow(LabelError);
-    await expect(
-      transitionToInProgress("nonz250/example-app", 42, phaseLabels),
-    ).rejects.toThrow("gh issue edit timed out after 120 seconds");
-  });
-});
-
-describe("transitionToDone", () => {
-  beforeEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it("in_progress ラベルを削除し done ラベルを追加する gh issue edit が呼ばれる", async () => {
+  it("add のみのラベル操作で --remove-label が含まれない", async () => {
     mockedRunCommand.mockResolvedValue({
       success: true,
       stdout: "",
       stderr: "",
     });
 
-    await transitionToDone("nonz250/example-app", 7, phaseLabels);
+    await applyLabelTransition("nonz250/example-app", 42, {
+      add: ["claude/impl"],
+      remove: [],
+    });
+
+    expect(mockedRunCommand).toHaveBeenCalledOnce();
+    expect(mockedRunCommand).toHaveBeenCalledWith(
+      "gh",
+      [
+        "issue",
+        "edit",
+        "--repo",
+        "nonz250/example-app",
+        "42",
+        "--add-label",
+        "claude/impl",
+      ],
+      { timeoutMs: 120_000 },
+    );
+  });
+
+  it("done 遷移の add/remove が正しく渡される", async () => {
+    mockedRunCommand.mockResolvedValue({
+      success: true,
+      stdout: "",
+      stderr: "",
+    });
+
+    await applyLabelTransition("nonz250/example-app", 7, {
+      add: ["claude/plan:done"],
+      remove: ["claude/plan:in-progress"],
+    });
 
     expect(mockedRunCommand).toHaveBeenCalledOnce();
     expect(mockedRunCommand).toHaveBeenCalledWith(
@@ -123,35 +114,17 @@ describe("transitionToDone", () => {
     );
   });
 
-  it("gh コマンドが非0終了コードを返した場合 LabelError が throw される", async () => {
-    mockedRunCommand.mockResolvedValue({
-      success: false,
-      stdout: "",
-      stderr: "permission denied",
-    });
-
-    await expect(
-      transitionToDone("nonz250/example-app", 7, phaseLabels),
-    ).rejects.toThrow(LabelError);
-    await expect(
-      transitionToDone("nonz250/example-app", 7, phaseLabels),
-    ).rejects.toThrow("permission denied");
-  });
-});
-
-describe("transitionToFailed", () => {
-  beforeEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it("in_progress ラベルを削除し failed ラベルを追加する gh issue edit が呼ばれる", async () => {
+  it("failed 遷移の add/remove が正しく渡される", async () => {
     mockedRunCommand.mockResolvedValue({
       success: true,
       stdout: "",
       stderr: "",
     });
 
-    await transitionToFailed("nonz250/example-app", 15, phaseLabels);
+    await applyLabelTransition("nonz250/example-app", 15, {
+      add: ["claude/plan:failed"],
+      remove: ["claude/plan:in-progress"],
+    });
 
     expect(mockedRunCommand).toHaveBeenCalledOnce();
     expect(mockedRunCommand).toHaveBeenCalledWith(
@@ -171,19 +144,91 @@ describe("transitionToFailed", () => {
     );
   });
 
+  it("複数の add ラベルがカンマ区切りで渡される", async () => {
+    mockedRunCommand.mockResolvedValue({
+      success: true,
+      stdout: "",
+      stderr: "",
+    });
+
+    await applyLabelTransition("nonz250/example-app", 42, {
+      add: ["ai/spec/done", "ai/plan"],
+      remove: ["ai/spec/review", "ai/spec/approved"],
+    });
+
+    expect(mockedRunCommand).toHaveBeenCalledOnce();
+    expect(mockedRunCommand).toHaveBeenCalledWith(
+      "gh",
+      [
+        "issue",
+        "edit",
+        "--repo",
+        "nonz250/example-app",
+        "42",
+        "--add-label",
+        "ai/spec/done,ai/plan",
+        "--remove-label",
+        "ai/spec/review,ai/spec/approved",
+      ],
+      { timeoutMs: 120_000 },
+    );
+  });
+
   it("gh コマンドが非0終了コードを返した場合 LabelError が throw される", async () => {
     mockedRunCommand.mockResolvedValue({
       success: false,
       stdout: "",
-      stderr: "network error",
+      stderr: "permission denied",
     });
 
     await expect(
-      transitionToFailed("nonz250/example-app", 15, phaseLabels),
+      applyLabelTransition("nonz250/example-app", 42, {
+        add: ["claude/plan:in-progress"],
+        remove: ["claude/plan"],
+      }),
     ).rejects.toThrow(LabelError);
     await expect(
-      transitionToFailed("nonz250/example-app", 15, phaseLabels),
-    ).rejects.toThrow("network error");
+      applyLabelTransition("nonz250/example-app", 42, {
+        add: ["claude/plan:in-progress"],
+        remove: ["claude/plan"],
+      }),
+    ).rejects.toThrow("permission denied");
+  });
+
+  it("タイムアウト時に LabelError が throw される", async () => {
+    mockedRunCommand.mockRejectedValue(new ProcessTimeoutError(120_000));
+
+    await expect(
+      applyLabelTransition("nonz250/example-app", 42, {
+        add: ["claude/plan:in-progress"],
+        remove: ["claude/plan"],
+      }),
+    ).rejects.toThrow(LabelError);
+    await expect(
+      applyLabelTransition("nonz250/example-app", 42, {
+        add: ["claude/plan:in-progress"],
+        remove: ["claude/plan"],
+      }),
+    ).rejects.toThrow("gh issue edit timed out after 120 seconds");
+  });
+
+  it("ProcessExecutionError 時に LabelError が throw される", async () => {
+    mockedRunCommand.mockRejectedValue(
+      new ProcessExecutionError("spawn gh ENOENT"),
+    );
+
+    await expect(
+      applyLabelTransition("nonz250/example-app", 42, {
+        add: ["claude/plan:in-progress"],
+        remove: ["claude/plan"],
+      }),
+    ).rejects.toThrow(LabelError);
+    await expect(
+      applyLabelTransition("nonz250/example-app", 42, {
+        add: ["claude/plan:in-progress"],
+        remove: ["claude/plan"],
+      }),
+    ).rejects.toThrow("spawn gh ENOENT");
   });
 });
 
@@ -193,7 +238,6 @@ describe("ラベル自動作成", () => {
   });
 
   it("addLabel が存在しない場合、label create → issue edit 再試行が行われる", async () => {
-    // Arrange
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
       stdout: "",
@@ -210,10 +254,11 @@ describe("ラベル自動作成", () => {
       stderr: "",
     });
 
-    // Act
-    await transitionToInProgress("nonz250/example-app", 42, phaseLabels);
+    await applyLabelTransition("nonz250/example-app", 42, {
+      add: ["claude/plan:in-progress"],
+      remove: ["claude/plan"],
+    });
 
-    // Assert
     expect(mockedRunCommand).toHaveBeenCalledTimes(3);
     expect(mockedRunCommand).toHaveBeenNthCalledWith(
       2,
@@ -245,8 +290,52 @@ describe("ラベル自動作成", () => {
     );
   });
 
+  it("複数の add ラベルが存在しない場合、全 add ラベルの create が試行される", async () => {
+    mockedRunCommand.mockResolvedValueOnce({
+      success: false,
+      stdout: "",
+      stderr: "'ai/spec/done' not found",
+    });
+    // label create for ai/spec/done
+    mockedRunCommand.mockResolvedValueOnce({
+      success: true,
+      stdout: "",
+      stderr: "",
+    });
+    // label create for ai/plan
+    mockedRunCommand.mockResolvedValueOnce({
+      success: true,
+      stdout: "",
+      stderr: "",
+    });
+    // retry gh issue edit
+    mockedRunCommand.mockResolvedValueOnce({
+      success: true,
+      stdout: "",
+      stderr: "",
+    });
+
+    await applyLabelTransition("nonz250/example-app", 42, {
+      add: ["ai/spec/done", "ai/plan"],
+      remove: ["ai/spec/review"],
+    });
+
+    expect(mockedRunCommand).toHaveBeenCalledTimes(4);
+    expect(mockedRunCommand).toHaveBeenNthCalledWith(
+      2,
+      "gh",
+      ["label", "create", "ai/spec/done", "--repo", "nonz250/example-app"],
+      { timeoutMs: 120_000 },
+    );
+    expect(mockedRunCommand).toHaveBeenNthCalledWith(
+      3,
+      "gh",
+      ["label", "create", "ai/plan", "--repo", "nonz250/example-app"],
+      { timeoutMs: 120_000 },
+    );
+  });
+
   it("label create が already exists を返した場合も成功する", async () => {
-    // Arrange
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
       stdout: "",
@@ -263,14 +352,15 @@ describe("ラベル自動作成", () => {
       stderr: "",
     });
 
-    // Act & Assert
     await expect(
-      transitionToInProgress("nonz250/example-app", 42, phaseLabels),
+      applyLabelTransition("nonz250/example-app", 42, {
+        add: ["claude/plan:in-progress"],
+        remove: ["claude/plan"],
+      }),
     ).resolves.toBeUndefined();
   });
 
   it("label create が別のエラーを返した場合は LabelError が throw される", async () => {
-    // Arrange
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
       stdout: "",
@@ -282,15 +372,16 @@ describe("ラベル自動作成", () => {
       stderr: "HTTP 403: permission denied",
     });
 
-    // Act & Assert
     await expect(
-      transitionToInProgress("nonz250/example-app", 42, phaseLabels),
+      applyLabelTransition("nonz250/example-app", 42, {
+        add: ["claude/plan:in-progress"],
+        remove: ["claude/plan"],
+      }),
     ).rejects.toThrow(LabelError);
     expect(mockedRunCommand).toHaveBeenCalledTimes(2);
   });
 
   it("再試行の issue edit が失敗した場合は LabelError が throw される", async () => {
-    // Arrange
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
       stdout: "",
@@ -307,14 +398,15 @@ describe("ラベル自動作成", () => {
       stderr: "network error",
     });
 
-    // Act & Assert
     await expect(
-      transitionToInProgress("nonz250/example-app", 42, phaseLabels),
+      applyLabelTransition("nonz250/example-app", 42, {
+        add: ["claude/plan:in-progress"],
+        remove: ["claude/plan"],
+      }),
     ).rejects.toThrow(LabelError);
   });
 
   it("label create 中に ProcessTimeoutError が発生した場合は LabelError が throw される", async () => {
-    // Arrange
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
       stdout: "",
@@ -322,29 +414,31 @@ describe("ラベル自動作成", () => {
     });
     mockedRunCommand.mockRejectedValueOnce(new ProcessTimeoutError(120_000));
 
-    // Act & Assert
     await expect(
-      transitionToInProgress("nonz250/example-app", 42, phaseLabels),
+      applyLabelTransition("nonz250/example-app", 42, {
+        add: ["claude/plan:in-progress"],
+        remove: ["claude/plan"],
+      }),
     ).rejects.toThrow(LabelError);
   });
 
   it("ラベル未存在でない通常のエラーではリトライしない", async () => {
-    // Arrange
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
       stdout: "",
       stderr: "permission denied",
     });
 
-    // Act & Assert
     await expect(
-      transitionToInProgress("nonz250/example-app", 42, phaseLabels),
+      applyLabelTransition("nonz250/example-app", 42, {
+        add: ["claude/plan:in-progress"],
+        remove: ["claude/plan"],
+      }),
     ).rejects.toThrow(LabelError);
     expect(mockedRunCommand).toHaveBeenCalledTimes(1);
   });
 
   it("label create 中に ProcessTimeoutError が発生した場合のエラーメッセージが正しい", async () => {
-    // Arrange
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
       stdout: "",
@@ -352,14 +446,15 @@ describe("ラベル自動作成", () => {
     });
     mockedRunCommand.mockRejectedValueOnce(new ProcessTimeoutError(120_000));
 
-    // Act & Assert
     await expect(
-      transitionToInProgress("nonz250/example-app", 42, phaseLabels),
+      applyLabelTransition("nonz250/example-app", 42, {
+        add: ["claude/plan:in-progress"],
+        remove: ["claude/plan"],
+      }),
     ).rejects.toThrow("gh issue edit timed out after 120 seconds");
   });
 
   it("label create 中に ProcessExecutionError が発生した場合は LabelError が throw される", async () => {
-    // Arrange
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
       stdout: "",
@@ -369,18 +464,15 @@ describe("ラベル自動作成", () => {
       new ProcessExecutionError("spawn gh ENOENT"),
     );
 
-    // Act & Assert
-    const promise = transitionToInProgress(
-      "nonz250/example-app",
-      42,
-      phaseLabels,
-    );
+    const promise = applyLabelTransition("nonz250/example-app", 42, {
+      add: ["claude/plan:in-progress"],
+      remove: ["claude/plan"],
+    });
     await expect(promise).rejects.toThrow(LabelError);
     await expect(promise).rejects.toThrow("spawn gh ENOENT");
   });
 
   it("label create が already exists を返した後の再試行が失敗した場合は LabelError が throw される", async () => {
-    // Arrange
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
       stdout: "",
@@ -397,106 +489,27 @@ describe("ラベル自動作成", () => {
       stderr: "unexpected error",
     });
 
-    // Act & Assert
     await expect(
-      transitionToInProgress("nonz250/example-app", 42, phaseLabels),
+      applyLabelTransition("nonz250/example-app", 42, {
+        add: ["claude/plan:in-progress"],
+        remove: ["claude/plan"],
+      }),
     ).rejects.toThrow(LabelError);
   });
 
   it("not found を含むがラベル名を含まないエラーではリトライしない", async () => {
-    // Arrange: "repository not found" のようなエラー
     mockedRunCommand.mockResolvedValueOnce({
       success: false,
       stdout: "",
       stderr: "repository not found",
     });
 
-    // Act & Assert
     await expect(
-      transitionToInProgress("nonz250/example-app", 42, phaseLabels),
+      applyLabelTransition("nonz250/example-app", 42, {
+        add: ["claude/plan:in-progress"],
+        remove: ["claude/plan"],
+      }),
     ).rejects.toThrow(LabelError);
     expect(mockedRunCommand).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("addImplTriggerLabel", () => {
-  beforeEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it("impl trigger ラベルを追加する gh issue edit が呼ばれる", async () => {
-    mockedRunCommand.mockResolvedValue({
-      success: true,
-      stdout: "",
-      stderr: "",
-    });
-
-    await addImplTriggerLabel("nonz250/example-app", 42, "claude/impl");
-
-    expect(mockedRunCommand).toHaveBeenCalledOnce();
-    expect(mockedRunCommand).toHaveBeenCalledWith(
-      "gh",
-      [
-        "issue",
-        "edit",
-        "--repo",
-        "nonz250/example-app",
-        "42",
-        "--add-label",
-        "claude/impl",
-      ],
-      { timeoutMs: 120_000 },
-    );
-  });
-
-  it("gh コマンドが非0終了コードを返した場合 LabelError が throw される", async () => {
-    mockedRunCommand.mockResolvedValue({
-      success: false,
-      stdout: "",
-      stderr: "permission denied",
-    });
-
-    await expect(
-      addImplTriggerLabel("nonz250/example-app", 42, "claude/impl"),
-    ).rejects.toThrow(LabelError);
-  });
-
-  it("ラベルが存在しない場合、label create → issue edit 再試行が行われる", async () => {
-    mockedRunCommand.mockResolvedValueOnce({
-      success: false,
-      stdout: "",
-      stderr: "'claude/impl' not found",
-    });
-    mockedRunCommand.mockResolvedValueOnce({
-      success: true,
-      stdout: "",
-      stderr: "",
-    });
-    mockedRunCommand.mockResolvedValueOnce({
-      success: true,
-      stdout: "",
-      stderr: "",
-    });
-
-    await addImplTriggerLabel("nonz250/example-app", 42, "claude/impl");
-
-    expect(mockedRunCommand).toHaveBeenCalledTimes(3);
-    expect(mockedRunCommand).toHaveBeenNthCalledWith(
-      2,
-      "gh",
-      ["label", "create", "claude/impl", "--repo", "nonz250/example-app"],
-      { timeoutMs: 120_000 },
-    );
-  });
-
-  it("タイムアウト時に LabelError が throw される", async () => {
-    mockedRunCommand.mockRejectedValue(new ProcessTimeoutError(120_000));
-
-    await expect(
-      addImplTriggerLabel("nonz250/example-app", 42, "claude/impl"),
-    ).rejects.toThrow(LabelError);
-    await expect(
-      addImplTriggerLabel("nonz250/example-app", 42, "claude/impl"),
-    ).rejects.toThrow("gh issue edit timed out after 120 seconds");
   });
 });

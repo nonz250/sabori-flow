@@ -4,12 +4,8 @@ import { Autonomy, Phase, FailureCategory, repoFullName } from "./models.js";
 import type { ProcessResult } from "./process.js";
 import { buildPrompt } from "./prompt.js";
 import { runClaude, ExecutorTimeoutError } from "./executor.js";
-import {
-  transitionToInProgress,
-  transitionToDone,
-  transitionToFailed,
-  addImplTriggerLabel,
-} from "./label.js";
+import { applyLabelTransition } from "./label.js";
+import type { LabelTransition } from "./label.js";
 import {
   postSuccessComment,
   postFailureComment,
@@ -32,25 +28,10 @@ export interface PipelineDeps {
     prompt: string,
     options: { cwd: string; autonomy?: Autonomy; timeoutMs?: number; authToken?: string },
   ) => Promise<ProcessResult>;
-  transitionToInProgress: (
+  applyLabelTransition: (
     repo: string,
     num: number,
-    labels: PhaseLabels,
-  ) => Promise<void>;
-  transitionToDone: (
-    repo: string,
-    num: number,
-    labels: PhaseLabels,
-  ) => Promise<void>;
-  transitionToFailed: (
-    repo: string,
-    num: number,
-    labels: PhaseLabels,
-  ) => Promise<void>;
-  addImplTriggerLabel: (
-    repo: string,
-    num: number,
-    implTriggerLabel: string,
+    transition: LabelTransition,
   ) => Promise<void>;
   postSuccessComment: (
     repo: string,
@@ -76,10 +57,7 @@ export interface PipelineDeps {
 export const defaultDeps: PipelineDeps = {
   buildPrompt,
   runClaude: (prompt, options) => runClaude(prompt, options),
-  transitionToInProgress,
-  transitionToDone,
-  transitionToFailed,
-  addImplTriggerLabel,
+  applyLabelTransition,
   postSuccessComment,
   postFailureComment,
   fetchLinkedPullRequestNumbers,
@@ -127,7 +105,10 @@ export async function processIssue(
 
   // 2. ラベル遷移 trigger -> in-progress（レベル 1）
   try {
-    await deps.transitionToInProgress(repo, issue.number, phaseLabels);
+    await deps.applyLabelTransition(repo, issue.number, {
+      add: [phaseLabels.inProgress],
+      remove: [phaseLabels.trigger],
+    });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error(
@@ -243,7 +224,10 @@ export async function processIssue(
         // 4-A. 成功: done 遷移 + 自動 impl ラベル付与 + 成功コメント（レベル 3）
         let doneTransitionSucceeded = false;
         try {
-          await deps.transitionToDone(repo, issue.number, phaseLabels);
+          await deps.applyLabelTransition(repo, issue.number, {
+            add: [phaseLabels.done],
+            remove: [phaseLabels.inProgress],
+          });
           doneTransitionSucceeded = true;
         } catch (error: unknown) {
           const errorMessage = error instanceof Error ? error.message : String(error);
@@ -258,7 +242,10 @@ export async function processIssue(
         // plan 成功 + autoImplAfterPlan 有効時に impl trigger ラベルを付与
         if (doneTransitionSucceeded && issue.phase === Phase.PLAN && repoConfig.autoImplAfterPlan) {
           try {
-            await deps.addImplTriggerLabel(repo, issue.number, repoConfig.labels.impl.trigger);
+            await deps.applyLabelTransition(repo, issue.number, {
+              add: [repoConfig.labels.impl.trigger],
+              remove: [],
+            });
           } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             logger.warn(
@@ -332,7 +319,10 @@ function handleFailure(
   phaseLabels: PhaseLabels,
   diagnostics: FailureDiagnostics,
 ): void {
-  deps.transitionToFailed(repo, issueNumber, phaseLabels).catch(
+  deps.applyLabelTransition(repo, issueNumber, {
+    add: [phaseLabels.failed],
+    remove: [phaseLabels.inProgress],
+  }).catch(
     (error: unknown) => {
       const errorMessage = error instanceof Error ? error.message : String(error);
       logger.warn(
