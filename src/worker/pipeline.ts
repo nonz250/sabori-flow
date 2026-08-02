@@ -15,6 +15,7 @@ import {
 } from "./comment.js";
 import { fetchIssueComments, IssueCommentsError } from "./issue-comments.js";
 import { deriveSpecThread, buildSpecContext } from "./spec-thread.js";
+import { evaluateSpecResume } from "./spec-review.js";
 import { fetchLinkedPullRequestNumbers } from "./linked-pr.js";
 import { withWorktree, WorktreeError } from "./worktree.js";
 import { createLogger } from "./logger.js";
@@ -496,6 +497,145 @@ function handleFailure(
  *          `:failed` は trigger ラベルを戻さず自動リトライされないため、
  *          確証が無い限り failed に倒さない。
  */
+/**
+ * spec review キューの Issue を評価し、適切なアクションを実行する。
+ */
+export async function resumeSpecReview(
+  issue: Issue,
+  repoConfig: RepositoryConfig,
+  executionConfig: ExecutionConfig,
+  authToken: string | null,
+  canRunClaude: boolean,
+  deps: PipelineDeps = defaultDeps,
+): Promise<StepResult> {
+  const repo = repoFullName(repoConfig);
+  const specLabels = repoConfig.labels.spec;
+
+  // Fetch comments to evaluate review state
+  let comments: readonly IssueComment[];
+  try {
+    comments = await deps.fetchIssueComments(repoConfig.owner, repoConfig.repo, issue.number);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (error instanceof IssueCommentsError && error.structural) {
+      // Structural: needs-human + diagnostic (review route has no trigger to strip)
+      deps.applyLabelTransition(repo, issue.number, {
+        add: [specLabels.needsHuman],
+        remove: [specLabels.review],
+      }).catch((e: unknown) => {
+        logger.warn(
+          "Issue #%s: needs-human ラベル遷移に失敗しました [repo=%s]: %s",
+          issue.number, repo, e instanceof Error ? e.message : String(e),
+        );
+      });
+      const formattedMessage = formatFailureDiagnostics({
+        category: FailureCategory.CLI_EXECUTION_ERROR,
+        summary: "Structural failure fetching Issue comments",
+        errorMessage,
+      });
+      deps.postFailureComment(repo, issue.number, formattedMessage).catch((e: unknown) => {
+        logger.warn(
+          "Issue #%s: 診断コメントの投稿に失敗しました [repo=%s]: %s",
+          issue.number, repo, e instanceof Error ? e.message : String(e),
+        );
+      });
+      return { outcome: "failure", claudeExecuted: false };
+    }
+    // Transient: leave labels, retry next cycle
+    logger.warn(
+      "Issue #%s: review 評価のコメント取得に一時的に失敗しました [repo=%s]: %s",
+      issue.number, repo, errorMessage,
+    );
+    return { outcome: "failure", claudeExecuted: false };
+  }
+
+  const thread = deriveSpecThread(comments);
+  const decision = evaluateSpecResume({ thread, labels: issue.labels, specLabels });
+
+  logger.info(
+    "Issue #%s: spec review 評価結果 [repo=%s, action=%s, reason=%s]",
+    issue.number, repo, decision.action, decision.reason,
+  );
+
+  // Filter remove list to labels actually present on the Issue
+  const presentLabels = new Set(issue.labels);
+
+  switch (decision.action) {
+    case "approve": {
+      const removeLabels = [specLabels.review, specLabels.approved];
+      if (presentLabels.has(specLabels.trigger)) removeLabels.push(specLabels.trigger);
+      try {
+        await deps.applyLabelTransition(repo, issue.number, {
+          add: [specLabels.done, repoConfig.labels.plan.trigger],
+          remove: removeLabels,
+        });
+      } catch (error: unknown) {
+        logger.warn(
+          "Issue #%s: approve ラベル遷移に失敗しました [repo=%s]: %s",
+          issue.number, repo, error instanceof Error ? error.message : String(error),
+        );
+      }
+      return { outcome: "success", claudeExecuted: false };
+    }
+
+    case "escalate": {
+      try {
+        const removeLabels = [specLabels.review];
+        if (presentLabels.has(specLabels.trigger)) removeLabels.push(specLabels.trigger);
+        await deps.applyLabelTransition(repo, issue.number, {
+          add: [specLabels.needsHuman],
+          remove: removeLabels,
+        });
+      } catch (error: unknown) {
+        logger.warn(
+          "Issue #%s: escalate ラベル遷移に失敗しました [repo=%s]: %s",
+          issue.number, repo, error instanceof Error ? error.message : String(error),
+        );
+      }
+      try {
+        await deps.postFailureComment(repo, issue.number,
+          `This issue requires human attention: ${decision.reason}`,
+        );
+      } catch (error: unknown) {
+        logger.warn(
+          "Issue #%s: エスカレーション説明コメントの投稿に失敗しました [repo=%s]: %s",
+          issue.number, repo, error instanceof Error ? error.message : String(error),
+        );
+      }
+      return { outcome: "success", claudeExecuted: false };
+    }
+
+    case "revise": {
+      if (!canRunClaude) {
+        return { outcome: "deferred", claudeExecuted: false };
+      }
+      // -review +in-progress, then delegate to processIssue
+      const removeLabels = [specLabels.review];
+      if (presentLabels.has(specLabels.trigger)) removeLabels.push(specLabels.trigger);
+      try {
+        await deps.applyLabelTransition(repo, issue.number, {
+          add: [specLabels.inProgress],
+          remove: removeLabels,
+        });
+      } catch (error: unknown) {
+        logger.warn(
+          "Issue #%s: revise ラベル遷移に失敗しました [repo=%s]: %s",
+          issue.number, repo, error instanceof Error ? error.message : String(error),
+        );
+        return { outcome: "failure", claudeExecuted: false };
+      }
+      // Delegate to processIssue with review entry label.
+      // The in-progress transition is already done, so processIssue will
+      // skip its own trigger→in-progress step (entryLabel = inProgress,
+      // which matches phaseLabels.inProgress, making the add/remove a no-op).
+      return processIssue(issue, repoConfig, executionConfig, authToken, specLabels.inProgress, deps);
+    }
+
+    case "wait":
+      return { outcome: "deferred", claudeExecuted: false };
+  }
+}
+
 async function implPullRequestCheckPassed(
   deps: PipelineDeps,
   repo: string,
