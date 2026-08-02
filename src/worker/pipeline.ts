@@ -1,5 +1,5 @@
 import type { Language } from "../i18n/types.js";
-import type { Issue, PhaseLabels, RepositoryConfig, ExecutionConfig, FailureDiagnostics, StepResult } from "./models.js";
+import type { Issue, IssueComment, PhaseLabels, RepositoryConfig, ExecutionConfig, FailureDiagnostics, StepResult, SpecPhaseLabels } from "./models.js";
 import { Autonomy, Phase, FailureCategory, repoFullName } from "./models.js";
 import type { ProcessResult } from "./process.js";
 import { buildPrompt } from "./prompt.js";
@@ -9,9 +9,12 @@ import type { LabelTransition } from "./label.js";
 import {
   postSuccessComment,
   postFailureComment,
+  postSpecProposalComment,
   formatFailureDiagnostics,
   sanitizeOutput,
 } from "./comment.js";
+import { fetchIssueComments, IssueCommentsError } from "./issue-comments.js";
+import { deriveSpecThread, buildSpecContext } from "./spec-thread.js";
 import { fetchLinkedPullRequestNumbers } from "./linked-pr.js";
 import { withWorktree, WorktreeError } from "./worktree.js";
 import { createLogger } from "./logger.js";
@@ -43,6 +46,17 @@ export interface PipelineDeps {
     num: number,
     message: string,
   ) => Promise<void>;
+  postSpecProposalComment: (
+    repo: string,
+    num: number,
+    rawOutput: string,
+    round: number,
+  ) => Promise<void>;
+  fetchIssueComments: (
+    owner: string,
+    repo: string,
+    issueNumber: number,
+  ) => Promise<readonly IssueComment[]>;
   fetchLinkedPullRequestNumbers: (
     repo: string,
     num: number,
@@ -60,40 +74,24 @@ export const defaultDeps: PipelineDeps = {
   applyLabelTransition,
   postSuccessComment,
   postFailureComment,
+  postSpecProposalComment,
+  fetchIssueComments,
   fetchLinkedPullRequestNumbers,
   withWorktree,
 };
 
 // ---------- Pipeline ----------
 
-/**
- * 1 Issue の処理パイプラインを実行する。
- *
- * 処理フロー:
- *   1. PhaseLabels 解決: issue.phase から plan/impl のラベル定義を取得
- *   2. ラベル遷移 trigger -> in-progress
- *   3. worktree 作成 -> プロンプト生成 -> Claude CLI 実行 -> worktree 削除
- *   4. impl のみ: Issue に紐づく PR の存在を検証
- *   5-A. 成功: done 遷移 + 成功コメント
- *   5-B. 失敗: failed 遷移 + 失敗コメント
- *
- * エラーハンドリング:
- *   - レベル 1: trigger->in-progress 失敗 -> return false（次回リトライ可能）
- *   - レベル 2: プロンプト生成/CLI 実行失敗/impl の PR 未作成 -> failed 遷移 + 失敗コメント + return false
- *   - レベル 3: 後処理失敗 -> ログ WARNING のみ、結果は変えない
- */
 export async function processIssue(
   issue: Issue,
   repoConfig: RepositoryConfig,
   executionConfig: ExecutionConfig,
   authToken: string | null,
+  entryLabel: string,
   deps: PipelineDeps = defaultDeps,
 ): Promise<StepResult> {
   const repo = repoFullName(repoConfig);
-
-  // 1. PhaseLabels 解決
-  const phaseLabels: PhaseLabels =
-    issue.phase === Phase.PLAN ? repoConfig.labels.plan : repoConfig.labels.impl;
+  const phaseLabels = repoConfig.labels[issue.phase];
 
   logger.info(
     "Issue #%s (%s) の処理を開始します [repo=%s, phase=%s]",
@@ -103,11 +101,41 @@ export async function processIssue(
     issue.phase,
   );
 
-  // 2. ラベル遷移 trigger -> in-progress（レベル 1）
+  // Fetch comments before removing the trigger label so that a transient
+  // failure leaves the label intact and the Issue is retried next cycle.
+  let specContext: string | null = null;
+  let specRound = 1;
+  const isSpecTrigger = issue.phase === Phase.SPEC && entryLabel === repoConfig.labels.spec.trigger;
+  const isSpecReview = issue.phase === Phase.SPEC && entryLabel === repoConfig.labels.spec.review;
+
+  if (issue.phase === Phase.SPEC || issue.phase === Phase.PLAN || issue.phase === Phase.IMPL) {
+    try {
+      const comments = await deps.fetchIssueComments(repoConfig.owner, repoConfig.repo, issue.number);
+      const thread = deriveSpecThread(comments);
+      specContext = buildSpecContext(thread);
+
+      if (issue.phase === Phase.SPEC) {
+        specRound = isSpecTrigger ? 1 : thread.round + 1;
+      }
+    } catch (error: unknown) {
+      if (issue.phase === Phase.SPEC) {
+        return handleCommentFetchError(error, deps, repo, issue, repoConfig, isSpecTrigger);
+      }
+      // plan/impl: spec context unavailable, proceed without it
+      logger.warn(
+        "Issue #%s: spec context fetch failed, proceeding without spec [repo=%s]: %s",
+        issue.number,
+        repo,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  }
+
+  // Trigger → in-progress (level 1)
   try {
     await deps.applyLabelTransition(repo, issue.number, {
       add: [phaseLabels.inProgress],
-      remove: [phaseLabels.trigger],
+      remove: [entryLabel],
     });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -120,16 +148,15 @@ export async function processIssue(
     return { outcome: "failure", claudeExecuted: false };
   }
 
-  // 3. worktree 作成 -> Claude 実行 -> worktree 削除
+  // Worktree → prompt → claude
   try {
     return await deps.withWorktree(
       repoConfig,
       issue.number,
       async (worktreePath: string) => {
-        // 3-1. プロンプト生成（レベル 2）
         let prompt: string;
         try {
-          prompt = deps.buildPrompt(issue, repoConfig, executionConfig.language);
+          prompt = deps.buildPrompt(issue, repoConfig, executionConfig.language, specContext);
         } catch (error: unknown) {
           const errorMessage = error instanceof Error ? error.message : String(error);
           logger.error(
@@ -146,7 +173,6 @@ export async function processIssue(
           return { outcome: "failure", claudeExecuted: false };
         }
 
-        // 3-2. Claude CLI 実行（レベル 2）
         let result: ProcessResult;
         try {
           result = await deps.runClaude(prompt, {
@@ -198,6 +224,11 @@ export async function processIssue(
           return { outcome: "failure", claudeExecuted: true };
         }
 
+        // Phase-specific success handling
+        if (issue.phase === Phase.SPEC) {
+          return handleSpecSuccess(deps, repo, issue, repoConfig.labels.spec, result, specRound);
+        }
+
         // `claude -p` exits 0 when the model stops calling tools, even if
         // background processes or subagents it spawned are still running.
         // Exit code alone therefore cannot confirm that impl actually
@@ -221,7 +252,7 @@ export async function processIssue(
           return { outcome: "failure", claudeExecuted: true };
         }
 
-        // 4-A. 成功: done 遷移 + 自動 impl ラベル付与 + 成功コメント（レベル 3）
+        // plan/impl success: done + success comment (level 3)
         let doneTransitionSucceeded = false;
         try {
           await deps.applyLabelTransition(repo, issue.number, {
@@ -239,7 +270,6 @@ export async function processIssue(
           );
         }
 
-        // plan 成功 + autoImplAfterPlan 有効時に impl trigger ラベルを付与
         if (doneTransitionSucceeded && issue.phase === Phase.PLAN && repoConfig.autoImplAfterPlan) {
           try {
             await deps.applyLabelTransition(repo, issue.number, {
@@ -278,7 +308,6 @@ export async function processIssue(
       },
     );
   } catch (error: unknown) {
-    // worktree 作成失敗（レベル 2）
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error(
       "Issue #%s: worktree の作成に失敗しました [repo=%s]: %s",
@@ -305,13 +334,126 @@ export async function processIssue(
 
 // ---------- Internal helpers ----------
 
+function handleCommentFetchError(
+  error: unknown,
+  deps: PipelineDeps,
+  repo: string,
+  issue: Issue,
+  repoConfig: RepositoryConfig,
+  isSpecTrigger: boolean,
+): StepResult {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  const specLabels = repoConfig.labels.spec;
+
+  if (error instanceof IssueCommentsError && error.structural) {
+    if (isSpecTrigger) {
+      handleFailure(deps, repo, issue.number, specLabels, {
+        category: FailureCategory.CLI_EXECUTION_ERROR,
+        summary: "Structural failure fetching Issue comments",
+        errorMessage,
+      });
+    } else {
+      // review route: needs-human + diagnostic
+      deps.applyLabelTransition(repo, issue.number, {
+        add: [specLabels.needsHuman],
+        remove: [specLabels.review],
+      }).catch((e: unknown) => {
+        logger.warn(
+          "Issue #%s: needs-human ラベル遷移に失敗しました [repo=%s]: %s",
+          issue.number,
+          repo,
+          e instanceof Error ? e.message : String(e),
+        );
+      });
+      const formattedMessage = formatFailureDiagnostics({
+        category: FailureCategory.CLI_EXECUTION_ERROR,
+        summary: "Structural failure fetching Issue comments",
+        errorMessage,
+      });
+      deps.postFailureComment(repo, issue.number, formattedMessage).catch((e: unknown) => {
+        logger.warn(
+          "Issue #%s: 診断コメントの投稿に失敗しました [repo=%s]: %s",
+          issue.number,
+          repo,
+          e instanceof Error ? e.message : String(e),
+        );
+      });
+    }
+    return { outcome: "failure", claudeExecuted: false };
+  }
+
+  // Transient failure: leave labels intact for next-cycle retry
+  logger.error(
+    "Issue #%s: コメント取得に一時的に失敗しました [repo=%s]: %s",
+    issue.number,
+    repo,
+    errorMessage,
+  );
+  return { outcome: "failure", claudeExecuted: false };
+}
+
 /**
- * 失敗時の後処理を行う。
- *
- * failed ラベルへの遷移と失敗コメントの投稿を行う。
- * いずれの操作もレベル 3 のエラーハンドリングとして、
- * 失敗してもログ WARNING のみで処理を継続する。
+ * Spec success: post proposal comment first, then transition to review.
+ * Comment before label because the marker comment is the state itself —
+ * transitioning to review without a marker makes the review evaluator
+ * unable to find the proposal.
  */
+async function handleSpecSuccess(
+  deps: PipelineDeps,
+  repo: string,
+  issue: Issue,
+  specLabels: SpecPhaseLabels,
+  result: ProcessResult,
+  round: number,
+): Promise<StepResult> {
+  try {
+    await deps.postSpecProposalComment(repo, issue.number, result.stdout, round);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error(
+      "Issue #%s: spec 提案コメントの投稿に失敗しました [repo=%s]: %s",
+      issue.number,
+      repo,
+      errorMessage,
+    );
+    // Preserve spec output in logs since the comment failed to post
+    logger.error(
+      "Issue #%s: spec output (not posted): %s",
+      issue.number,
+      result.stdout,
+    );
+    handleFailure(deps, repo, issue.number, specLabels, {
+      category: FailureCategory.SPEC_PROPOSAL_COMMENT,
+      summary: "Failed to post spec proposal comment",
+      errorMessage,
+    });
+    return { outcome: "failure", claudeExecuted: true };
+  }
+
+  // in-progress → review (level 3)
+  try {
+    await deps.applyLabelTransition(repo, issue.number, {
+      add: [specLabels.review],
+      remove: [specLabels.inProgress],
+    });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.warn(
+      "Issue #%s: review ラベル遷移に失敗しました [repo=%s]: %s",
+      issue.number,
+      repo,
+      errorMessage,
+    );
+  }
+
+  logger.info(
+    "Issue #%s の spec 提案が投稿されました [repo=%s]",
+    issue.number,
+    repo,
+  );
+  return { outcome: "success", claudeExecuted: true };
+}
+
 function handleFailure(
   deps: PipelineDeps,
   repo: string,

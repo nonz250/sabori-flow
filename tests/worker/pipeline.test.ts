@@ -57,7 +57,7 @@ describe("processIssue", () => {
         makeProcessResult({ stdout: "Claude output" }),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(result.outcome).toBe("success");
       expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
@@ -68,7 +68,7 @@ describe("processIssue", () => {
         { add: [PLAN_LABELS.inProgress], remove: [PLAN_LABELS.trigger] },
       );
       expect(deps.buildPrompt).toHaveBeenCalledOnce();
-      expect(deps.buildPrompt).toHaveBeenCalledWith(issue, repoConfig, "ja");
+      expect(deps.buildPrompt).toHaveBeenCalledWith(issue, repoConfig, "ja", null);
       expect(deps.runClaude).toHaveBeenCalledOnce();
       expect(deps.applyLabelTransition).toHaveBeenNthCalledWith(
         2,
@@ -89,7 +89,7 @@ describe("processIssue", () => {
       const issue = makeIssue({ phase: Phase.PLAN });
       const repoConfig = makeRepoConfig();
 
-      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(deps.applyLabelTransition).toHaveBeenNthCalledWith(
         1,
@@ -109,7 +109,7 @@ describe("processIssue", () => {
       const issue = makeIssue({ phase: Phase.IMPL });
       const repoConfig = makeRepoConfig();
 
-      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(deps.applyLabelTransition).toHaveBeenNthCalledWith(
         1,
@@ -137,7 +137,7 @@ describe("processIssue", () => {
         language: "ja",
       };
 
-      await processIssue(issue, repoConfig, executionConfig, null, deps);
+      await processIssue(issue, repoConfig, executionConfig, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(deps.runClaude).toHaveBeenCalledOnce();
       expect(deps.runClaude).toHaveBeenCalledWith(
@@ -150,7 +150,7 @@ describe("processIssue", () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
 
-      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(deps.runClaude).toHaveBeenCalledOnce();
       expect(deps.runClaude).toHaveBeenCalledWith(
@@ -167,7 +167,7 @@ describe("processIssue", () => {
         timeoutMinutes: 30,
       };
 
-      await processIssue(issue, repoConfig, executionConfig, null, deps);
+      await processIssue(issue, repoConfig, executionConfig, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(deps.runClaude).toHaveBeenCalledOnce();
       expect(deps.runClaude).toHaveBeenCalledWith(
@@ -184,7 +184,7 @@ describe("processIssue", () => {
         timeoutMinutes: 240,
       };
 
-      await processIssue(issue, repoConfig, executionConfig, null, deps);
+      await processIssue(issue, repoConfig, executionConfig, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(deps.runClaude).toHaveBeenCalledOnce();
       expect(deps.runClaude).toHaveBeenCalledWith(
@@ -202,6 +202,7 @@ describe("processIssue", () => {
         repoConfig,
         DEFAULT_EXECUTION_CONFIG,
         "sk-ant-oat01-example",
+        repoConfig.labels[issue.phase].trigger,
         deps,
       );
 
@@ -215,7 +216,7 @@ describe("processIssue", () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
 
-      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       const options = vi.mocked(deps.runClaude).mock.calls[0][1];
       expect(options.authToken).toBeUndefined();
@@ -225,7 +226,7 @@ describe("processIssue", () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
 
-      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(deps.withWorktree).toHaveBeenCalledOnce();
       expect(deps.withWorktree).toHaveBeenCalledWith(
@@ -244,7 +245,7 @@ describe("processIssue", () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig({ defaultBranch: "develop" });
 
-      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(deps.withWorktree).toHaveBeenCalledOnce();
       expect(deps.withWorktree).toHaveBeenCalledWith(
@@ -264,7 +265,7 @@ describe("processIssue", () => {
         }),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(result.outcome).toBe("success");
       expect(deps.postSuccessComment).toHaveBeenCalledOnce();
@@ -288,7 +289,7 @@ describe("processIssue", () => {
         new Error("label operation failed"),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(result.outcome).toBe("failure");
       expect(deps.applyLabelTransition).toHaveBeenCalledOnce();
@@ -311,7 +312,7 @@ describe("processIssue", () => {
         throw new Error("template not found");
       });
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(result.outcome).toBe("failure");
       expect(deps.runClaude).not.toHaveBeenCalled();
@@ -338,7 +339,7 @@ describe("processIssue", () => {
         new Error("execution failed unexpectedly"),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(result.outcome).toBe("failure");
       expect(deps.postSuccessComment).not.toHaveBeenCalled();
@@ -365,7 +366,7 @@ describe("processIssue", () => {
         new ExecutorTimeoutError(`Claude Code CLI timed out after ${timeoutMs}ms`, timeoutMs),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(result.outcome).toBe("failure");
       expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
@@ -388,7 +389,7 @@ describe("processIssue", () => {
         }),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(result.outcome).toBe("failure");
       expect(deps.postFailureComment).toHaveBeenCalledOnce();
@@ -413,7 +414,7 @@ describe("processIssue", () => {
         }),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(result.outcome).toBe("failure");
       const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
@@ -429,7 +430,7 @@ describe("processIssue", () => {
         makeExecutorTimeoutError({ timeoutMs: 600_000 }),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(result.outcome).toBe("failure");
       const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
@@ -448,7 +449,7 @@ describe("processIssue", () => {
         makeProcessResult({ success: false, stderr: "CLI error output" }),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(result.outcome).toBe("failure");
       expect(deps.postSuccessComment).not.toHaveBeenCalled();
@@ -475,7 +476,7 @@ describe("processIssue", () => {
         makeProcessResult({ success: false, stderr: "", stdout: "stdout error" }),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(result.outcome).toBe("failure");
       const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
@@ -492,7 +493,7 @@ describe("processIssue", () => {
         makeProcessResult({ success: false, stderr: "", stdout: "" }),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(result.outcome).toBe("failure");
       const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
@@ -507,7 +508,7 @@ describe("processIssue", () => {
         new WorktreeError("git fetch origin failed", "fetch"),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(result.outcome).toBe("failure");
       expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
@@ -531,7 +532,7 @@ describe("processIssue", () => {
         new WorktreeError("worktree ディレクトリの作成に失敗しました", "mkdir"),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(result.outcome).toBe("failure");
       expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
@@ -555,7 +556,7 @@ describe("processIssue", () => {
         new WorktreeError("worktree の作成に失敗しました", "create"),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(result.outcome).toBe("failure");
       expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
@@ -573,7 +574,7 @@ describe("processIssue", () => {
         new Error("worktree creation failed"),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(result.outcome).toBe("failure");
       expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
@@ -603,7 +604,7 @@ describe("processIssue", () => {
         .mockResolvedValueOnce(undefined)
         .mockRejectedValueOnce(new Error("done label failed"));
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(result.outcome).toBe("success");
       expect(deps.postSuccessComment).toHaveBeenCalledOnce();
@@ -616,7 +617,7 @@ describe("processIssue", () => {
         new Error("comment post failed"),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(result.outcome).toBe("success");
       expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
@@ -639,7 +640,7 @@ describe("processIssue", () => {
         },
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(result.outcome).toBe("failure");
       expect(deps.postFailureComment).toHaveBeenCalledOnce();
@@ -656,7 +657,7 @@ describe("processIssue", () => {
         new Error("comment post failed"),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(result.outcome).toBe("failure");
       expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
@@ -672,7 +673,7 @@ describe("processIssue", () => {
       const issue = makeIssue({ phase: Phase.PLAN });
       const repoConfig = makeRepoConfig({ autoImplAfterPlan: true });
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(result.outcome).toBe("success");
       expect(deps.applyLabelTransition).toHaveBeenCalledTimes(3);
@@ -688,7 +689,7 @@ describe("processIssue", () => {
       const issue = makeIssue({ phase: Phase.PLAN });
       const repoConfig = makeRepoConfig({ autoImplAfterPlan: false });
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(result.outcome).toBe("success");
       expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
@@ -698,7 +699,7 @@ describe("processIssue", () => {
       const issue = makeIssue({ phase: Phase.IMPL });
       const repoConfig = makeRepoConfig({ autoImplAfterPlan: true });
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(result.outcome).toBe("success");
       expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
@@ -715,7 +716,7 @@ describe("processIssue", () => {
         },
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(result.outcome).toBe("success");
       expect(deps.applyLabelTransition).toHaveBeenCalledTimes(3);
@@ -732,7 +733,7 @@ describe("processIssue", () => {
         },
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(result.outcome).toBe("success");
       expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
@@ -748,7 +749,7 @@ describe("processIssue", () => {
       const issue = makeIssue({ phase: Phase.IMPL });
       const repoConfig = makeRepoConfig();
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(result.outcome).toBe("success");
       expect(deps.fetchLinkedPullRequestNumbers).toHaveBeenCalledOnce();
@@ -769,7 +770,7 @@ describe("processIssue", () => {
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValue([]);
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(result.outcome).toBe("failure");
       expect(deps.applyLabelTransition).toHaveBeenCalledWith(
@@ -792,7 +793,7 @@ describe("processIssue", () => {
         }),
       );
 
-      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
       expect(failureMessage).toContain("No Linked Pull Request");
@@ -808,7 +809,7 @@ describe("processIssue", () => {
         new Error("API error"),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(result.outcome).toBe("success");
       expect(deps.applyLabelTransition).toHaveBeenCalledWith(
@@ -824,7 +825,7 @@ describe("processIssue", () => {
       const issue = makeIssue({ phase: Phase.PLAN });
       const repoConfig = makeRepoConfig();
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(result.outcome).toBe("success");
       expect(deps.fetchLinkedPullRequestNumbers).not.toHaveBeenCalled();

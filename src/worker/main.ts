@@ -24,6 +24,7 @@ export interface WorkerDeps {
     repoConfig: RepositoryConfig,
     executionConfig: ExecutionConfig,
     authToken: string | null,
+    entryLabel: string,
   ) => Promise<StepResult>;
   readAuthToken: () => string | null;
 }
@@ -96,7 +97,10 @@ async function processPhase(
       issue.priority,
       issue.title,
     );
-    const result = await deps.processIssue(issue, repoConfig, executionConfig, authToken);
+    const triggerLabel = phase === PhaseEnum.PLAN
+      ? repoConfig.labels.plan.trigger
+      : repoConfig.labels.impl.trigger;
+    const result = await deps.processIssue(issue, repoConfig, executionConfig, authToken, triggerLabel);
     if (result.outcome === "success") {
       anySuccess = true;
     }

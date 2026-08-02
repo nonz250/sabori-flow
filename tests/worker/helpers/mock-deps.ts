@@ -22,6 +22,8 @@ export function createMockPipelineDeps(
     applyLabelTransition: vi.fn().mockResolvedValue(undefined),
     postSuccessComment: vi.fn().mockResolvedValue(undefined),
     postFailureComment: vi.fn().mockResolvedValue(undefined),
+    postSpecProposalComment: vi.fn().mockResolvedValue(undefined),
+    fetchIssueComments: vi.fn().mockResolvedValue([]),
     fetchLinkedPullRequestNumbers: vi.fn().mockResolvedValue([123]),
     withWorktree: vi.fn().mockImplementation(
       async (

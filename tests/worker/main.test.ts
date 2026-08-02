@@ -618,6 +618,7 @@ describe("workerMain", () => {
         expect.anything(),
         expect.anything(),
         "sk-ant-oat01-example",
+        expect.any(String),
       );
     });
 
@@ -639,6 +640,7 @@ describe("workerMain", () => {
         expect.anything(),
         expect.anything(),
         null,
+        expect.any(String),
       );
     });
 
