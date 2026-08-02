@@ -59,7 +59,7 @@ describe("processIssue", () => {
 
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
 
-      expect(result).toBe(true);
+      expect(result.outcome).toBe("success");
       expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
       expect(deps.applyLabelTransition).toHaveBeenNthCalledWith(
         1,
@@ -266,7 +266,7 @@ describe("processIssue", () => {
 
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
 
-      expect(result).toBe(true);
+      expect(result.outcome).toBe("success");
       expect(deps.postSuccessComment).toHaveBeenCalledOnce();
       expect(deps.postSuccessComment).toHaveBeenCalledWith(
         "testowner/testrepo",
@@ -290,7 +290,7 @@ describe("processIssue", () => {
 
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
 
-      expect(result).toBe(false);
+      expect(result.outcome).toBe("failure");
       expect(deps.applyLabelTransition).toHaveBeenCalledOnce();
       expect(deps.buildPrompt).not.toHaveBeenCalled();
       expect(deps.runClaude).not.toHaveBeenCalled();
@@ -313,7 +313,7 @@ describe("processIssue", () => {
 
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
 
-      expect(result).toBe(false);
+      expect(result.outcome).toBe("failure");
       expect(deps.runClaude).not.toHaveBeenCalled();
       expect(deps.postSuccessComment).not.toHaveBeenCalled();
       expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
@@ -340,7 +340,7 @@ describe("processIssue", () => {
 
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
 
-      expect(result).toBe(false);
+      expect(result.outcome).toBe("failure");
       expect(deps.postSuccessComment).not.toHaveBeenCalled();
       expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
       expect(deps.applyLabelTransition).toHaveBeenNthCalledWith(
@@ -367,7 +367,7 @@ describe("processIssue", () => {
 
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
 
-      expect(result).toBe(false);
+      expect(result.outcome).toBe("failure");
       expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
       expect(deps.postFailureComment).toHaveBeenCalledOnce();
       const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
@@ -390,7 +390,7 @@ describe("processIssue", () => {
 
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
 
-      expect(result).toBe(false);
+      expect(result.outcome).toBe("failure");
       expect(deps.postFailureComment).toHaveBeenCalledOnce();
       const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
       expect(failureMessage).toContain("CLI Timeout");
@@ -415,7 +415,7 @@ describe("processIssue", () => {
 
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
 
-      expect(result).toBe(false);
+      expect(result.outcome).toBe("failure");
       const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
       expect(failureMessage).not.toContain(token);
       expect(failureMessage).toContain("[REDACTED]");
@@ -431,7 +431,7 @@ describe("processIssue", () => {
 
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
 
-      expect(result).toBe(false);
+      expect(result.outcome).toBe("failure");
       const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
       expect(failureMessage).toContain("CLI Timeout");
       expect(failureMessage).not.toContain("<summary>stderr");
@@ -450,7 +450,7 @@ describe("processIssue", () => {
 
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
 
-      expect(result).toBe(false);
+      expect(result.outcome).toBe("failure");
       expect(deps.postSuccessComment).not.toHaveBeenCalled();
       expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
       expect(deps.applyLabelTransition).toHaveBeenNthCalledWith(
@@ -477,7 +477,7 @@ describe("processIssue", () => {
 
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
 
-      expect(result).toBe(false);
+      expect(result.outcome).toBe("failure");
       const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
       expect(failureMessage).toContain("CLI Non-zero Exit");
       expect(failureMessage).toContain("Claude Code CLI returned a non-zero exit code");
@@ -494,7 +494,7 @@ describe("processIssue", () => {
 
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
 
-      expect(result).toBe(false);
+      expect(result.outcome).toBe("failure");
       const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
       expect(failureMessage).toContain("CLI Non-zero Exit");
       expect(failureMessage).toContain("Claude Code CLI returned a non-zero exit code");
@@ -509,7 +509,7 @@ describe("processIssue", () => {
 
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
 
-      expect(result).toBe(false);
+      expect(result.outcome).toBe("failure");
       expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
       expect(deps.applyLabelTransition).toHaveBeenNthCalledWith(
         2,
@@ -533,7 +533,7 @@ describe("processIssue", () => {
 
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
 
-      expect(result).toBe(false);
+      expect(result.outcome).toBe("failure");
       expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
       expect(deps.applyLabelTransition).toHaveBeenNthCalledWith(
         2,
@@ -557,7 +557,7 @@ describe("processIssue", () => {
 
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
 
-      expect(result).toBe(false);
+      expect(result.outcome).toBe("failure");
       expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
       expect(deps.postFailureComment).toHaveBeenCalledOnce();
       const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
@@ -575,7 +575,7 @@ describe("processIssue", () => {
 
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
 
-      expect(result).toBe(false);
+      expect(result.outcome).toBe("failure");
       expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
       expect(deps.applyLabelTransition).toHaveBeenNthCalledWith(
         2,
@@ -605,7 +605,7 @@ describe("processIssue", () => {
 
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
 
-      expect(result).toBe(true);
+      expect(result.outcome).toBe("success");
       expect(deps.postSuccessComment).toHaveBeenCalledOnce();
     });
 
@@ -618,7 +618,7 @@ describe("processIssue", () => {
 
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
 
-      expect(result).toBe(true);
+      expect(result.outcome).toBe("success");
       expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
     });
   });
@@ -641,7 +641,7 @@ describe("processIssue", () => {
 
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
 
-      expect(result).toBe(false);
+      expect(result.outcome).toBe("failure");
       expect(deps.postFailureComment).toHaveBeenCalledOnce();
     });
 
@@ -658,7 +658,7 @@ describe("processIssue", () => {
 
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
 
-      expect(result).toBe(false);
+      expect(result.outcome).toBe("failure");
       expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
     });
   });
@@ -674,7 +674,7 @@ describe("processIssue", () => {
 
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
 
-      expect(result).toBe(true);
+      expect(result.outcome).toBe("success");
       expect(deps.applyLabelTransition).toHaveBeenCalledTimes(3);
       expect(deps.applyLabelTransition).toHaveBeenNthCalledWith(
         3,
@@ -690,7 +690,7 @@ describe("processIssue", () => {
 
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
 
-      expect(result).toBe(true);
+      expect(result.outcome).toBe("success");
       expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
     });
 
@@ -700,7 +700,7 @@ describe("processIssue", () => {
 
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
 
-      expect(result).toBe(true);
+      expect(result.outcome).toBe("success");
       expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
     });
 
@@ -717,7 +717,7 @@ describe("processIssue", () => {
 
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
 
-      expect(result).toBe(true);
+      expect(result.outcome).toBe("success");
       expect(deps.applyLabelTransition).toHaveBeenCalledTimes(3);
     });
 
@@ -734,7 +734,7 @@ describe("processIssue", () => {
 
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
 
-      expect(result).toBe(true);
+      expect(result.outcome).toBe("success");
       expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
     });
   });
@@ -750,7 +750,7 @@ describe("processIssue", () => {
 
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
 
-      expect(result).toBe(true);
+      expect(result.outcome).toBe("success");
       expect(deps.fetchLinkedPullRequestNumbers).toHaveBeenCalledOnce();
       expect(deps.fetchLinkedPullRequestNumbers).toHaveBeenCalledWith(
         "testowner/testrepo",
@@ -771,7 +771,7 @@ describe("processIssue", () => {
 
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
 
-      expect(result).toBe(false);
+      expect(result.outcome).toBe("failure");
       expect(deps.applyLabelTransition).toHaveBeenCalledWith(
         "testowner/testrepo",
         42,
@@ -810,7 +810,7 @@ describe("processIssue", () => {
 
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
 
-      expect(result).toBe(true);
+      expect(result.outcome).toBe("success");
       expect(deps.applyLabelTransition).toHaveBeenCalledWith(
         "testowner/testrepo",
         42,
@@ -826,7 +826,7 @@ describe("processIssue", () => {
 
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
 
-      expect(result).toBe(true);
+      expect(result.outcome).toBe("success");
       expect(deps.fetchLinkedPullRequestNumbers).not.toHaveBeenCalled();
       expect(deps.applyLabelTransition).toHaveBeenCalledWith(
         "testowner/testrepo",

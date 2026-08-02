@@ -73,7 +73,7 @@ describe("workerMain", () => {
           makeIssue({ number: 42, title: "Feature request", priority: Priority.HIGH }),
         ])
         .mockResolvedValueOnce([]);
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -90,7 +90,7 @@ describe("workerMain", () => {
         .mockResolvedValueOnce([
           makeIssue({ number: 43, title: "Another issue", phase: Phase.IMPL }),
         ]);
-      vi.mocked(deps.processIssue).mockResolvedValue(false);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "failure", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -119,7 +119,7 @@ describe("workerMain", () => {
       vi.mocked(deps.fetchIssues)
         .mockRejectedValueOnce(new Error("gh failed"))
         .mockResolvedValueOnce([makeIssue({ phase: Phase.IMPL })]);
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -131,7 +131,7 @@ describe("workerMain", () => {
       vi.mocked(deps.fetchIssues)
         .mockRejectedValueOnce(new Error("parse failed"))
         .mockResolvedValueOnce([makeIssue({ phase: Phase.IMPL })]);
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -173,7 +173,7 @@ describe("workerMain", () => {
       vi.mocked(deps.fetchIssues)
         .mockResolvedValueOnce([makeIssue({ number: 10, phase: Phase.PLAN })])
         .mockResolvedValueOnce([]);
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -187,7 +187,7 @@ describe("workerMain", () => {
       vi.mocked(deps.fetchIssues)
         .mockResolvedValueOnce([makeIssue({ number: 10, phase: Phase.PLAN })])
         .mockResolvedValueOnce([makeIssue({ number: 20, phase: Phase.IMPL })]);
-      vi.mocked(deps.processIssue).mockResolvedValue(false);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "failure", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -223,8 +223,8 @@ describe("workerMain", () => {
         ])
         .mockResolvedValueOnce([]);
       vi.mocked(deps.processIssue)
-        .mockResolvedValueOnce(false)
-        .mockResolvedValueOnce(true);
+        .mockResolvedValueOnce({ outcome: "failure", claudeExecuted: true })
+        .mockResolvedValueOnce({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -253,7 +253,7 @@ describe("workerMain", () => {
       vi.mocked(deps.fetchIssues)
         .mockResolvedValueOnce([makeIssue({ phase: Phase.PLAN })])
         .mockRejectedValueOnce(new Error("impl fetch failed"));
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -265,7 +265,7 @@ describe("workerMain", () => {
       vi.mocked(deps.fetchIssues)
         .mockRejectedValueOnce(new Error("plan fetch failed"))
         .mockResolvedValueOnce([makeIssue({ phase: Phase.IMPL })]);
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -277,7 +277,7 @@ describe("workerMain", () => {
       vi.mocked(deps.fetchIssues)
         .mockResolvedValueOnce([makeIssue({ phase: Phase.PLAN })])
         .mockResolvedValueOnce([makeIssue({ phase: Phase.IMPL })]);
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -339,7 +339,7 @@ describe("workerMain", () => {
         return [];
       });
 
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -368,7 +368,7 @@ describe("workerMain", () => {
           ? [makeIssue({ phase: Phase.PLAN })]
           : [];
       });
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -395,7 +395,7 @@ describe("workerMain", () => {
           makeIssue({ number: 5, phase: Phase.PLAN }),
         ])
         .mockResolvedValueOnce([]);
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -414,7 +414,7 @@ describe("workerMain", () => {
           makeIssue({ number: 3, phase: Phase.PLAN }),
         ])
         .mockResolvedValueOnce([]);
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -432,7 +432,7 @@ describe("workerMain", () => {
           makeIssue({ number: 2, phase: Phase.PLAN }),
         ])
         .mockResolvedValueOnce([]);
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -448,7 +448,7 @@ describe("workerMain", () => {
         .mockResolvedValueOnce([
           makeIssue({ number: 1, phase: Phase.PLAN }),
         ]);
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       await workerMain("/path/to/config.yml", deps);
 
@@ -471,7 +471,7 @@ describe("workerMain", () => {
           makeIssue({ number: 11, phase: Phase.IMPL }),
           makeIssue({ number: 12, phase: Phase.IMPL }),
         ]);
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -491,7 +491,7 @@ describe("workerMain", () => {
           makeIssue({ number: 11, phase: Phase.IMPL }),
           makeIssue({ number: 12, phase: Phase.IMPL }),
         ]);
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -509,7 +509,7 @@ describe("workerMain", () => {
           makeIssue({ number: 1, phase: Phase.PLAN }),
           makeIssue({ number: 2, phase: Phase.PLAN }),
         ]);
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -607,7 +607,7 @@ describe("workerMain", () => {
       vi.mocked(deps.fetchIssues)
         .mockResolvedValueOnce([makeIssue({ phase: Phase.PLAN })])
         .mockResolvedValueOnce([]);
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       await workerMain("/path/to/config.yml", deps);
 
@@ -629,7 +629,7 @@ describe("workerMain", () => {
       vi.mocked(deps.fetchIssues)
         .mockResolvedValueOnce([makeIssue({ phase: Phase.PLAN })])
         .mockResolvedValueOnce([]);
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       await workerMain("/path/to/config.yml", deps);
 

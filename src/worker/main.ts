@@ -1,4 +1,4 @@
-import type { AppConfig, ExecutionConfig, Issue, Phase, RepositoryConfig } from "./models.js";
+import type { AppConfig, ExecutionConfig, Issue, Phase, RepositoryConfig, StepResult } from "./models.js";
 import { repoFullName } from "./models.js";
 import { Phase as PhaseEnum } from "./models.js";
 import { loadConfig } from "./config.js";
@@ -24,7 +24,7 @@ export interface WorkerDeps {
     repoConfig: RepositoryConfig,
     executionConfig: ExecutionConfig,
     authToken: string | null,
-  ) => Promise<boolean>;
+  ) => Promise<StepResult>;
   readAuthToken: () => string | null;
 }
 
@@ -41,7 +41,7 @@ export const defaultWorkerDeps: WorkerDeps = {
  * 指定リポジトリ・フェーズの Issue を取得し、パイプラインを実行する。
  *
  * @returns anySuccess: 1 件以上の Issue を正常に処理できた場合 true,
- *          processedCount: 処理対象とした Issue 件数
+ *          claudeExecutions: claude を起動した回数（quota 会計の単位）
  */
 async function processPhase(
   repoConfig: RepositoryConfig,
@@ -50,7 +50,7 @@ async function processPhase(
   deps: WorkerDeps,
   remainingQuota: number,
   authToken: string | null,
-): Promise<{ anySuccess: boolean; processedCount: number }> {
+): Promise<{ anySuccess: boolean; claudeExecutions: number }> {
   const fullName = repoFullName(repoConfig);
 
   logger.info("[%s] %s フェーズの Issue を取得中...", fullName, phase);
@@ -65,7 +65,7 @@ async function processPhase(
       phase,
       error,
     );
-    return { anySuccess: false, processedCount: 0 };
+    return { anySuccess: false, claudeExecutions: 0 };
   }
 
   logger.info(
@@ -76,35 +76,36 @@ async function processPhase(
   );
 
   if (issues.length === 0) {
-    return { anySuccess: true, processedCount: 0 }; // 0 件は成功扱い
-  }
-
-  const targetIssues = issues.slice(0, remainingQuota);
-  if (targetIssues.length < issues.length) {
-    logger.info(
-      "[%s] %s フェーズ: 上限により %s/%s 件を処理",
-      fullName,
-      phase,
-      targetIssues.length,
-      issues.length,
-    );
+    return { anySuccess: true, claudeExecutions: 0 };
   }
 
   let anySuccess = false;
-  for (const issue of targetIssues) {
+  let claudeExecutions = 0;
+  for (const issue of issues) {
+    if (remainingQuota - claudeExecutions <= 0) {
+      logger.info(
+        "[%s] %s フェーズ: claude 起動上限に達したため残りをスキップ",
+        fullName,
+        phase,
+      );
+      break;
+    }
     logger.info(
       "  #%s [%s] %s の処理を開始",
       issue.number,
       issue.priority,
       issue.title,
     );
-    const success = await deps.processIssue(issue, repoConfig, executionConfig, authToken);
-    if (success) {
+    const result = await deps.processIssue(issue, repoConfig, executionConfig, authToken);
+    if (result.outcome === "success") {
       anySuccess = true;
+    }
+    if (result.claudeExecuted) {
+      claudeExecutions++;
     }
   }
 
-  return { anySuccess, processedCount: targetIssues.length };
+  return { anySuccess, claudeExecutions };
 }
 
 /**
@@ -128,7 +129,7 @@ async function processRepository(
       break;
     }
     const result = await processPhase(repoConfig, phase, executionConfig, deps, remaining, authToken);
-    remaining -= result.processedCount;
+    remaining -= result.claudeExecutions;
     if (result.anySuccess) {
       anySuccess = true;
     }

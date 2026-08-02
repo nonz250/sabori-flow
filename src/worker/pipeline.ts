@@ -1,5 +1,5 @@
 import type { Language } from "../i18n/types.js";
-import type { Issue, PhaseLabels, RepositoryConfig, ExecutionConfig, FailureDiagnostics } from "./models.js";
+import type { Issue, PhaseLabels, RepositoryConfig, ExecutionConfig, FailureDiagnostics, StepResult } from "./models.js";
 import { Autonomy, Phase, FailureCategory, repoFullName } from "./models.js";
 import type { ProcessResult } from "./process.js";
 import { buildPrompt } from "./prompt.js";
@@ -88,7 +88,7 @@ export async function processIssue(
   executionConfig: ExecutionConfig,
   authToken: string | null,
   deps: PipelineDeps = defaultDeps,
-): Promise<boolean> {
+): Promise<StepResult> {
   const repo = repoFullName(repoConfig);
 
   // 1. PhaseLabels 解決
@@ -117,7 +117,7 @@ export async function processIssue(
       repo,
       errorMessage,
     );
-    return false;
+    return { outcome: "failure", claudeExecuted: false };
   }
 
   // 3. worktree 作成 -> Claude 実行 -> worktree 削除
@@ -143,7 +143,7 @@ export async function processIssue(
             summary: "Prompt generation failed",
             errorMessage,
           });
-          return false;
+          return { outcome: "failure", claudeExecuted: false };
         }
 
         // 3-2. Claude CLI 実行（レベル 2）
@@ -179,7 +179,7 @@ export async function processIssue(
               errorMessage,
             });
           }
-          return false;
+          return { outcome: "failure", claudeExecuted: true };
         }
 
         if (!result.success) {
@@ -195,7 +195,7 @@ export async function processIssue(
             stdout: result.stdout,
             exitCode: result.exitCode,
           });
-          return false;
+          return { outcome: "failure", claudeExecuted: true };
         }
 
         // `claude -p` exits 0 when the model stops calling tools, even if
@@ -218,7 +218,7 @@ export async function processIssue(
             stdout: result.stdout,
             stderr: result.stderr,
           });
-          return false;
+          return { outcome: "failure", claudeExecuted: true };
         }
 
         // 4-A. 成功: done 遷移 + 自動 impl ラベル付与 + 成功コメント（レベル 3）
@@ -274,7 +274,7 @@ export async function processIssue(
           issue.number,
           repo,
         );
-        return true;
+        return { outcome: "success", claudeExecuted: true };
       },
     );
   } catch (error: unknown) {
@@ -299,7 +299,7 @@ export async function processIssue(
       summary,
       errorMessage,
     });
-    return false;
+    return { outcome: "failure", claudeExecuted: false };
   }
 }
 

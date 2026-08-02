@@ -44,7 +44,7 @@ export function createMockWorkerDeps(
   return {
     loadConfig: vi.fn(),
     fetchIssues: vi.fn().mockResolvedValue([]),
-    processIssue: vi.fn().mockResolvedValue(true),
+    processIssue: vi.fn().mockResolvedValue({ outcome: "success", claudeExecuted: true }),
     readAuthToken: vi.fn().mockReturnValue(null),
     ...overrides,
   };
