@@ -352,10 +352,10 @@ async function handleCommentFetchError(
       remove: [entryLabel],
     };
 
-    // Label first: if the transition fails, the Issue is retried next cycle
-    // rather than accumulating a duplicate diagnostic each time.
+    let transitionSucceeded = false;
     try {
       await deps.applyLabelTransition(repo, issue.number, transition);
+      transitionSucceeded = true;
     } catch (e: unknown) {
       logger.warn(
         "Issue #%s: コメント取得失敗後のラベル遷移に失敗しました [repo=%s]: %s",
@@ -365,20 +365,22 @@ async function handleCommentFetchError(
       );
     }
 
-    const formattedMessage = formatFailureDiagnostics({
-      category: FailureCategory.CLI_EXECUTION_ERROR,
-      summary: "Structural failure fetching Issue comments",
-      errorMessage,
-    });
-    try {
-      await deps.postFailureComment(repo, issue.number, formattedMessage);
-    } catch (e: unknown) {
-      logger.warn(
-        "Issue #%s: 診断コメントの投稿に失敗しました [repo=%s]: %s",
-        issue.number,
-        repo,
-        e instanceof Error ? e.message : String(e),
-      );
+    if (transitionSucceeded) {
+      const formattedMessage = formatFailureDiagnostics({
+        category: FailureCategory.CLI_EXECUTION_ERROR,
+        summary: "Structural failure fetching Issue comments",
+        errorMessage,
+      });
+      try {
+        await deps.postFailureComment(repo, issue.number, formattedMessage);
+      } catch (e: unknown) {
+        logger.warn(
+          "Issue #%s: 診断コメントの投稿に失敗しました [repo=%s]: %s",
+          issue.number,
+          repo,
+          e instanceof Error ? e.message : String(e),
+        );
+      }
     }
     return { outcome: "failure", claudeExecuted: false };
   }
@@ -560,6 +562,7 @@ export async function resumeSpecReview(
     }
 
     case "escalate": {
+      let transitionSucceeded = false;
       try {
         const removeLabels = [specLabels.review];
         if (presentLabels.has(specLabels.trigger)) removeLabels.push(specLabels.trigger);
@@ -567,21 +570,24 @@ export async function resumeSpecReview(
           add: [specLabels.needsHuman],
           remove: removeLabels,
         });
+        transitionSucceeded = true;
       } catch (error: unknown) {
         logger.warn(
           "Issue #%s: escalate ラベル遷移に失敗しました [repo=%s]: %s",
           issue.number, repo, error instanceof Error ? error.message : String(error),
         );
       }
-      try {
-        await deps.postFailureComment(repo, issue.number,
-          `This issue requires human attention: ${decision.reason}`,
-        );
-      } catch (error: unknown) {
-        logger.warn(
-          "Issue #%s: エスカレーション説明コメントの投稿に失敗しました [repo=%s]: %s",
-          issue.number, repo, error instanceof Error ? error.message : String(error),
-        );
+      if (transitionSucceeded) {
+        try {
+          await deps.postFailureComment(repo, issue.number,
+            `This issue requires human attention: ${decision.reason}`,
+          );
+        } catch (error: unknown) {
+          logger.warn(
+            "Issue #%s: エスカレーション説明コメントの投稿に失敗しました [repo=%s]: %s",
+            issue.number, repo, error instanceof Error ? error.message : String(error),
+          );
+        }
       }
       return { outcome: "success", claudeExecuted: false };
     }

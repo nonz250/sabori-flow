@@ -1056,6 +1056,20 @@ describe("processIssue", () => {
       expect(reviewCalls).toHaveLength(0);
     });
 
+    it("コメント取得の構造的な失敗時にラベル遷移が throw した場合、診断コメントは投稿されない", async () => {
+      const issue = makeIssue({ phase: Phase.SPEC });
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.fetchIssueComments).mockRejectedValue(
+        new IssueCommentsError("viewerDidAuthor missing", true),
+      );
+      vi.mocked(deps.applyLabelTransition).mockRejectedValue(new Error("gh failed"));
+
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels.spec.trigger, deps);
+
+      expect(result.outcome).toBe("failure");
+      expect(deps.postFailureComment).not.toHaveBeenCalled();
+    });
+
     it("plan フェーズで spec コンテキストが buildPrompt に渡される", async () => {
       const issue = makeIssue({ phase: Phase.PLAN });
       const repoConfig = makeRepoConfig();

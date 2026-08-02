@@ -206,6 +206,21 @@ describe("resumeSpecReview", () => {
     expect(deps.applyLabelTransition).not.toHaveBeenCalled();
   });
 
+  it("escalate のラベル遷移失敗時は説明コメントを投稿しない", async () => {
+    const issue = makeIssue({
+      phase: Phase.SPEC,
+      labels: [SPEC_LABELS.review],
+    });
+    const repoConfig = makeRepoConfig();
+    vi.mocked(deps.fetchIssueComments).mockResolvedValue([]);
+    vi.mocked(deps.applyLabelTransition).mockRejectedValue(new Error("gh failed"));
+
+    const result = await resumeSpecReview(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, true, deps);
+
+    expect(result.outcome).toBe("success");
+    expect(deps.postFailureComment).not.toHaveBeenCalled();
+  });
+
   it("approve strips spec.trigger if present in labels", async () => {
     const issue = makeIssue({
       phase: Phase.SPEC,
