@@ -509,12 +509,6 @@ async function handleFailure(
 }
 
 /**
- * @returns GitHub が「紐づく PR 0 件」と明示した場合のみ false。
- *          問い合わせ自体に失敗した場合は WARNING を残して true を返す。
- *          `:failed` は trigger ラベルを戻さず自動リトライされないため、
- *          確証が無い限り failed に倒さない。
- */
-/**
  * spec review キューの Issue を評価し、適切なアクションを実行する。
  */
 export async function resumeSpecReview(
@@ -630,6 +624,12 @@ export async function resumeSpecReview(
   }
 }
 
+/**
+ * @returns GitHub が「紐づく PR 0 件」と明示した場合のみ false。
+ *          問い合わせ自体に失敗した場合は WARNING を残して true を返す。
+ *          `:failed` は trigger ラベルを戻さず自動リトライされないため、
+ *          確証が無い限り failed に倒さない。
+ */
 async function implPullRequestCheckPassed(
   deps: PipelineDeps,
   repo: string,
