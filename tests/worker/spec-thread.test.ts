@@ -41,6 +41,13 @@ describe("formatMarker / parseMarker", () => {
     const body = `${formatMarker(1)}\n\nsome text\n\n${formatMarker(2)}`;
     expect(parseMarker(body)).toBe(2);
   });
+
+  it("repeated calls on the same body return the same value", () => {
+    const body = `${formatMarker(1)}\n\nsome text\n\n${formatMarker(2)}`;
+    expect(parseMarker(body)).toBe(2);
+    expect(parseMarker(body)).toBe(2);
+    expect(parseMarker(body)).toBe(2);
+  });
 });
 
 describe("deriveSpecThread", () => {

@@ -14,9 +14,7 @@ export function formatMarker(round: number): string {
 
 export function parseMarker(body: string): number | null {
   let lastMatch: number | null = null;
-  SPEC_MARKER_PATTERN.lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = SPEC_MARKER_PATTERN.exec(body)) !== null) {
+  for (const match of body.matchAll(SPEC_MARKER_PATTERN)) {
     lastMatch = Number(match[1]);
   }
   return lastMatch;
@@ -71,7 +69,6 @@ export function deriveSpecThread(comments: readonly IssueComment[]): SpecThread 
   // Extract proposal text (marker removed)
   let latestProposal: string | null = null;
   if (latestMarkerBody !== null) {
-    SPEC_MARKER_PATTERN.lastIndex = 0;
     latestProposal = latestMarkerBody.replace(SPEC_MARKER_PATTERN, "").trim();
   }
 
