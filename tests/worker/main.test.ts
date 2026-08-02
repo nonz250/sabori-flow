@@ -81,21 +81,14 @@ describe("workerMain", () => {
       expect(deps.processIssue).toHaveBeenCalledOnce();
     });
 
-    it("Issue 取得成功だが processIssue が全件失敗すると 1 が返る", async () => {
+    it("全ステップで processIssue が失敗し空ステップもなければ 1 が返る", async () => {
       vi.mocked(deps.loadConfig).mockReturnValue(makeAppConfig());
-      vi.mocked(deps.fetchIssues)
-        .mockResolvedValueOnce([
-          makeIssue({ number: 42, title: "Feature request", priority: Priority.HIGH }),
-        ])
-        .mockResolvedValueOnce([
-          makeIssue({ number: 43, title: "Another issue", phase: Phase.IMPL }),
-        ]);
+      vi.mocked(deps.fetchIssues).mockRejectedValue(new Error("gh failed"));
       vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "failure", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
       expect(result).toBe(1);
-      expect(deps.processIssue).toHaveBeenCalledTimes(2);
     });
 
     it("Issue 0 件の場合は processIssue が呼ばれず 0 が返る", async () => {
@@ -181,12 +174,9 @@ describe("workerMain", () => {
       expect(deps.processIssue).toHaveBeenCalledOnce();
     });
 
-    it("Issue が取得されたが processIssue が全件失敗すると 1 が返る", async () => {
+    it("全ステップで fetchIssues が失敗すると 1 が返る", async () => {
       vi.mocked(deps.loadConfig).mockReturnValue(makeAppConfig());
-      // 両フェーズで Issue が取得され、全件 processIssue が失敗
-      vi.mocked(deps.fetchIssues)
-        .mockResolvedValueOnce([makeIssue({ number: 10, phase: Phase.PLAN })])
-        .mockResolvedValueOnce([makeIssue({ number: 20, phase: Phase.IMPL })]);
+      vi.mocked(deps.fetchIssues).mockRejectedValue(new Error("gh failed"));
       vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "failure", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
@@ -238,14 +228,14 @@ describe("workerMain", () => {
   // -----------------------------------------------------------------------
 
   describe("リポジトリ処理", () => {
-    it("plan と impl の両フェーズが処理される", async () => {
+    it("全 4 ステップが処理される (impl → plan → spec/review → spec)", async () => {
       vi.mocked(deps.loadConfig).mockReturnValue(makeAppConfig());
       vi.mocked(deps.fetchIssues).mockResolvedValue([]);
 
       await workerMain("/path/to/config.yml", deps);
 
-      // 1 リポジトリ x 2 フェーズ = 2 回の fetchIssues 呼び出し
-      expect(deps.fetchIssues).toHaveBeenCalledTimes(2);
+      // 1 リポジトリ x 4 ステップ = 4 回の fetchIssues 呼び出し
+      expect(deps.fetchIssues).toHaveBeenCalledTimes(4);
     });
 
     it("plan が成功し impl が失敗しても 0 が返る", async () => {
@@ -313,8 +303,8 @@ describe("workerMain", () => {
 
       await workerMain("/path/to/config.yml", deps);
 
-      // 3 リポジトリ x 2 フェーズ = 6 回の fetchIssues 呼び出し
-      expect(deps.fetchIssues).toHaveBeenCalledTimes(6);
+      // 3 リポジトリ x 4 ステップ = 12 回の fetchIssues 呼び出し
+      expect(deps.fetchIssues).toHaveBeenCalledTimes(12);
     });
 
     it("processIssue が例外を投げるリポジトリがあっても他のリポジトリは処理が継続する", async () => {
@@ -440,20 +430,21 @@ describe("workerMain", () => {
       expect(deps.processIssue).toHaveBeenCalledTimes(2);
     });
 
-    it("plan で上限に達すると impl フェーズの fetchIssues が呼ばれない", async () => {
+    it("impl で上限に達すると後続ステップの Issue は quota 超過でスキップされる", async () => {
       vi.mocked(deps.loadConfig).mockReturnValue(
         makeAppConfig({ execution: { maxIssuesPerRepo: 1 } }),
       );
-      vi.mocked(deps.fetchIssues)
-        .mockResolvedValueOnce([
-          makeIssue({ number: 1, phase: Phase.PLAN }),
-        ]);
+      vi.mocked(deps.fetchIssues).mockImplementation(async (_repo, _phase, label) => {
+        if (label === "claude/impl") return [makeIssue({ number: 1, phase: Phase.IMPL })];
+        if (label === "claude/plan") return [makeIssue({ number: 2, phase: Phase.PLAN })];
+        return [];
+      });
       vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       await workerMain("/path/to/config.yml", deps);
 
-      // plan の fetchIssues のみ呼ばれ、impl の fetchIssues は呼ばれない
-      expect(deps.fetchIssues).toHaveBeenCalledTimes(1);
+      // impl で 1 件消費 → plan は quota 超過で processIssue に到達しない
+      // ただし fetchIssues は全 4 ステップで呼ばれる (review はまだ Issue を引いてから判定する)
       expect(deps.processIssue).toHaveBeenCalledTimes(1);
     });
 

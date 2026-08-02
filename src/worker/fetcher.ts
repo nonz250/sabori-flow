@@ -52,19 +52,15 @@ interface GhIssueItem {
 export async function fetchIssues(
   repoConfig: RepositoryConfig,
   phase: Phase,
+  label: string,
 ): Promise<readonly Issue[]> {
-  const triggerLabel =
-    phase === Phase.PLAN
-      ? repoConfig.labels.plan.trigger
-      : repoConfig.labels.impl.trigger;
-
   const args = [
     "api",
     `repos/${repoFullName(repoConfig)}/issues`,
     "--method",
     "GET",
     "--field",
-    `labels=${triggerLabel}`,
+    `labels=${label}`,
     "--field",
     "state=open",
     "--field",

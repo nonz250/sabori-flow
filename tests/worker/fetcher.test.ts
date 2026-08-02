@@ -27,6 +27,15 @@ function makeRepoConfig(): RepositoryConfig {
     repo: "example-app",
     localPath: "/tmp/nonz250/example-app",
     labels: {
+      spec: {
+        trigger: "claude/spec",
+        inProgress: "claude/spec:in-progress",
+        done: "claude/spec:done",
+        failed: "claude/spec:failed",
+        review: "claude/spec:review",
+        approved: "claude/spec:approved",
+        needsHuman: "claude/spec:needs-human",
+      },
       plan: {
         trigger: "claude/plan",
         inProgress: "claude/plan:in-progress",
@@ -76,7 +85,7 @@ describe("fetchIssues", () => {
   it("gh コマンドに正しい引数が渡される", async () => {
     mockGhSuccess("[]");
 
-    await fetchIssues(makeRepoConfig(), Phase.PLAN);
+    await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
 
     expect(mockedRunCommand).toHaveBeenCalledWith(
       "gh",
@@ -99,7 +108,7 @@ describe("fetchIssues", () => {
   it("plan フェーズでは plan の trigger ラベルが使われる", async () => {
     mockGhSuccess("[]");
 
-    await fetchIssues(makeRepoConfig(), Phase.PLAN);
+    await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
 
     const callArgs = mockedRunCommand.mock.calls[0][1];
     expect(callArgs).toContain("labels=claude/plan");
@@ -108,7 +117,7 @@ describe("fetchIssues", () => {
   it("impl フェーズでは impl の trigger ラベルが使われる", async () => {
     mockGhSuccess("[]");
 
-    await fetchIssues(makeRepoConfig(), Phase.IMPL);
+    await fetchIssues(makeRepoConfig(), Phase.IMPL, "claude/impl");
 
     const callArgs = mockedRunCommand.mock.calls[0][1];
     expect(callArgs).toContain("labels=claude/impl");
@@ -135,7 +144,7 @@ describe("fetchIssues", () => {
     ]);
     mockGhSuccess(rawJson);
 
-    const result = await fetchIssues(makeRepoConfig(), Phase.PLAN);
+    const result = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
 
     expect(result).toHaveLength(2);
     expect(result[0].number).toBe(3);
@@ -148,10 +157,10 @@ describe("fetchIssues", () => {
     mockGhFailure("gh: not found");
 
     await expect(
-      fetchIssues(makeRepoConfig(), Phase.PLAN),
+      fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan"),
     ).rejects.toThrow(GitHubCLIError);
     await expect(
-      fetchIssues(makeRepoConfig(), Phase.PLAN),
+      fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan"),
     ).rejects.toThrow("gh: not found");
   });
 
@@ -161,10 +170,10 @@ describe("fetchIssues", () => {
     );
 
     await expect(
-      fetchIssues(makeRepoConfig(), Phase.PLAN),
+      fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan"),
     ).rejects.toThrow(GitHubCLIError);
     await expect(
-      fetchIssues(makeRepoConfig(), Phase.PLAN),
+      fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan"),
     ).rejects.toThrow("gh command timed out after 120 seconds");
   });
 
@@ -176,10 +185,10 @@ describe("fetchIssues", () => {
     mockedRunCommand.mockRejectedValue(execError);
 
     await expect(
-      fetchIssues(makeRepoConfig(), Phase.PLAN),
+      fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan"),
     ).rejects.toThrow(GitHubCLIError);
     await expect(
-      fetchIssues(makeRepoConfig(), Phase.PLAN),
+      fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan"),
     ).rejects.toThrow("spawn gh ENOENT");
   });
 });
@@ -206,7 +215,7 @@ describe("fetchIssues - JSON パース", () => {
     ]);
     mockGhSuccess(rawJson);
 
-    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN);
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
 
     expect(issues).toHaveLength(1);
     const issue = issues[0];
@@ -239,7 +248,7 @@ describe("fetchIssues - JSON パース", () => {
     ]);
     mockGhSuccess(rawJson);
 
-    const issues = await fetchIssues(makeRepoConfig(), Phase.IMPL);
+    const issues = await fetchIssues(makeRepoConfig(), Phase.IMPL, "claude/impl");
 
     expect(issues[0].labels).toEqual(["bug", "enhancement", "priority:low"]);
   });
@@ -257,7 +266,7 @@ describe("fetchIssues - JSON パース", () => {
     ]);
     mockGhSuccess(rawJson);
 
-    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN);
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
 
     expect(issues[0].body).toBeNull();
   });
@@ -266,17 +275,17 @@ describe("fetchIssues - JSON パース", () => {
     mockGhSuccess("not valid json");
 
     await expect(
-      fetchIssues(makeRepoConfig(), Phase.PLAN),
+      fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan"),
     ).rejects.toThrow(IssueParseError);
     await expect(
-      fetchIssues(makeRepoConfig(), Phase.PLAN),
+      fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan"),
     ).rejects.toThrow("Failed to parse JSON");
   });
 
   it("空の JSON 配列は空リストを返す", async () => {
     mockGhSuccess("[]");
 
-    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN);
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
 
     expect(issues).toEqual([]);
   });
@@ -293,10 +302,10 @@ describe("fetchIssues - JSON パース", () => {
     mockGhSuccess(rawJson);
 
     await expect(
-      fetchIssues(makeRepoConfig(), Phase.PLAN),
+      fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan"),
     ).rejects.toThrow(IssueParseError);
     await expect(
-      fetchIssues(makeRepoConfig(), Phase.PLAN),
+      fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan"),
     ).rejects.toThrow("Missing required field");
   });
 
@@ -312,10 +321,10 @@ describe("fetchIssues - JSON パース", () => {
     mockGhSuccess(rawJson);
 
     await expect(
-      fetchIssues(makeRepoConfig(), Phase.PLAN),
+      fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan"),
     ).rejects.toThrow(IssueParseError);
     await expect(
-      fetchIssues(makeRepoConfig(), Phase.PLAN),
+      fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan"),
     ).rejects.toThrow("Missing required field");
   });
 
@@ -331,10 +340,10 @@ describe("fetchIssues - JSON パース", () => {
     mockGhSuccess(rawJson);
 
     await expect(
-      fetchIssues(makeRepoConfig(), Phase.PLAN),
+      fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan"),
     ).rejects.toThrow(IssueParseError);
     await expect(
-      fetchIssues(makeRepoConfig(), Phase.PLAN),
+      fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan"),
     ).rejects.toThrow("Missing required field");
   });
 });
@@ -361,7 +370,7 @@ describe("fetchIssues - 優先度判定", () => {
     ]);
     mockGhSuccess(rawJson);
 
-    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN);
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
 
     expect(issues[0].priority).toBe(Priority.HIGH);
   });
@@ -379,7 +388,7 @@ describe("fetchIssues - 優先度判定", () => {
     ]);
     mockGhSuccess(rawJson);
 
-    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN);
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
 
     expect(issues[0].priority).toBe(Priority.LOW);
   });
@@ -397,7 +406,7 @@ describe("fetchIssues - 優先度判定", () => {
     ]);
     mockGhSuccess(rawJson);
 
-    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN);
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
 
     expect(issues[0].priority).toBe(Priority.NONE);
   });
@@ -415,7 +424,7 @@ describe("fetchIssues - 優先度判定", () => {
     ]);
     mockGhSuccess(rawJson);
 
-    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN);
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
 
     expect(issues[0].priority).toBe(Priority.HIGH);
   });
@@ -459,7 +468,7 @@ describe("fetchIssues - ソート", () => {
     ]);
     mockGhSuccess(rawJson);
 
-    const result = await fetchIssues(makeRepoConfig(), Phase.PLAN);
+    const result = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
 
     expect(result[0].number).toBe(5);
     expect(result[0].priority).toBe(Priority.HIGH);
@@ -498,7 +507,7 @@ describe("fetchIssues - ソート", () => {
     ]);
     mockGhSuccess(rawJson);
 
-    const result = await fetchIssues(makeRepoConfig(), Phase.PLAN);
+    const result = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
 
     expect(result.map((i) => i.number)).toEqual([10, 20, 30]);
   });
@@ -526,7 +535,7 @@ describe("fetchIssues - authorAssociation フィルタリング", () => {
     ]);
     mockGhSuccess(rawJson);
 
-    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN);
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
 
     expect(issues).toHaveLength(1);
     expect(issues[0].number).toBe(1);
@@ -545,7 +554,7 @@ describe("fetchIssues - authorAssociation フィルタリング", () => {
     ]);
     mockGhSuccess(rawJson);
 
-    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN);
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
 
     expect(issues).toHaveLength(1);
     expect(issues[0].number).toBe(2);
@@ -564,7 +573,7 @@ describe("fetchIssues - authorAssociation フィルタリング", () => {
     ]);
     mockGhSuccess(rawJson);
 
-    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN);
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
 
     expect(issues).toHaveLength(1);
     expect(issues[0].number).toBe(3);
@@ -583,7 +592,7 @@ describe("fetchIssues - authorAssociation フィルタリング", () => {
     ]);
     mockGhSuccess(rawJson);
 
-    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN);
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
 
     expect(issues).toHaveLength(0);
   });
@@ -601,7 +610,7 @@ describe("fetchIssues - authorAssociation フィルタリング", () => {
     ]);
     mockGhSuccess(rawJson);
 
-    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN);
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
 
     expect(issues).toHaveLength(0);
   });
@@ -643,7 +652,7 @@ describe("fetchIssues - authorAssociation フィルタリング", () => {
     ]);
     mockGhSuccess(rawJson);
 
-    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN);
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
 
     expect(issues).toHaveLength(2);
     expect(issues.map((i) => i.number)).toEqual([1, 3]);
@@ -661,7 +670,7 @@ describe("fetchIssues - authorAssociation フィルタリング", () => {
     ]);
     mockGhSuccess(rawJson);
 
-    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN);
+    const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "claude/plan");
 
     expect(issues).toHaveLength(0);
   });
