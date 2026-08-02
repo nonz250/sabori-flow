@@ -559,6 +559,30 @@ describe("workerMain", () => {
   });
 
   // -----------------------------------------------------------------------
+  // spec review の revise による quota 消費
+  // -----------------------------------------------------------------------
+
+  describe("spec review の revise による quota 消費", () => {
+    it("requiresQuota: false のステップでも claudeExecuted: true を返すと remaining を消費する", async () => {
+      vi.mocked(deps.loadConfig).mockReturnValue(
+        makeAppConfig({ execution: { maxIssuesPerRepo: 1 } }),
+      );
+      vi.mocked(deps.fetchIssues).mockImplementation(async (_repo, _phase, label) => {
+        if (label === SPEC_LABELS.review) return [makeIssue({ number: 10, phase: Phase.SPEC })];
+        if (label === SPEC_LABELS.trigger) return [makeIssue({ number: 20, phase: Phase.SPEC })];
+        return [];
+      });
+      vi.mocked(deps.resumeSpecReview).mockResolvedValue({ outcome: "success", claudeExecuted: true });
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
+
+      await workerMain("/path/to/config.yml", deps);
+
+      expect(deps.resumeSpecReview).toHaveBeenCalledTimes(1);
+      expect(deps.processIssue).not.toHaveBeenCalled();
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // autonomy startup ログ
   // -----------------------------------------------------------------------
 

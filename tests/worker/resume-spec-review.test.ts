@@ -221,6 +221,72 @@ describe("resumeSpecReview", () => {
     expect(deps.postFailureComment).not.toHaveBeenCalled();
   });
 
+  it("approve のラベル遷移が throw しても success を返す", async () => {
+    const issue = makeIssue({
+      phase: Phase.SPEC,
+      labels: [SPEC_LABELS.review, SPEC_LABELS.approved],
+    });
+    const repoConfig = makeRepoConfig();
+    vi.mocked(deps.fetchIssueComments).mockResolvedValue([
+      makeWorkerComment(1, "proposal"),
+    ]);
+    vi.mocked(deps.applyLabelTransition).mockRejectedValue(new Error("gh failed"));
+
+    const result = await resumeSpecReview(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, true, deps);
+
+    expect(result.outcome).toBe("success");
+    expect(result.claudeExecuted).toBe(false);
+  });
+
+  it("escalate の説明コメント投稿が throw しても success を返す", async () => {
+    const issue = makeIssue({
+      phase: Phase.SPEC,
+      labels: [SPEC_LABELS.review],
+    });
+    const repoConfig = makeRepoConfig();
+    vi.mocked(deps.fetchIssueComments).mockResolvedValue([]);
+    vi.mocked(deps.postFailureComment).mockRejectedValue(new Error("comment failed"));
+
+    const result = await resumeSpecReview(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, true, deps);
+
+    expect(result.outcome).toBe("success");
+    expect(result.claudeExecuted).toBe(false);
+  });
+
+  it("revise のラベル遷移が throw したら failure を返し processIssue に委譲しない", async () => {
+    const issue = makeIssue({
+      phase: Phase.SPEC,
+      labels: [SPEC_LABELS.review],
+    });
+    const repoConfig = makeRepoConfig();
+    vi.mocked(deps.fetchIssueComments).mockResolvedValue([
+      makeWorkerComment(1, "proposal"),
+      makeHumanComment("fix this"),
+    ]);
+    vi.mocked(deps.applyLabelTransition).mockRejectedValue(new Error("gh failed"));
+
+    const result = await resumeSpecReview(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, true, deps);
+
+    expect(result).toEqual({ outcome: "failure", claudeExecuted: false });
+    expect(deps.runClaude).not.toHaveBeenCalled();
+    expect(deps.withWorktree).not.toHaveBeenCalled();
+  });
+
+  it("escalate 時に spec.trigger がラベルに含まれる場合 remove に含まれる", async () => {
+    const issue = makeIssue({
+      phase: Phase.SPEC,
+      labels: [SPEC_LABELS.review, SPEC_LABELS.trigger],
+    });
+    const repoConfig = makeRepoConfig();
+    vi.mocked(deps.fetchIssueComments).mockResolvedValue([]);
+
+    await resumeSpecReview(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, true, deps);
+
+    const call = vi.mocked(deps.applyLabelTransition).mock.calls[0];
+    const transition = call[2] as { add: string[]; remove: string[] };
+    expect(transition.remove).toContain(SPEC_LABELS.trigger);
+  });
+
   it("approve strips spec.trigger if present in labels", async () => {
     const issue = makeIssue({
       phase: Phase.SPEC,

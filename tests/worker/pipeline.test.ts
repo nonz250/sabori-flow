@@ -939,6 +939,20 @@ describe("processIssue", () => {
       expect(deps.postFailureComment).toHaveBeenCalledOnce();
     });
 
+    it("コメント取得の構造的な失敗時に診断コメント投稿が throw しても failure を返す", async () => {
+      const issue = makeIssue({ phase: Phase.SPEC });
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.fetchIssueComments).mockRejectedValue(
+        new IssueCommentsError("viewerDidAuthor missing", true),
+      );
+      vi.mocked(deps.postFailureComment).mockRejectedValue(new Error("comment failed"));
+
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels.spec.trigger, deps);
+
+      expect(result.outcome).toBe("failure");
+      expect(result.claudeExecuted).toBe(false);
+    });
+
     it("spec trigger では round 1 で postSpecProposalComment が呼ばれる", async () => {
       const issue = makeIssue({ phase: Phase.SPEC });
       const repoConfig = makeRepoConfig();
@@ -1035,6 +1049,24 @@ describe("processIssue", () => {
       expect(deps.postFailureComment).toHaveBeenCalledOnce();
       const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
       expect(failureMessage).toContain("Spec Proposal Comment Error");
+    });
+
+    it("spec 成功時に review ラベル遷移が throw しても success を返す", async () => {
+      const issue = makeIssue({ phase: Phase.SPEC });
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.fetchIssueComments).mockResolvedValue([]);
+      vi.mocked(deps.runClaude).mockResolvedValue(
+        makeProcessResult({ stdout: "spec output" }),
+      );
+      vi.mocked(deps.applyLabelTransition)
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error("review transition failed"));
+
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels.spec.trigger, deps);
+
+      expect(result.outcome).toBe("success");
+      expect(result.claudeExecuted).toBe(true);
+      expect(deps.postSpecProposalComment).toHaveBeenCalledOnce();
     });
 
     it("提案コメント投稿失敗時に review ラベル遷移は呼ばれない", async () => {
