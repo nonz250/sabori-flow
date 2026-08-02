@@ -126,20 +126,22 @@ export async function processIssue(
   }
 
   // Trigger → in-progress (level 1)
-  try {
-    await deps.applyLabelTransition(repo, issue.number, {
-      add: [phaseLabels.inProgress],
-      remove: [entryLabel],
-    });
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    logger.error(
-      "Issue #%s: trigger -> in-progress のラベル遷移に失敗しました [repo=%s]: %s",
-      issue.number,
-      repo,
-      errorMessage,
-    );
-    return { outcome: "failure", claudeExecuted: false };
+  if (entryLabel !== phaseLabels.inProgress) {
+    try {
+      await deps.applyLabelTransition(repo, issue.number, {
+        add: [phaseLabels.inProgress],
+        remove: [entryLabel],
+      });
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error(
+        "Issue #%s: trigger -> in-progress のラベル遷移に失敗しました [repo=%s]: %s",
+        issue.number,
+        repo,
+        errorMessage,
+      );
+      return { outcome: "failure", claudeExecuted: false };
+    }
   }
 
   // Worktree → prompt → claude
@@ -588,7 +590,6 @@ export async function resumeSpecReview(
       if (!canRunClaude) {
         return { outcome: "deferred", claudeExecuted: false };
       }
-      // -review +in-progress, then delegate to processIssue
       const removeLabels = [specLabels.review];
       if (presentLabels.has(specLabels.trigger)) removeLabels.push(specLabels.trigger);
       try {
@@ -603,10 +604,6 @@ export async function resumeSpecReview(
         );
         return { outcome: "failure", claudeExecuted: false };
       }
-      // Delegate to processIssue with review entry label.
-      // The in-progress transition is already done, so processIssue will
-      // skip its own trigger→in-progress step (entryLabel = inProgress,
-      // which matches phaseLabels.inProgress, making the add/remove a no-op).
       return processIssue(issue, repoConfig, executionConfig, authToken, specLabels.inProgress, deps);
     }
 

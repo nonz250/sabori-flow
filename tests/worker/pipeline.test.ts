@@ -225,6 +225,24 @@ describe("processIssue", () => {
       expect(options.authToken).toBeUndefined();
     });
 
+    it("entryLabel が phaseLabels.inProgress と一致する場合は trigger→in-progress をスキップする", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+
+      const result = await processIssue(
+        issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null,
+        PLAN_LABELS.inProgress, deps,
+      );
+
+      expect(result.outcome).toBe("success");
+      expect(deps.applyLabelTransition).toHaveBeenCalledTimes(1);
+      expect(deps.applyLabelTransition).toHaveBeenCalledWith(
+        "testowner/testrepo",
+        42,
+        { add: [PLAN_LABELS.done], remove: [PLAN_LABELS.inProgress] },
+      );
+    });
+
     it("withWorktree に owner/repo/localPath/defaultBranch を含む repoConfig が渡される", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
