@@ -205,7 +205,37 @@ describe("logger", () => {
 
       rotateOldLogs();
 
-      const expectedDateStr = yesterday.toISOString().slice(0, 10);
+      const expectedDateStr = [
+        yesterday.getFullYear(),
+        String(yesterday.getMonth() + 1).padStart(2, "0"),
+        String(yesterday.getDate()).padStart(2, "0"),
+      ].join("-");
+      expect(renameSync).toHaveBeenCalledWith(
+        "/tmp/test-logs/worker.log",
+        `/tmp/test-logs/worker.log.${expectedDateStr}`,
+      );
+    });
+
+    it("UTC で日付が前日になる早朝の mtime でもローカル日付で命名される", () => {
+      configureLogger({ logDir: "/tmp/test-logs", retentionDays: 7 });
+
+      // 03:00 local: still the previous day in UTC anywhere east of Greenwich
+      const earlyMorning = new Date();
+      earlyMorning.setDate(earlyMorning.getDate() - 1);
+      earlyMorning.setHours(3, 0, 0, 0);
+
+      vi.mocked(lstatSync).mockReturnValue({
+        isSymbolicLink: () => false,
+        mtime: earlyMorning,
+      } as unknown as ReturnType<typeof lstatSync>);
+
+      rotateOldLogs();
+
+      const expectedDateStr = [
+        earlyMorning.getFullYear(),
+        String(earlyMorning.getMonth() + 1).padStart(2, "0"),
+        String(earlyMorning.getDate()).padStart(2, "0"),
+      ].join("-");
       expect(renameSync).toHaveBeenCalledWith(
         "/tmp/test-logs/worker.log",
         `/tmp/test-logs/worker.log.${expectedDateStr}`,

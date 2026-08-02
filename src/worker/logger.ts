@@ -94,6 +94,19 @@ export function createLogger(name: string): Logger {
   };
 }
 
+/**
+ * YYYY-MM-DD in local time.
+ *
+ * Deliberately not toISOString(): the log a run appends to is the one for
+ * the local calendar day, so a UTC stamp names it a day early for every
+ * run east of Greenwich before the offset elapses.
+ */
+function toLocalDateStamp(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
 export function rotateOldLogs(): void {
   if (!globalConfig.logDir) {
     return;
@@ -106,14 +119,8 @@ export function rotateOldLogs(): void {
     if (stat.isSymbolicLink()) {
       console.warn(`[logger] WARNING: Skipping symbolic link: ${LOG_FILE_NAME}`);
     } else {
-      const mtime = stat.mtime;
-      const today = new Date();
-      if (
-        mtime.getFullYear() !== today.getFullYear() ||
-        mtime.getMonth() !== today.getMonth() ||
-        mtime.getDate() !== today.getDate()
-      ) {
-        const dateStr = mtime.toISOString().slice(0, 10);
+      const dateStr = toLocalDateStamp(stat.mtime);
+      if (dateStr !== toLocalDateStamp(new Date())) {
         const rotatedName = `${LOG_FILE_NAME}.${dateStr}`;
         renameSync(logPath, join(globalConfig.logDir, rotatedName));
       }
