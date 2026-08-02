@@ -8,6 +8,7 @@ import {
   type RepositoryConfig,
   type LabelsConfig,
   type PhaseLabels,
+  type SpecPhaseLabels,
 } from "./models.js";
 import { expandTilde } from "../utils/paths.js";
 import type { Language } from "../i18n/types.js";
@@ -29,8 +30,18 @@ const LABEL_PATTERN = /^[a-zA-Z0-9./:_ -]+$/;
 const BRANCH_NAME_PATTERN = /^[a-zA-Z0-9._\/-]+$/;
 const DEFAULT_BRANCH_DEFAULT = "main";
 const PHASE_LABEL_KEYS = ["trigger", "in_progress", "done", "failed"] as const;
+const SPEC_LABEL_KEYS = [...PHASE_LABEL_KEYS, "review", "approved", "needs_human"] as const;
 
 export const DEFAULT_LABELS: LabelsConfig = {
+  spec: {
+    trigger: "ai/spec",
+    inProgress: "ai/spec/in-progress",
+    done: "ai/spec/done",
+    failed: "ai/spec/failed",
+    review: "ai/spec/review",
+    approved: "ai/spec/approved",
+    needsHuman: "ai/spec/needs-human",
+  },
   plan: {
     trigger: "ai/plan",
     inProgress: "ai/plan/in-progress",
@@ -194,6 +205,9 @@ function parseRepositories(raw: unknown): readonly RepositoryConfig[] {
 
       const labelsRecord = labelsRaw as Record<string, unknown>;
 
+      const spec = "spec" in labelsRecord
+        ? parseSpecPhaseLabels(labelsRecord["spec"], `${prefix}.labels.spec`)
+        : DEFAULT_LABELS.spec;
       const plan = "plan" in labelsRecord
         ? parsePhaseLabels(labelsRecord["plan"], `${prefix}.labels.plan`)
         : DEFAULT_LABELS.plan;
@@ -201,9 +215,9 @@ function parseRepositories(raw: unknown): readonly RepositoryConfig[] {
         ? parsePhaseLabels(labelsRecord["impl"], `${prefix}.labels.impl`)
         : DEFAULT_LABELS.impl;
 
-      labels = { plan, impl };
+      labels = { spec, plan, impl };
     } else {
-      labels = { plan: DEFAULT_LABELS.plan, impl: DEFAULT_LABELS.impl };
+      labels = DEFAULT_LABELS;
     }
 
     // priority_labels
@@ -337,6 +351,47 @@ function parsePhaseLabels(raw: unknown, phaseName: string): PhaseLabels {
     inProgress: values["in_progress"],
     done: values["done"],
     failed: values["failed"],
+  };
+}
+
+function parseSpecPhaseLabels(raw: unknown, phaseName: string): SpecPhaseLabels {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new ConfigValidationError(`${phaseName}: must be a mapping`);
+  }
+
+  const record = raw as Record<string, unknown>;
+  const values: Record<string, string> = {};
+
+  for (const key of SPEC_LABEL_KEYS) {
+    if (!(key in record)) {
+      throw new ConfigValidationError(
+        `${phaseName}: '${key}' key is required`,
+      );
+    }
+
+    const value = record[key];
+    if (typeof value !== "string") {
+      throw new ConfigValidationError(`${phaseName}.${key}: must be a string`);
+    }
+
+    if (!LABEL_PATTERN.test(value)) {
+      throw new ConfigValidationError(
+        `${phaseName}.${key}: invalid characters in '${value}' ` +
+          `(must match ${LABEL_PATTERN.source})`,
+      );
+    }
+
+    values[key] = value;
+  }
+
+  return {
+    trigger: values["trigger"],
+    inProgress: values["in_progress"],
+    done: values["done"],
+    failed: values["failed"],
+    review: values["review"],
+    approved: values["approved"],
+    needsHuman: values["needs_human"],
   };
 }
 

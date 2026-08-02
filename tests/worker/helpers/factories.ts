@@ -1,6 +1,7 @@
 import type {
   Issue,
   PhaseLabels,
+  SpecPhaseLabels,
   LabelsConfig,
   RepositoryConfig,
   AppConfig,
@@ -12,6 +13,16 @@ import type { ProcessResult } from "../../../src/worker/process.js";
 import { ExecutorTimeoutError } from "../../../src/worker/executor.js";
 
 // ---------- Label constants ----------
+
+export const SPEC_LABELS: SpecPhaseLabels = {
+  trigger: "claude/spec",
+  inProgress: "claude/spec:in-progress",
+  done: "claude/spec:done",
+  failed: "claude/spec:failed",
+  review: "claude/spec:review",
+  approved: "claude/spec:approved",
+  needsHuman: "claude/spec:needs-human",
+};
 
 export const PLAN_LABELS: PhaseLabels = {
   trigger: "claude/plan",
@@ -28,6 +39,7 @@ export const IMPL_LABELS: PhaseLabels = {
 };
 
 export const DEFAULT_LABELS_CONFIG: LabelsConfig = {
+  spec: SPEC_LABELS,
   plan: PLAN_LABELS,
   impl: IMPL_LABELS,
 };

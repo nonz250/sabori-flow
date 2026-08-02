@@ -370,6 +370,39 @@ repositories:
     expect(result.repositories[0].labels.impl.trigger).toBe("impl");
   });
 
+  it("labels.spec omitted defaults to ai/spec/*", () => {
+    mockYaml(VALID_YAML);
+    const result = loadConfig("/path/to/config.yml");
+    const repo = result.repositories[0];
+
+    expect(repo.labels.spec.trigger).toBe("ai/spec");
+    expect(repo.labels.spec.inProgress).toBe("ai/spec/in-progress");
+    expect(repo.labels.spec.done).toBe("ai/spec/done");
+    expect(repo.labels.spec.failed).toBe("ai/spec/failed");
+    expect(repo.labels.spec.review).toBe("ai/spec/review");
+    expect(repo.labels.spec.approved).toBe("ai/spec/approved");
+    expect(repo.labels.spec.needsHuman).toBe("ai/spec/needs-human");
+  });
+
+  it("labels.spec specified with incomplete keys throws ConfigValidationError", () => {
+    const yaml = `\
+repositories:
+  - owner: my-org
+    repo: my-repo
+    local_path: /tmp/my-org/my-repo
+    labels:
+      spec:
+        trigger: "custom/spec"
+        in_progress: "custom/spec:wip"
+    priority_labels: []
+`;
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+  });
+
   it("missing trigger key", () => {
     const yaml = `\
 repositories:

@@ -64,11 +64,26 @@ export interface PhaseLabels {
   readonly failed: string;
 }
 
-/** plan/impl 両フェーズのラベル定義 */
+/** spec は 4 状態に加えて人間ゲート用の 3 状態を持つ */
+export interface SpecPhaseLabels extends PhaseLabels {
+  readonly review: string;
+  readonly approved: string;
+  readonly needsHuman: string;
+}
+
+/** 全フェーズのラベル定義 */
 export interface LabelsConfig {
+  readonly spec: SpecPhaseLabels;
   readonly plan: PhaseLabels;
   readonly impl: PhaseLabels;
 }
+
+/** 処理を許可する authorAssociation の一覧 */
+export const PERMITTED_ASSOCIATIONS: ReadonlySet<string> = new Set([
+  "OWNER",
+  "MEMBER",
+  "COLLABORATOR",
+]);
 
 /** 1 リポジトリの設定 */
 export interface RepositoryConfig {
