@@ -70,6 +70,8 @@ interface Step {
   readonly phase: Phase;
   readonly label: (labels: LabelsConfig) => string;
   readonly run: (ctx: StepContext, issue: Issue, canRunClaude: boolean) => Promise<StepResult>;
+  /** Skipped once the claude quota is spent. False for steps that only read GitHub. */
+  readonly requiresQuota: boolean;
 }
 
 /**
@@ -83,24 +85,31 @@ const STEPS: readonly Step[] = [
     label: (l) => l.impl.trigger,
     run: (ctx, issue, _canRunClaude) =>
       ctx.deps.processIssue(issue, ctx.repoConfig, ctx.executionConfig, ctx.authToken, ctx.repoConfig.labels.impl.trigger),
+    requiresQuota: true,
   },
   {
     phase: PhaseEnum.PLAN,
     label: (l) => l.plan.trigger,
     run: (ctx, issue, _canRunClaude) =>
       ctx.deps.processIssue(issue, ctx.repoConfig, ctx.executionConfig, ctx.authToken, ctx.repoConfig.labels.plan.trigger),
+    requiresQuota: true,
   },
   {
     phase: PhaseEnum.SPEC,
     label: (l) => l.spec.review,
     run: (ctx, issue, canRunClaude) =>
       ctx.deps.resumeSpecReview(issue, ctx.repoConfig, ctx.executionConfig, ctx.authToken, canRunClaude),
+    // Evaluating a review costs one gh call and no claude run. Skipping it
+    // when quota is spent would sit on a human's approval until a cycle
+    // happens to have quota left over.
+    requiresQuota: false,
   },
   {
     phase: PhaseEnum.SPEC,
     label: (l) => l.spec.trigger,
     run: (ctx, issue, _canRunClaude) =>
       ctx.deps.processIssue(issue, ctx.repoConfig, ctx.executionConfig, ctx.authToken, ctx.repoConfig.labels.spec.trigger),
+    requiresQuota: true,
   },
 ];
 
@@ -164,8 +173,7 @@ async function processRepository(
 
     for (const issue of issues) {
       const canRunClaude = remaining > 0;
-      if (!canRunClaude && step.label !== STEPS[2].label) {
-        // Non-review steps skip when quota is exhausted
+      if (!canRunClaude && step.requiresQuota) {
         logger.info(
           "[%s] %s フェーズ: claude 起動上限に達したため残りをスキップ",
           fullName,
