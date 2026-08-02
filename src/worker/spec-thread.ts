@@ -78,7 +78,6 @@ export function deriveSpecThread(comments: readonly IssueComment[]): SpecThread 
     const c = comments[i];
     if (isWorkerComment(c)) continue;
     if (!PERMITTED_ASSOCIATIONS.has(c.authorAssociation)) continue;
-    if (c.authorAssociation === "") continue;
     feedback.push(c.body);
   }
 
