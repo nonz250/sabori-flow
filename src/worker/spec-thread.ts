@@ -23,12 +23,20 @@ export function parseMarker(body: string): number | null {
 // ---------- Thread derivation ----------
 
 /**
- * Worker のコメントかどうかを判定する。
+ * Decide whether a comment was written by the worker itself.
  *
- * viewerDidAuthor と marker の AND で判定する。
- * author_association だけでは worker 自身の OWNER コメントと区別できず、
- * marker だけでは第三者が marker を含むコメントを投稿して
- * latestProposal を乗っ取れる。両方を要求して双方の穴を塞ぐ。
+ * Two independent conditions, both required:
+ *
+ * - viewerDidAuthor, because a marker alone lets a third party post a
+ *   comment carrying the marker and take over latestProposal.
+ * - The marker must start a line, because viewerDidAuthor means "the gh
+ *   token holder wrote this", not "the bot wrote this". The worker
+ *   normally runs under the repository owner's own credentials, so the
+ *   human who reviews the proposal authors comments with viewerDidAuthor
+ *   set. GitHub's quote reply copies the proposal body verbatim, marker
+ *   included, and prefixes every line with "> " — an unanchored match
+ *   would read that revision request as a fresh proposal, leaving the
+ *   thread with no feedback and the review parked on "wait" forever.
  */
 function isWorkerComment(comment: IssueComment): boolean {
   return comment.viewerDidAuthor && WORKER_COMMENT_LINE_PATTERN.test(comment.body);
