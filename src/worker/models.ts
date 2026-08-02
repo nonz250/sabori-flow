@@ -85,6 +85,31 @@ export const PERMITTED_ASSOCIATIONS: ReadonlySet<string> = new Set([
   "COLLABORATOR",
 ]);
 
+/** Issue コメント 1 件 */
+export interface IssueComment {
+  readonly body: string;
+  readonly authorAssociation: string;
+  readonly createdAt: string;
+  readonly viewerDidAuthor: boolean;
+}
+
+/** spec のやり取りを GitHub のコメント列から導出したもの */
+export interface SpecThread {
+  readonly round: number;
+  readonly latestProposal: string | null;
+  readonly feedback: readonly string[];
+}
+
+// ---------- Step result ----------
+
+export type StepOutcome = "success" | "failure" | "deferred";
+
+export interface StepResult {
+  readonly outcome: StepOutcome;
+  /** claude を起動したか（quota 会計の単位） */
+  readonly claudeExecuted: boolean;
+}
+
 /** 1 リポジトリの設定 */
 export interface RepositoryConfig {
   readonly owner: string;
