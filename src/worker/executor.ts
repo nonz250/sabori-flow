@@ -26,6 +26,7 @@ export class ExecutorTimeoutError extends ExecutorError {
 }
 
 const DEFAULT_TIMEOUT_MS = 3_600_000; // 60 minutes
+const BG_WAIT_CEILING_MS = 3_600_000; // 60 minutes
 
 export interface RunClaudeOptions {
   readonly cwd?: string;
@@ -54,20 +55,25 @@ export async function runClaude(
   const autonomyFlags = resolveClaudeAutonomyFlags(autonomy);
   const args = ["-p", ...autonomyFlags];
 
-  const runOptions: RunCommandOptions = {
-    input: prompt,
-    cwd: options?.cwd,
-    timeoutMs,
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    // The CLI force-terminates still-running background tasks after this idle
+    // window and exits 0, so the worker sees a successful run with no PR.
+    CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS: String(BG_WAIT_CEILING_MS),
   };
   if (options?.authToken) {
     // Scope the dedicated long-lived token to the claude child only. It avoids
     // 401s from credentials.json refresh-rotation races during unattended runs,
     // and keeps the secret out of the gh/git children the worker also spawns.
-    runOptions.env = {
-      ...process.env,
-      CLAUDE_CODE_OAUTH_TOKEN: options.authToken,
-    };
+    env.CLAUDE_CODE_OAUTH_TOKEN = options.authToken;
   }
+
+  const runOptions: RunCommandOptions = {
+    input: prompt,
+    cwd: options?.cwd,
+    timeoutMs,
+    env,
+  };
 
   try {
     return await runCommand("claude", args, runOptions);

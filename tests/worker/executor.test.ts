@@ -92,6 +92,7 @@ describe("runClaude", () => {
           input: "Fix the bug in module Y",
           cwd: undefined,
           timeoutMs: 3_600_000,
+          env: expect.any(Object),
         },
       );
     });
@@ -426,13 +427,25 @@ describe("runClaude", () => {
       );
     });
 
-    it("authToken 未指定時、runCommand に env が渡されない", async () => {
+    it("authToken 未指定時、env に CLAUDE_CODE_OAUTH_TOKEN が含まれない", async () => {
       mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
 
       await runClaude("prompt text");
 
       const options = mockedRunCommand.mock.calls[0][2];
-      expect(options?.env).toBeUndefined();
+      expect(options?.env?.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
+    });
+
+    it("authToken 未指定時も env は既存の process.env を継承する", async () => {
+      process.env.SABORI_TEST_MARKER = "marker-value";
+      mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
+
+      await runClaude("prompt text");
+
+      const options = mockedRunCommand.mock.calls[0][2];
+      expect(options?.env?.SABORI_TEST_MARKER).toBe("marker-value");
+
+      delete process.env.SABORI_TEST_MARKER;
     });
 
     it("authToken 指定時も process.env は変異しない", async () => {
