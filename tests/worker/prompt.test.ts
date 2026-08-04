@@ -2,14 +2,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("node:fs");
 
-// logger mock
+// logger mock (shared instance so tests can inspect warn/error calls)
+const mockPromptLogger = vi.hoisted(() => ({
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+}));
+
 vi.mock("../../src/worker/logger.js", () => ({
-  createLogger: vi.fn(() => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  })),
+  createLogger: vi.fn(() => mockPromptLogger),
 }));
 
 // paths mock
@@ -45,18 +47,28 @@ function makeRepoConfig(
     owner,
     repo,
     localPath: "/tmp/testowner/testrepo",
+    defaultBranch: "main",
     labels: {
+      spec: {
+        trigger: "test/spec",
+        inProgress: "test/spec/in-progress",
+        done: "test/spec/done",
+        failed: "test/spec/failed",
+        review: "test/spec/review",
+        approved: "test/spec/approved",
+        needsHuman: "test/spec/needs-human",
+      },
       plan: {
-        trigger: "claude/plan",
-        inProgress: "claude/plan:in-progress",
-        done: "claude/plan:done",
-        failed: "claude/plan:failed",
+        trigger: "test/plan",
+        inProgress: "test/plan/in-progress",
+        done: "test/plan/done",
+        failed: "test/plan/failed",
       },
       impl: {
-        trigger: "claude/impl",
-        inProgress: "claude/impl:in-progress",
-        done: "claude/impl:done",
-        failed: "claude/impl:failed",
+        trigger: "test/impl",
+        inProgress: "test/impl/in-progress",
+        done: "test/impl/done",
+        failed: "test/impl/failed",
       },
     },
     priorityLabels: ["priority:high", "priority:low"],
@@ -69,7 +81,7 @@ function makeIssue(overrides?: Partial<Issue>): Issue {
     number: 42,
     title: "Test Issue Title",
     body: "This is the issue body.",
-    labels: ["claude/plan"],
+    labels: ["test/plan"],
     url: "https://github.com/testowner/testrepo/issues/42",
     authorAssociation: "OWNER",
     phase: Phase.PLAN,
@@ -95,6 +107,17 @@ const MINIMAL_IMPL_TEMPLATE = [
   "close {issue_url}",
   "{boundary_open}",
   "{issue_body}",
+  "{boundary_close}",
+].join("\n") + "\n";
+
+const MINIMAL_SPEC_TEMPLATE = [
+  "Spec for {repo_full_name}",
+  "Issue #{issue_number}: {issue_title}",
+  "{boundary_open}",
+  "{issue_body}",
+  "{boundary_close}",
+  "{boundary_open}",
+  "{spec}",
   "{boundary_close}",
 ].join("\n") + "\n";
 
@@ -394,6 +417,7 @@ describe("buildPrompt - integration", () => {
     "issue_body",
     "boundary_open",
     "boundary_close",
+    "spec",
   ];
 
   function findUnexpandedPlaceholders(text: string): string[] {
@@ -504,6 +528,112 @@ describe("buildPrompt - integration", () => {
     expect(result).toContain("testowner/testrepo");
     expect(result).toContain("#101");
   });
+
+  it("All placeholders expanded in actual spec.md template (ja)", () => {
+    const result = buildPrompt(
+      makeIssue({
+        phase: Phase.SPEC,
+        number: 303,
+        title: "Design new module",
+        body: "Design the new authentication module.",
+        url: "https://github.com/testowner/testrepo/issues/303",
+        labels: ["test/spec"],
+      }),
+      makeRepoConfig(),
+      "ja",
+      "agreed spec content",
+    );
+
+    const unexpanded = findUnexpandedPlaceholders(result);
+    expect(unexpanded).toEqual([]);
+    expect(result).toContain("testowner/testrepo");
+    expect(result).toContain("#303");
+    expect(result).toContain("Design new module");
+    expect(result).toContain("agreed spec content");
+    expect(result).toMatch(BOUNDARY_OPEN_PATTERN);
+    expect(result).toMatch(BOUNDARY_CLOSE_PATTERN);
+  });
+
+  it("All placeholders expanded in actual spec.md template (en)", () => {
+    const result = buildPrompt(
+      makeIssue({
+        phase: Phase.SPEC,
+        number: 304,
+        title: "Design auth module",
+        body: "Design the authentication module.",
+        url: "https://github.com/testowner/testrepo/issues/304",
+        labels: ["test/spec"],
+      }),
+      makeRepoConfig(),
+      "en",
+      "agreed spec content",
+    );
+
+    const unexpanded = findUnexpandedPlaceholders(result);
+    expect(unexpanded).toEqual([]);
+    expect(result).toContain("testowner/testrepo");
+    expect(result).toContain("#304");
+    expect(result).toContain("agreed spec content");
+  });
+
+  it("spec.md template instructs 5 output items", () => {
+    const result = buildPrompt(
+      makeIssue({
+        phase: Phase.SPEC,
+        number: 1,
+        title: "T",
+        body: "B",
+        url: "https://github.com/testowner/testrepo/issues/1",
+        labels: ["test/spec"],
+      }),
+      makeRepoConfig(),
+      "ja",
+    );
+
+    expect(result).toContain("Issue の解釈");
+    expect(result).toContain("受け入れ条件");
+    expect(result).toContain("置いた前提");
+    expect(result).toContain("決められなかった点");
+    expect(result).toContain("スコープ外");
+  });
+
+  it("plan.md template contains expanded {spec} block", () => {
+    const result = buildPrompt(
+      makeIssue({
+        phase: Phase.PLAN,
+        number: 101,
+        title: "Plan feature",
+        body: "Plan the feature.",
+        url: "https://github.com/testowner/testrepo/issues/101",
+      }),
+      makeRepoConfig(),
+      "ja",
+      "the agreed specification",
+    );
+
+    const unexpanded = findUnexpandedPlaceholders(result);
+    expect(unexpanded).toEqual([]);
+    expect(result).toContain("the agreed specification");
+  });
+
+  it("impl.md template contains expanded {spec} block", () => {
+    const result = buildPrompt(
+      makeIssue({
+        phase: Phase.IMPL,
+        number: 202,
+        title: "Implement feature",
+        body: "Implement the feature.",
+        url: "https://github.com/testowner/testrepo/issues/202",
+      }),
+      makeRepoConfig(),
+      "ja",
+      "the agreed specification",
+    );
+
+    const unexpanded = findUnexpandedPlaceholders(result);
+    expect(unexpanded).toEqual([]);
+    expect(result).toContain("the agreed specification");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -591,5 +721,142 @@ describe("buildPrompt - 2-tier priority", () => {
     );
 
     expect(result).toContain("Repo: testowner/testrepo");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Spec phase template and {spec} variable
+// ---------------------------------------------------------------------------
+
+describe("buildPrompt - spec phase", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    mockedGetUserPromptsDir.mockReturnValue(USER_DIR);
+    mockedGetDefaultPromptsDir.mockReturnValue(DEFAULT_DIR);
+  });
+
+  it("Spec phase resolves template from user directory first, then package default", () => {
+    mockedExistsSync.mockImplementation((p) => {
+      const path = String(p);
+      if (path.startsWith(USER_DIR)) return false;
+      return true;
+    });
+    mockedStatSync.mockReturnValue({ size: 1024, isFile: () => true } as unknown as ReturnType<typeof statSync>);
+    mockedReadFileSync.mockReturnValue(MINIMAL_SPEC_TEMPLATE);
+
+    const result = buildPrompt(
+      makeIssue({ phase: Phase.SPEC, labels: ["test/spec"] }),
+      makeRepoConfig(),
+      "ja",
+    );
+
+    expect(result).toContain("Spec for testowner/testrepo");
+    expect(result).toMatch(BOUNDARY_OPEN_PATTERN);
+    expect(result).toMatch(BOUNDARY_CLOSE_PATTERN);
+  });
+
+  it("{spec} placeholder-like strings in specContext are not double-expanded", () => {
+    setupDefaultDirMocks();
+    mockedReadFileSync.mockReturnValue(
+      "{boundary_open}\n{spec}\n{boundary_close}\nURL: {issue_url}",
+    );
+    const maliciousSpec = "See {issue_url} for details";
+
+    const result = buildPrompt(
+      makeIssue({ phase: Phase.SPEC, labels: ["test/spec"] }),
+      makeRepoConfig(),
+      "ja",
+      maliciousSpec,
+    );
+
+    expect(result).toContain("See {issue_url} for details");
+    expect(result).toContain(
+      "URL: https://github.com/testowner/testrepo/issues/42",
+    );
+  });
+
+  it("specContext with $& or $' is safely expanded without replace special pattern issues", () => {
+    setupDefaultDirMocks();
+    mockedReadFileSync.mockReturnValue(
+      "{boundary_open}\n{spec}\n{boundary_close}",
+    );
+    const specWithDollar = "spec price is $& and $' and $` and $$";
+
+    const result = buildPrompt(
+      makeIssue({ phase: Phase.SPEC, labels: ["test/spec"] }),
+      makeRepoConfig(),
+      "ja",
+      specWithDollar,
+    );
+
+    expect(result).toContain(specWithDollar);
+  });
+
+  it("specContext non-null with no {spec} in template emits WARNING log", () => {
+    setupDefaultDirMocks();
+    mockedReadFileSync.mockReturnValue("Only title: {issue_title}");
+    mockPromptLogger.warn.mockClear();
+
+    buildPrompt(
+      makeIssue({ phase: Phase.SPEC, labels: ["test/spec"] }),
+      makeRepoConfig(),
+      "ja",
+      "some spec context",
+    );
+
+    expect(mockPromptLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("{spec}"),
+      expect.any(String),
+    );
+  });
+
+  it("specContext null with no {spec} in template does not emit WARNING log", () => {
+    setupDefaultDirMocks();
+    mockedReadFileSync.mockReturnValue("Only title: {issue_title}");
+    mockPromptLogger.warn.mockClear();
+
+    buildPrompt(
+      makeIssue({ phase: Phase.SPEC, labels: ["test/spec"] }),
+      makeRepoConfig(),
+      "ja",
+      null,
+    );
+
+    expect(mockPromptLogger.warn).not.toHaveBeenCalledWith(
+      expect.stringContaining("{spec}"),
+      expect.any(String),
+    );
+  });
+
+  it("Proposal and feedback in specContext are placed within a single boundary pair", () => {
+    setupDefaultDirMocks();
+    mockedReadFileSync.mockReturnValue(
+      "{boundary_open}\n{spec}\n{boundary_close}",
+    );
+    const specContext =
+      "## Approved specification\n\nthe proposal\n\n" +
+      "## Supplementary feedback\n\n### Feedback 1\n\nfeedback text";
+
+    const result = buildPrompt(
+      makeIssue({ phase: Phase.SPEC, labels: ["test/spec"] }),
+      makeRepoConfig(),
+      "ja",
+      specContext,
+    );
+
+    const openMatch = result.match(/<!-- BOUNDARY-([0-9a-f-]+) DATA START -->/);
+    const closeMatch = result.match(/<!-- BOUNDARY-([0-9a-f-]+) DATA END -->/);
+    expect(openMatch).not.toBeNull();
+    expect(closeMatch).not.toBeNull();
+    expect(result).toContain("the proposal");
+    expect(result).toContain("feedback text");
+
+    const openIdx = result.indexOf(openMatch![0]);
+    const proposalIdx = result.indexOf("the proposal");
+    const feedbackIdx = result.indexOf("feedback text");
+    const closeIdx = result.indexOf(closeMatch![0]);
+    expect(openIdx).toBeLessThan(proposalIdx);
+    expect(proposalIdx).toBeLessThan(feedbackIdx);
+    expect(feedbackIdx).toBeLessThan(closeIdx);
   });
 });

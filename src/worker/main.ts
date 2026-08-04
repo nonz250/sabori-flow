@@ -1,15 +1,22 @@
-import type { AppConfig, ExecutionConfig, Issue, Phase, RepositoryConfig } from "./models.js";
+import type { AppConfig, ExecutionConfig, Issue, LabelsConfig, Phase, RepositoryConfig, StepResult } from "./models.js";
 import { repoFullName } from "./models.js";
 import { Phase as PhaseEnum } from "./models.js";
 import { loadConfig } from "./config.js";
 import { fetchIssues } from "./fetcher.js";
-import { processIssue } from "./pipeline.js";
+import { processIssue, resumeSpecReview } from "./pipeline.js";
 import { resolveAutonomyLogMessage } from "./executor.js";
 import { configureLogger, createLogger, rotateOldLogs } from "./logger.js";
 import { getConfigPath, getLogsDir } from "../utils/paths.js";
 import { readAuthToken } from "../utils/auth-token.js";
+import {
+  runCommand,
+  ProcessTimeoutError,
+  ProcessExecutionError,
+} from "./process.js";
 
 const logger = createLogger("main");
+
+const GH_TIMEOUT_MS = 120_000;
 
 // ---------- Dependency Injection ----------
 
@@ -18,97 +25,98 @@ export interface WorkerDeps {
   fetchIssues: (
     repoConfig: RepositoryConfig,
     phase: Phase,
+    label: string,
   ) => Promise<readonly Issue[]>;
   processIssue: (
     issue: Issue,
     repoConfig: RepositoryConfig,
     executionConfig: ExecutionConfig,
     authToken: string | null,
-  ) => Promise<boolean>;
+    entryLabel: string,
+  ) => Promise<StepResult>;
+  resumeSpecReview: (
+    issue: Issue,
+    repoConfig: RepositoryConfig,
+    executionConfig: ExecutionConfig,
+    authToken: string | null,
+    canRunClaude: boolean,
+  ) => Promise<StepResult>;
+  ensureLabelsExist: (
+    repo: string,
+    labels: readonly string[],
+  ) => Promise<void>;
   readAuthToken: () => string | null;
 }
 
 export const defaultWorkerDeps: WorkerDeps = {
   loadConfig,
-  fetchIssues,
+  fetchIssues: (repoConfig, phase, label) => fetchIssues(repoConfig, phase, label),
   processIssue,
+  resumeSpecReview,
+  ensureLabelsExist,
   readAuthToken,
 };
+
+// ---------- Step definitions ----------
+
+interface StepContext {
+  repoConfig: RepositoryConfig;
+  executionConfig: ExecutionConfig;
+  deps: WorkerDeps;
+  authToken: string | null;
+}
+
+interface Step {
+  readonly phase: Phase;
+  readonly label: (labels: LabelsConfig) => string;
+  readonly run: (ctx: StepContext, issue: Issue, canRunClaude: boolean) => Promise<StepResult>;
+  /** Skipped once the claude quota is spent. False for steps that only read GitHub. */
+  readonly requiresQuota: boolean;
+}
+
+/**
+ * Process later-stage phases first. When quota is 1, the first step
+ * always wins — processing front-to-back would let new intake
+ * overtake in-progress work and stall impl.
+ */
+const STEPS: readonly Step[] = [
+  {
+    phase: PhaseEnum.IMPL,
+    label: (l) => l.impl.trigger,
+    run: (ctx, issue, _canRunClaude) =>
+      ctx.deps.processIssue(issue, ctx.repoConfig, ctx.executionConfig, ctx.authToken, ctx.repoConfig.labels.impl.trigger),
+    requiresQuota: true,
+  },
+  {
+    phase: PhaseEnum.PLAN,
+    label: (l) => l.plan.trigger,
+    run: (ctx, issue, _canRunClaude) =>
+      ctx.deps.processIssue(issue, ctx.repoConfig, ctx.executionConfig, ctx.authToken, ctx.repoConfig.labels.plan.trigger),
+    requiresQuota: true,
+  },
+  {
+    phase: PhaseEnum.SPEC,
+    label: (l) => l.spec.review,
+    run: (ctx, issue, canRunClaude) =>
+      ctx.deps.resumeSpecReview(issue, ctx.repoConfig, ctx.executionConfig, ctx.authToken, canRunClaude),
+    // Evaluating a review costs one gh call and no claude run. Skipping it
+    // when quota is spent would sit on a human's approval until a cycle
+    // happens to have quota left over.
+    requiresQuota: false,
+  },
+  {
+    phase: PhaseEnum.SPEC,
+    label: (l) => l.spec.trigger,
+    run: (ctx, issue, _canRunClaude) =>
+      ctx.deps.processIssue(issue, ctx.repoConfig, ctx.executionConfig, ctx.authToken, ctx.repoConfig.labels.spec.trigger),
+    requiresQuota: true,
+  },
+];
 
 // ---------- Internal helpers ----------
 
 /**
- * 指定リポジトリ・フェーズの Issue を取得し、パイプラインを実行する。
- *
- * @returns anySuccess: 1 件以上の Issue を正常に処理できた場合 true,
- *          processedCount: 処理対象とした Issue 件数
- */
-async function processPhase(
-  repoConfig: RepositoryConfig,
-  phase: Phase,
-  executionConfig: ExecutionConfig,
-  deps: WorkerDeps,
-  remainingQuota: number,
-  authToken: string | null,
-): Promise<{ anySuccess: boolean; processedCount: number }> {
-  const fullName = repoFullName(repoConfig);
-
-  logger.info("[%s] %s フェーズの Issue を取得中...", fullName, phase);
-
-  let issues: readonly Issue[];
-  try {
-    issues = await deps.fetchIssues(repoConfig, phase);
-  } catch (error: unknown) {
-    logger.error(
-      "[%s] %s フェーズの Issue 取得に失敗: %s",
-      fullName,
-      phase,
-      error,
-    );
-    return { anySuccess: false, processedCount: 0 };
-  }
-
-  logger.info(
-    "[%s] %s フェーズ: %s 件の Issue を取得",
-    fullName,
-    phase,
-    issues.length,
-  );
-
-  if (issues.length === 0) {
-    return { anySuccess: true, processedCount: 0 }; // 0 件は成功扱い
-  }
-
-  const targetIssues = issues.slice(0, remainingQuota);
-  if (targetIssues.length < issues.length) {
-    logger.info(
-      "[%s] %s フェーズ: 上限により %s/%s 件を処理",
-      fullName,
-      phase,
-      targetIssues.length,
-      issues.length,
-    );
-  }
-
-  let anySuccess = false;
-  for (const issue of targetIssues) {
-    logger.info(
-      "  #%s [%s] %s の処理を開始",
-      issue.number,
-      issue.priority,
-      issue.title,
-    );
-    const success = await deps.processIssue(issue, repoConfig, executionConfig, authToken);
-    if (success) {
-      anySuccess = true;
-    }
-  }
-
-  return { anySuccess, processedCount: targetIssues.length };
-}
-
-/**
- * 1 リポジトリの全フェーズを処理する。
+ * 1 リポジトリの全ステップを処理する。
  *
  * @returns 1 件以上の Issue を正常に処理できた場合 true
  */
@@ -119,21 +127,134 @@ async function processRepository(
   authToken: string | null,
 ): Promise<boolean> {
   const fullName = repoFullName(repoConfig);
+  const labels = repoConfig.labels;
+
+  // Create trigger labels that humans need to use from the UI
+  await deps.ensureLabelsExist(fullName, [
+    labels.spec.trigger,
+    labels.spec.approved,
+    labels.plan.trigger,
+    labels.impl.trigger,
+  ]);
+
   let anySuccess = false;
   let remaining = executionConfig.maxIssuesPerRepo;
+  const processedIssueNumbers = new Set<number>();
 
-  for (const phase of [PhaseEnum.PLAN, PhaseEnum.IMPL]) {
-    if (remaining <= 0) {
-      logger.info("[%s] リポジトリ上限に達したため %s フェーズをスキップ", fullName, phase);
-      break;
+  const ctx: StepContext = { repoConfig, executionConfig, deps, authToken };
+
+  for (const step of STEPS) {
+    const stepLabel = step.label(labels);
+    logger.info("[%s] %s フェーズ (%s) の Issue を取得中...", fullName, step.phase, stepLabel);
+
+    let issues: readonly Issue[];
+    try {
+      issues = await deps.fetchIssues(repoConfig, step.phase, stepLabel);
+    } catch (error: unknown) {
+      logger.error(
+        "[%s] %s フェーズの Issue 取得に失敗: %s",
+        fullName,
+        step.phase,
+        error,
+      );
+      continue;
     }
-    const result = await processPhase(repoConfig, phase, executionConfig, deps, remaining, authToken);
-    remaining -= result.processedCount;
-    if (result.anySuccess) {
+
+    logger.info(
+      "[%s] %s フェーズ: %s 件の Issue を取得",
+      fullName,
+      step.phase,
+      issues.length,
+    );
+
+    if (issues.length === 0) {
       anySuccess = true;
+      continue;
+    }
+
+    for (const issue of issues) {
+      if (processedIssueNumbers.has(issue.number)) {
+        logger.warn(
+          "[%s] Issue #%s は今サイクルで処理済みのためスキップ",
+          fullName,
+          issue.number,
+        );
+        continue;
+      }
+
+      const canRunClaude = remaining > 0;
+      if (!canRunClaude && step.requiresQuota) {
+        logger.info(
+          "[%s] %s フェーズ: claude 起動上限に達したため残りをスキップ",
+          fullName,
+          step.phase,
+        );
+        break;
+      }
+      logger.info(
+        "  #%s [%s] %s の処理を開始",
+        issue.number,
+        issue.priority,
+        issue.title,
+      );
+      const result = await step.run(ctx, issue, canRunClaude);
+      processedIssueNumbers.add(issue.number);
+      if (result.outcome === "success") {
+        anySuccess = true;
+      }
+      if (result.claudeExecuted) {
+        remaining--;
+      }
     }
   }
+
   return anySuccess;
+}
+
+// ---------- ensureLabelsExist ----------
+
+async function ensureLabelsExist(
+  repoFullName: string,
+  labels: readonly string[],
+): Promise<void> {
+  let existingLabels: Set<string>;
+  try {
+    const result = await runCommand(
+      "gh",
+      ["label", "list", "--repo", repoFullName, "--json", "name", "--limit", "1000"],
+      { timeoutMs: GH_TIMEOUT_MS },
+    );
+    if (!result.success) {
+      logger.warn("Failed to list labels in %s: %s", repoFullName, result.stderr);
+      return;
+    }
+    const parsed = JSON.parse(result.stdout) as Array<{ name: string }>;
+    existingLabels = new Set(parsed.map((l) => l.name));
+  } catch (error: unknown) {
+    logger.warn("Failed to list labels in %s: %s", repoFullName,
+      error instanceof Error ? error.message : String(error));
+    return;
+  }
+
+  for (const label of labels) {
+    if (existingLabels.has(label)) continue;
+    try {
+      const result = await runCommand(
+        "gh",
+        ["label", "create", label, "--repo", repoFullName],
+        { timeoutMs: GH_TIMEOUT_MS },
+      );
+      if (!result.success) {
+        if (result.stderr.toLowerCase().includes("already exists")) continue;
+        logger.warn("Failed to create label '%s' in %s: %s", label, repoFullName, result.stderr);
+      } else {
+        logger.info("Label '%s' created in %s", label, repoFullName);
+      }
+    } catch (error: unknown) {
+      logger.warn("Failed to create label '%s' in %s: %s", label, repoFullName,
+        error instanceof Error ? error.message : String(error));
+    }
+  }
 }
 
 // ---------- Semaphore ----------
@@ -169,15 +290,12 @@ class Semaphore {
 /**
  * ワーカーのメインロジック。
  *
- * config 読み込み -> ログ設定 -> リポジトリ並列処理 -> 結果判定
- *
  * @returns 終了コード (0: 成功, 1: 失敗)
  */
 export async function workerMain(
   configPath: string = getConfigPath(),
   deps: WorkerDeps = defaultWorkerDeps,
 ): Promise<number> {
-  // config 読み込み
   let appConfig: AppConfig;
   try {
     appConfig = deps.loadConfig(configPath);
@@ -186,7 +304,6 @@ export async function workerMain(
     return 1;
   }
 
-  // ログ設定
   configureLogger({ logDir: getLogsDir() });
   rotateOldLogs();
 
@@ -205,7 +322,6 @@ export async function workerMain(
     logger.info("Claude auth token loaded; scoping it to claude executions.");
   }
 
-  // リポジトリ並列処理 (Promise.allSettled + セマフォ制御)
   const semaphore = new Semaphore(appConfig.execution.maxParallel);
 
   const results = await Promise.allSettled(
@@ -219,7 +335,6 @@ export async function workerMain(
     }),
   );
 
-  // 結果判定
   let anySuccess = false;
   for (let i = 0; i < results.length; i++) {
     const result = results[i];

@@ -40,18 +40,21 @@ src/
     helpers/
       repository-prompt.ts  # 対話入力の共通ロジック（init/add で共有）
   worker/            # ワーカー本体
-    main.ts          # メインロジック、並列実行制御
+    main.ts          # メインロジック、STEPS ループ、並列実行制御
     config.ts        # config.yml 読み込み・バリデーション
     models.ts        # データモデル（interface, enum）
-    fetcher.ts       # gh issue list で Issue 取得・優先度ソート
-    pipeline.ts      # 1 Issue の処理パイプライン（DI パターン）
+    fetcher.ts       # gh api で Issue 取得・優先度ソート
+    pipeline.ts      # 1 Issue の処理パイプライン + resumeSpecReview（DI パターン）
     prompt.ts        # プロンプトテンプレート読み込み・展開
     executor.ts      # Claude CLI 実行
     worktree.ts      # git worktree ライフサイクル管理
-    label.ts         # ラベル遷移操作
-    comment.ts       # Issue コメント投稿
+    label.ts         # ラベル遷移操作（applyLabelTransition）
+    comment.ts       # Issue コメント投稿（成功・失敗・spec 提案）
+    issue-comments.ts # GraphQL でコメント取得（spec thread 導出用）
+    spec-thread.ts   # コメント列から SpecThread を導出（marker 解析、round 計算）
+    spec-review.ts   # spec review の再開条件評価（approve/revise/escalate/wait）
     linked-pr.ts     # Issue に紐づく PR の取得（impl の完了検証）
-    logger.ts        # 軽量ロガー
+    logger.ts        # 軽量ロガー（日次ローテーション付き）
     process.ts       # child_process ラッパー
   utils/             # 共有ユーティリティ
     paths.ts         # ~/.sabori-flow/ ベースのパス解決 + expandTilde（チルダ展開）
@@ -75,8 +78,11 @@ src/
 
 ### ラベル遷移
 
-- plan: `claude/plan` → `claude/plan:in-progress` → `claude/plan:done` / `claude/plan:failed`
-- impl: `claude/impl` → `claude/impl:in-progress` → `claude/impl:done` / `claude/impl:failed`
+- spec: `ai/spec` → `ai/spec/in-progress` → `ai/spec/review` → `ai/spec/done` / `ai/spec/needs-human` / `ai/spec/failed`
+- plan: `ai/plan` → `ai/plan/in-progress` → `ai/plan/done` / `ai/plan/failed`
+- impl: `ai/impl` → `ai/impl/in-progress` → `ai/impl/done` / `ai/impl/failed`
+
+spec の review 状態では、ワーカーが毎サイクル評価を行う。承認（`ai/spec/approved` ラベル）→ `ai/spec/done` + `ai/plan` 自動付与、差し戻しコメント → 再提案（最大 2 回）、上限到達 → `ai/spec/needs-human`。
 
 ### エラーハンドリング 3 段階
 
@@ -84,7 +90,7 @@ src/
 - **レベル 2**: プロンプト生成/CLI 実行失敗/impl の PR 未作成 → failed 遷移 + 構造化された失敗診断コメント（`FailureDiagnostics` → `formatFailureDiagnostics()` でフォーマット）
 - **レベル 3**: 後処理（done/failed ラベル遷移、コメント投稿）失敗 → ログ WARNING のみ
 
-`:failed` に遷移した Issue は trigger ラベルが剥がれるため、次回フェッチ対象から外れる (自動リトライされない)。再実行するにはユーザーが手動で trigger ラベル (`claude/plan` 等) を再付与する必要がある。
+`:failed` に遷移した Issue は trigger ラベルが剥がれるため、次回フェッチ対象から外れる (自動リトライされない)。再実行するにはユーザーが手動で trigger ラベル (`ai/spec` 等) を再付与する必要がある。
 
 ### 並列実行
 
@@ -162,7 +168,8 @@ src/
   - `auto`: Claude Code の `--permission-mode auto`。分類器が危険操作のみブロック (v2.1.83+ / Max・Team・Enterprise プラン必須)
   - `full`: `--dangerously-skip-permissions`。全許可
   - `sandboxed`: 将来の非-Claude CLI (OpenAI Codex 等) 向け予約値。現状は interactive にフォールバック
-- `execution.interval_minutes`: スケジュール実行間隔（整数、10-1440分、デフォルト: 60）
+- `repositories[].labels`: 各フェーズのラベル名（省略可、デフォルト: `ai/*`）。フェーズ単位でフォールバック
+- `execution.interval_minutes`: スケジュール実行間隔（整数、10-1440分、デフォルト: 10）
 - `execution.timeout_minutes`: Claude CLI 実行タイムアウト（整数、1-240分、デフォルト: 60）
 - `language`: CLI メッセージおよびプロンプトテンプレートの言語（`ja` / `en`、デフォルト: `ja`）
 

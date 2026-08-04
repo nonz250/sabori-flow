@@ -4,6 +4,7 @@ import type { Language } from "../i18n/types.js";
 
 /** 処理フェーズ */
 export const Phase = {
+  SPEC: "spec",
   PLAN: "plan",
   IMPL: "impl",
 } as const;
@@ -64,10 +65,50 @@ export interface PhaseLabels {
   readonly failed: string;
 }
 
-/** plan/impl 両フェーズのラベル定義 */
+/** spec は 4 状態に加えて人間ゲート用の 3 状態を持つ */
+export interface SpecPhaseLabels extends PhaseLabels {
+  readonly review: string;
+  readonly approved: string;
+  readonly needsHuman: string;
+}
+
+/** 全フェーズのラベル定義 */
 export interface LabelsConfig {
+  readonly spec: SpecPhaseLabels;
   readonly plan: PhaseLabels;
   readonly impl: PhaseLabels;
+}
+
+/** 処理を許可する authorAssociation の一覧 */
+export const PERMITTED_ASSOCIATIONS: ReadonlySet<string> = new Set([
+  "OWNER",
+  "MEMBER",
+  "COLLABORATOR",
+]);
+
+/** Issue コメント 1 件 */
+export interface IssueComment {
+  readonly body: string;
+  readonly authorAssociation: string;
+  readonly createdAt: string;
+  readonly viewerDidAuthor: boolean;
+}
+
+/** spec のやり取りを GitHub のコメント列から導出したもの */
+export interface SpecThread {
+  readonly round: number;
+  readonly latestProposal: string | null;
+  readonly feedback: readonly string[];
+}
+
+// ---------- Step result ----------
+
+export type StepOutcome = "success" | "failure" | "deferred";
+
+export interface StepResult {
+  readonly outcome: StepOutcome;
+  /** claude を起動したか（quota 会計の単位） */
+  readonly claudeExecuted: boolean;
 }
 
 /** 1 リポジトリの設定 */
@@ -117,6 +158,7 @@ export const FailureCategory = {
   IMPL_NO_LINKED_PR: "impl_no_linked_pr",
   WORKTREE_CREATION: "worktree_creation",
   GIT_FETCH: "git_fetch",
+  SPEC_PROPOSAL_COMMENT: "spec_proposal_comment",
 } as const;
 export type FailureCategory = (typeof FailureCategory)[keyof typeof FailureCategory];
 

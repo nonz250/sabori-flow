@@ -8,9 +8,14 @@ import {
 import type { FailureDiagnostics } from "./models.js";
 import { FailureCategory } from "./models.js";
 
+import { formatMarker } from "./spec-thread.js";
+
 const GH_TIMEOUT_MS = 120_000;
 
 const MAX_COMMENT_LENGTH = 64_000;
+
+const WORKER_COMMENT_MARKER = "<!-- sabori-flow -->";
+const WORKER_COMMENT_MARKER_PREFIX = "<!-- sabori-flow";
 
 const PARTIAL_STDOUT_TAIL_LENGTH = 2_000;
 const PARTIAL_STDERR_TAIL_LENGTH = 4_000;
@@ -192,6 +197,7 @@ const FAILURE_CATEGORY_LABELS: Record<FailureCategory, string> = {
   [FailureCategory.IMPL_NO_LINKED_PR]: "No Linked Pull Request",
   [FailureCategory.WORKTREE_CREATION]: "Worktree Creation Error",
   [FailureCategory.GIT_FETCH]: "Git Fetch Error",
+  [FailureCategory.SPEC_PROPOSAL_COMMENT]: "Spec Proposal Comment Error",
 };
 
 // ---------- Output section labels ----------
@@ -327,15 +333,19 @@ export async function postSuccessComment(
   issueNumber: number,
   claudeOutput: string,
 ): Promise<void> {
-  const maxOutputLength = MAX_COMMENT_LENGTH - SUCCESS_HEADER.length;
+  const markerSuffix = "\n\n" + WORKER_COMMENT_MARKER;
+  const maxOutputLength =
+    MAX_COMMENT_LENGTH - SUCCESS_HEADER.length - markerSuffix.length;
 
-  let output = claudeOutput;
+  // Worker comments are read back by deriveSpecThread, so a spec marker
+  // appearing in claude's output would make this comment parse as a proposal.
+  let output = escapeWorkerMarkers(claudeOutput);
   if (output.length > maxOutputLength) {
     const truncatedLength = maxOutputLength - SUCCESS_TRUNCATED_SUFFIX.length;
     output = output.slice(0, truncatedLength) + SUCCESS_TRUNCATED_SUFFIX;
   }
 
-  const body = SUCCESS_HEADER + output;
+  const body = SUCCESS_HEADER + output + markerSuffix;
   await postComment(repoFullName, issueNumber, body);
 }
 
@@ -350,16 +360,57 @@ export async function postFailureComment(
   issueNumber: number,
   errorMessage: string,
 ): Promise<void> {
-  const maxOutputLength = MAX_COMMENT_LENGTH - FAILURE_HEADER.length;
+  const markerSuffix = "\n\n" + WORKER_COMMENT_MARKER;
+  const maxOutputLength =
+    MAX_COMMENT_LENGTH - FAILURE_HEADER.length - markerSuffix.length;
 
-  let message = errorMessage;
+  let message = escapeWorkerMarkers(errorMessage);
   if (message.length > maxOutputLength) {
     const truncatedLength = maxOutputLength - FAILURE_TRUNCATED_SUFFIX.length;
     message = message.slice(0, truncatedLength) + FAILURE_TRUNCATED_SUFFIX;
   }
 
-  const body = FAILURE_HEADER + message;
+  const body = FAILURE_HEADER + message + markerSuffix;
   await postComment(repoFullName, issueNumber, body);
+}
+
+/**
+ * spec 提案コメントを投稿する。
+ *
+ * sanitize を関数の内側で行う。truncate とマーカー付与を内包しており
+ * 順序に意味がある（sanitize → マーカー列の無害化 → truncate → マーカー付与）。
+ * truncate の後に marker を付けるのは、切り落とすと状態が失われるため。
+ *
+ * @throws {CommentError} コメント投稿に失敗した場合
+ */
+export async function postSpecProposalComment(
+  repoFullName: string,
+  issueNumber: number,
+  rawOutput: string,
+  round: number,
+): Promise<void> {
+  let output = sanitizeOutput(rawOutput);
+  output = escapeWorkerMarkers(output);
+
+  const marker = formatMarker(round);
+  const markerSuffix = "\n\n" + marker;
+  const maxOutputLength = MAX_COMMENT_LENGTH - markerSuffix.length;
+
+  if (output.length > maxOutputLength) {
+    const truncatedLength = maxOutputLength - SUCCESS_TRUNCATED_SUFFIX.length;
+    output = output.slice(0, truncatedLength) + SUCCESS_TRUNCATED_SUFFIX;
+  }
+
+  const body = output + markerSuffix;
+  await postComment(repoFullName, issueNumber, body);
+}
+
+/**
+ * Neutralize worker marker sequences in text to prevent marker spoofing.
+ * Inserts a zero-width space after "<!--" in any sabori-flow marker prefix.
+ */
+function escapeWorkerMarkers(text: string): string {
+  return text.replaceAll(WORKER_COMMENT_MARKER_PREFIX, "<!--​ sabori-flow");
 }
 
 /**

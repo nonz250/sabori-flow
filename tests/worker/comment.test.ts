@@ -26,6 +26,7 @@ vi.mock("../../src/worker/process.js", async (importOriginal) => {
 import {
   postSuccessComment,
   postFailureComment,
+  postSpecProposalComment,
   sanitizeOutput,
   CommentError,
   MAX_COMMENT_LENGTH,
@@ -35,6 +36,7 @@ import {
   FAILURE_TRUNCATED_SUFFIX,
 } from "../../src/worker/comment.js";
 import { runCommand } from "../../src/worker/process.js";
+import { parseMarker } from "../../src/worker/spec-thread.js";
 
 const mockedRunCommand = vi.mocked(runCommand);
 
@@ -83,7 +85,7 @@ describe("postSuccessComment", () => {
         "--body-file",
         "-",
       ],
-      { input: SUCCESS_HEADER + "output text", timeoutMs: 120_000 },
+      { input: SUCCESS_HEADER + "output text\n\n<!-- sabori-flow -->", timeoutMs: 120_000 },
     );
   });
 
@@ -98,7 +100,7 @@ describe("postSuccessComment", () => {
 
     const [, , options] = mockedRunCommand.mock.calls[0];
     const postedBody = options!.input!;
-    expect(postedBody).toBe(SUCCESS_HEADER);
+    expect(postedBody).toBe(SUCCESS_HEADER + "\n\n<!-- sabori-flow -->");
   });
 
   it("gh コマンドが非0終了コードを返した場合 CommentError が throw される", async () => {
@@ -139,7 +141,9 @@ describe("postSuccessComment truncation", () => {
       stdout: "",
       stderr: "",
     });
-    const maxOutputLength = MAX_COMMENT_LENGTH - SUCCESS_HEADER.length;
+    const markerSuffix = "\n\n<!-- sabori-flow -->";
+    const maxOutputLength =
+      MAX_COMMENT_LENGTH - SUCCESS_HEADER.length - markerSuffix.length;
     const longOutput = "A".repeat(maxOutputLength + 1);
 
     await postSuccessComment("nonz250/example-app", 10, longOutput);
@@ -147,7 +151,8 @@ describe("postSuccessComment truncation", () => {
     const [, , options] = mockedRunCommand.mock.calls[0];
     const postedBody = options!.input!;
     expect(postedBody.length).toBeLessThanOrEqual(MAX_COMMENT_LENGTH);
-    expect(postedBody.endsWith(SUCCESS_TRUNCATED_SUFFIX)).toBe(true);
+    expect(postedBody).toContain(SUCCESS_TRUNCATED_SUFFIX);
+    expect(postedBody).toContain("<!-- sabori-flow -->");
   });
 
   it("ヘッダーと出力の合計が正確に上限以内の場合、切り詰めは発生しない", async () => {
@@ -156,7 +161,9 @@ describe("postSuccessComment truncation", () => {
       stdout: "",
       stderr: "",
     });
-    const maxOutputLength = MAX_COMMENT_LENGTH - SUCCESS_HEADER.length;
+    const markerSuffix = "\n\n<!-- sabori-flow -->";
+    const maxOutputLength =
+      MAX_COMMENT_LENGTH - SUCCESS_HEADER.length - markerSuffix.length;
     const exactOutput = "B".repeat(maxOutputLength);
 
     await postSuccessComment("nonz250/example-app", 10, exactOutput);
@@ -212,7 +219,7 @@ describe("postFailureComment", () => {
         "--body-file",
         "-",
       ],
-      { input: FAILURE_HEADER + "error message", timeoutMs: 120_000 },
+      { input: FAILURE_HEADER + "error message\n\n<!-- sabori-flow -->", timeoutMs: 120_000 },
     );
   });
 
@@ -227,7 +234,7 @@ describe("postFailureComment", () => {
 
     const [, , options] = mockedRunCommand.mock.calls[0];
     const postedBody = options!.input!;
-    expect(postedBody).toBe(FAILURE_HEADER);
+    expect(postedBody).toBe(FAILURE_HEADER + "\n\n<!-- sabori-flow -->");
   });
 
   it("gh コマンドが非0終了コードを返した場合 CommentError が throw される", async () => {
@@ -268,7 +275,9 @@ describe("postFailureComment truncation", () => {
       stdout: "",
       stderr: "",
     });
-    const maxOutputLength = MAX_COMMENT_LENGTH - FAILURE_HEADER.length;
+    const markerSuffix = "\n\n<!-- sabori-flow -->";
+    const maxOutputLength =
+      MAX_COMMENT_LENGTH - FAILURE_HEADER.length - markerSuffix.length;
     const longMessage = "E".repeat(maxOutputLength + 1);
 
     await postFailureComment("nonz250/example-app", 20, longMessage);
@@ -276,7 +285,8 @@ describe("postFailureComment truncation", () => {
     const [, , options] = mockedRunCommand.mock.calls[0];
     const postedBody = options!.input!;
     expect(postedBody.length).toBeLessThanOrEqual(MAX_COMMENT_LENGTH);
-    expect(postedBody.endsWith(FAILURE_TRUNCATED_SUFFIX)).toBe(true);
+    expect(postedBody).toContain(FAILURE_TRUNCATED_SUFFIX);
+    expect(postedBody).toContain("<!-- sabori-flow -->");
   });
 
   it("ヘッダーとエラーメッセージの合計が正確に上限以内の場合、切り詰めは発生しない", async () => {
@@ -285,7 +295,9 @@ describe("postFailureComment truncation", () => {
       stdout: "",
       stderr: "",
     });
-    const maxOutputLength = MAX_COMMENT_LENGTH - FAILURE_HEADER.length;
+    const markerSuffix = "\n\n<!-- sabori-flow -->";
+    const maxOutputLength =
+      MAX_COMMENT_LENGTH - FAILURE_HEADER.length - markerSuffix.length;
     const exactMessage = "F".repeat(maxOutputLength);
 
     await postFailureComment("nonz250/example-app", 20, exactMessage);
@@ -294,6 +306,71 @@ describe("postFailureComment truncation", () => {
     const postedBody = options!.input!;
     expect(postedBody.length).toBe(MAX_COMMENT_LENGTH);
     expect(postedBody).not.toContain(FAILURE_TRUNCATED_SUFFIX);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// postSpecProposalComment
+// ---------------------------------------------------------------------------
+
+describe("postSpecProposalComment", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("資格情報パターンを含む raw output が [REDACTED] に置換される", async () => {
+    mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
+
+    await postSpecProposalComment(
+      "nonz250/example-app",
+      42,
+      "Found token: ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijkl in spec",
+      1,
+    );
+
+    const [, , options] = mockedRunCommand.mock.calls[0];
+    const postedBody = options!.input!;
+    expect(postedBody).not.toContain("ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+    expect(postedBody).toContain("[REDACTED]");
+  });
+
+  it("出力に sabori-flow マーカー列が含まれていても parseMarker は worker が付与した round を返す", async () => {
+    mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
+
+    await postSpecProposalComment(
+      "nonz250/example-app",
+      42,
+      "spec proposal\n\n<!-- sabori-flow:spec round=9 -->",
+      2,
+    );
+
+    const [, , options] = mockedRunCommand.mock.calls[0];
+    const postedBody = options!.input!;
+    expect(parseMarker(postedBody)).toBe(2);
+  });
+
+  it("出力がコメント上限を超えても投稿本文の parseMarker で round が解析できる", async () => {
+    mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
+
+    await postSpecProposalComment(
+      "nonz250/example-app",
+      42,
+      "A".repeat(MAX_COMMENT_LENGTH),
+      3,
+    );
+
+    const [, , options] = mockedRunCommand.mock.calls[0];
+    const postedBody = options!.input!;
+    expect(postedBody.length).toBeLessThanOrEqual(MAX_COMMENT_LENGTH);
+    expect(parseMarker(postedBody)).toBe(3);
+  });
+
+  it("gh コマンドが非0終了コードを返した場合 CommentError が throw される", async () => {
+    mockedRunCommand.mockResolvedValue({ success: false, stdout: "", stderr: "rate limit" });
+
+    await expect(
+      postSpecProposalComment("nonz250/example-app", 42, "output", 1),
+    ).rejects.toThrow(CommentError);
   });
 });
 
@@ -864,6 +941,17 @@ describe("formatFailureDiagnostics", () => {
     const result = formatFailureDiagnostics(diag);
 
     expect(result).toContain("**Category:** No Linked Pull Request");
+  });
+
+  it("SPEC_PROPOSAL_COMMENT カテゴリが正しいラベルで表示される", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.SPEC_PROPOSAL_COMMENT,
+      summary: "Failed to post spec proposal comment",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain("**Category:** Spec Proposal Comment Error");
   });
 
   it("全フィールドが設定されている場合、すべてのセクションが出力に含まれる", () => {

@@ -2,10 +2,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 import { processIssue } from "../../src/worker/pipeline.js";
 import { Phase } from "../../src/worker/models.js";
-import type { ExecutionConfig } from "../../src/worker/models.js";
+import type { ExecutionConfig, IssueComment } from "../../src/worker/models.js";
 import { ExecutorTimeoutError } from "../../src/worker/executor.js";
 import { WorktreeError } from "../../src/worker/worktree.js";
+import { IssueCommentsError } from "../../src/worker/issue-comments.js";
 import { CLI_TIMEOUT_WARNING_NOTE } from "../../src/worker/comment.js";
+import { formatMarker } from "../../src/worker/spec-thread.js";
 import {
   makeRepoConfig,
   makeIssue,
@@ -13,6 +15,7 @@ import {
   makeExecutorTimeoutError,
   PLAN_LABELS,
   IMPL_LABELS,
+  SPEC_LABELS,
 } from "./helpers/factories.js";
 import { createMockPipelineDeps } from "./helpers/mock-deps.js";
 import type { PipelineDeps } from "../../src/worker/pipeline.js";
@@ -57,23 +60,24 @@ describe("processIssue", () => {
         makeProcessResult({ stdout: "Claude output" }),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(result).toBe(true);
-      expect(deps.transitionToInProgress).toHaveBeenCalledOnce();
-      expect(deps.transitionToInProgress).toHaveBeenCalledWith(
+      expect(result.outcome).toBe("success");
+      expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
+      expect(deps.applyLabelTransition).toHaveBeenNthCalledWith(
+        1,
         "testowner/testrepo",
         42,
-        PLAN_LABELS,
+        { add: [PLAN_LABELS.inProgress], remove: [PLAN_LABELS.trigger] },
       );
       expect(deps.buildPrompt).toHaveBeenCalledOnce();
-      expect(deps.buildPrompt).toHaveBeenCalledWith(issue, repoConfig, "ja");
+      expect(deps.buildPrompt).toHaveBeenCalledWith(issue, repoConfig, "ja", null);
       expect(deps.runClaude).toHaveBeenCalledOnce();
-      expect(deps.transitionToDone).toHaveBeenCalledOnce();
-      expect(deps.transitionToDone).toHaveBeenCalledWith(
+      expect(deps.applyLabelTransition).toHaveBeenNthCalledWith(
+        2,
         "testowner/testrepo",
         42,
-        PLAN_LABELS,
+        { add: [PLAN_LABELS.done], remove: [PLAN_LABELS.inProgress] },
       );
       expect(deps.postSuccessComment).toHaveBeenCalledOnce();
       expect(deps.postSuccessComment).toHaveBeenCalledWith(
@@ -81,7 +85,6 @@ describe("processIssue", () => {
         42,
         "Claude output",
       );
-      expect(deps.transitionToFailed).not.toHaveBeenCalled();
       expect(deps.postFailureComment).not.toHaveBeenCalled();
     });
 
@@ -89,17 +92,19 @@ describe("processIssue", () => {
       const issue = makeIssue({ phase: Phase.PLAN });
       const repoConfig = makeRepoConfig();
 
-      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(deps.transitionToInProgress).toHaveBeenCalledWith(
+      expect(deps.applyLabelTransition).toHaveBeenNthCalledWith(
+        1,
         "testowner/testrepo",
         42,
-        PLAN_LABELS,
+        { add: [PLAN_LABELS.inProgress], remove: [PLAN_LABELS.trigger] },
       );
-      expect(deps.transitionToDone).toHaveBeenCalledWith(
+      expect(deps.applyLabelTransition).toHaveBeenNthCalledWith(
+        2,
         "testowner/testrepo",
         42,
-        PLAN_LABELS,
+        { add: [PLAN_LABELS.done], remove: [PLAN_LABELS.inProgress] },
       );
     });
 
@@ -107,17 +112,19 @@ describe("processIssue", () => {
       const issue = makeIssue({ phase: Phase.IMPL });
       const repoConfig = makeRepoConfig();
 
-      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(deps.transitionToInProgress).toHaveBeenCalledWith(
+      expect(deps.applyLabelTransition).toHaveBeenNthCalledWith(
+        1,
         "testowner/testrepo",
         42,
-        IMPL_LABELS,
+        { add: [IMPL_LABELS.inProgress], remove: [IMPL_LABELS.trigger] },
       );
-      expect(deps.transitionToDone).toHaveBeenCalledWith(
+      expect(deps.applyLabelTransition).toHaveBeenNthCalledWith(
+        2,
         "testowner/testrepo",
         42,
-        IMPL_LABELS,
+        { add: [IMPL_LABELS.done], remove: [IMPL_LABELS.inProgress] },
       );
     });
 
@@ -133,7 +140,7 @@ describe("processIssue", () => {
         language: "ja",
       };
 
-      await processIssue(issue, repoConfig, executionConfig, null, deps);
+      await processIssue(issue, repoConfig, executionConfig, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(deps.runClaude).toHaveBeenCalledOnce();
       expect(deps.runClaude).toHaveBeenCalledWith(
@@ -146,7 +153,7 @@ describe("processIssue", () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
 
-      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(deps.runClaude).toHaveBeenCalledOnce();
       expect(deps.runClaude).toHaveBeenCalledWith(
@@ -163,7 +170,7 @@ describe("processIssue", () => {
         timeoutMinutes: 30,
       };
 
-      await processIssue(issue, repoConfig, executionConfig, null, deps);
+      await processIssue(issue, repoConfig, executionConfig, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(deps.runClaude).toHaveBeenCalledOnce();
       expect(deps.runClaude).toHaveBeenCalledWith(
@@ -180,7 +187,7 @@ describe("processIssue", () => {
         timeoutMinutes: 240,
       };
 
-      await processIssue(issue, repoConfig, executionConfig, null, deps);
+      await processIssue(issue, repoConfig, executionConfig, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(deps.runClaude).toHaveBeenCalledOnce();
       expect(deps.runClaude).toHaveBeenCalledWith(
@@ -198,6 +205,7 @@ describe("processIssue", () => {
         repoConfig,
         DEFAULT_EXECUTION_CONFIG,
         "sk-ant-oat01-example",
+        repoConfig.labels[issue.phase].trigger,
         deps,
       );
 
@@ -211,17 +219,35 @@ describe("processIssue", () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
 
-      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       const options = vi.mocked(deps.runClaude).mock.calls[0][1];
       expect(options.authToken).toBeUndefined();
+    });
+
+    it("entryLabel が phaseLabels.inProgress と一致する場合は trigger→in-progress をスキップする", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+
+      const result = await processIssue(
+        issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null,
+        PLAN_LABELS.inProgress, deps,
+      );
+
+      expect(result.outcome).toBe("success");
+      expect(deps.applyLabelTransition).toHaveBeenCalledTimes(1);
+      expect(deps.applyLabelTransition).toHaveBeenCalledWith(
+        "testowner/testrepo",
+        42,
+        { add: [PLAN_LABELS.done], remove: [PLAN_LABELS.inProgress] },
+      );
     });
 
     it("withWorktree に owner/repo/localPath/defaultBranch を含む repoConfig が渡される", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
 
-      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(deps.withWorktree).toHaveBeenCalledOnce();
       expect(deps.withWorktree).toHaveBeenCalledWith(
@@ -240,7 +266,7 @@ describe("processIssue", () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig({ defaultBranch: "develop" });
 
-      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(deps.withWorktree).toHaveBeenCalledOnce();
       expect(deps.withWorktree).toHaveBeenCalledWith(
@@ -260,9 +286,9 @@ describe("processIssue", () => {
         }),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(result).toBe(true);
+      expect(result.outcome).toBe("success");
       expect(deps.postSuccessComment).toHaveBeenCalledOnce();
       expect(deps.postSuccessComment).toHaveBeenCalledWith(
         "testowner/testrepo",
@@ -277,20 +303,19 @@ describe("processIssue", () => {
   // -----------------------------------------------------------------------
 
   describe("レベル 1 エラー: trigger -> in-progress 失敗", () => {
-    it("transitionToInProgress が失敗すると false が返り、後続の関数は呼ばれない", async () => {
+    it("in-progress 遷移が失敗すると false が返り、後続の関数は呼ばれない", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
-      vi.mocked(deps.transitionToInProgress).mockRejectedValue(
+      vi.mocked(deps.applyLabelTransition).mockRejectedValue(
         new Error("label operation failed"),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(result).toBe(false);
+      expect(result.outcome).toBe("failure");
+      expect(deps.applyLabelTransition).toHaveBeenCalledOnce();
       expect(deps.buildPrompt).not.toHaveBeenCalled();
       expect(deps.runClaude).not.toHaveBeenCalled();
-      expect(deps.transitionToDone).not.toHaveBeenCalled();
-      expect(deps.transitionToFailed).not.toHaveBeenCalled();
       expect(deps.postSuccessComment).not.toHaveBeenCalled();
       expect(deps.postFailureComment).not.toHaveBeenCalled();
     });
@@ -308,17 +333,17 @@ describe("processIssue", () => {
         throw new Error("template not found");
       });
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(result).toBe(false);
+      expect(result.outcome).toBe("failure");
       expect(deps.runClaude).not.toHaveBeenCalled();
-      expect(deps.transitionToDone).not.toHaveBeenCalled();
       expect(deps.postSuccessComment).not.toHaveBeenCalled();
-      expect(deps.transitionToFailed).toHaveBeenCalledOnce();
-      expect(deps.transitionToFailed).toHaveBeenCalledWith(
+      expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
+      expect(deps.applyLabelTransition).toHaveBeenNthCalledWith(
+        2,
         "testowner/testrepo",
         42,
-        PLAN_LABELS,
+        { add: [PLAN_LABELS.failed], remove: [PLAN_LABELS.inProgress] },
       );
       expect(deps.postFailureComment).toHaveBeenCalledOnce();
       const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
@@ -335,16 +360,16 @@ describe("processIssue", () => {
         new Error("execution failed unexpectedly"),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(result).toBe(false);
-      expect(deps.transitionToDone).not.toHaveBeenCalled();
+      expect(result.outcome).toBe("failure");
       expect(deps.postSuccessComment).not.toHaveBeenCalled();
-      expect(deps.transitionToFailed).toHaveBeenCalledOnce();
-      expect(deps.transitionToFailed).toHaveBeenCalledWith(
+      expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
+      expect(deps.applyLabelTransition).toHaveBeenNthCalledWith(
+        2,
         "testowner/testrepo",
         42,
-        PLAN_LABELS,
+        { add: [PLAN_LABELS.failed], remove: [PLAN_LABELS.inProgress] },
       );
       expect(deps.postFailureComment).toHaveBeenCalledOnce();
       const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
@@ -362,10 +387,10 @@ describe("processIssue", () => {
         new ExecutorTimeoutError(`Claude Code CLI timed out after ${timeoutMs}ms`, timeoutMs),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(result).toBe(false);
-      expect(deps.transitionToFailed).toHaveBeenCalledOnce();
+      expect(result.outcome).toBe("failure");
+      expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
       expect(deps.postFailureComment).toHaveBeenCalledOnce();
       const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
       expect(failureMessage).toContain("CLI Timeout");
@@ -385,15 +410,14 @@ describe("processIssue", () => {
         }),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(result).toBe(false);
+      expect(result.outcome).toBe("failure");
       expect(deps.postFailureComment).toHaveBeenCalledOnce();
       const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
       expect(failureMessage).toContain("CLI Timeout");
       expect(failureMessage).toContain("partial stdout chunk");
       expect(failureMessage).toContain("partial stderr chunk");
-      // CLI_TIMEOUT かつ partial 出力が非空のとき、信頼性警告注記が含まれる
       expect(failureMessage).toContain(CLI_TIMEOUT_WARNING_NOTE);
       expect(failureMessage).toContain("Output reliability is limited");
     });
@@ -411,9 +435,9 @@ describe("processIssue", () => {
         }),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(result).toBe(false);
+      expect(result.outcome).toBe("failure");
       const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
       expect(failureMessage).not.toContain(token);
       expect(failureMessage).toContain("[REDACTED]");
@@ -427,15 +451,13 @@ describe("processIssue", () => {
         makeExecutorTimeoutError({ timeoutMs: 600_000 }),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(result).toBe(false);
+      expect(result.outcome).toBe("failure");
       const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
       expect(failureMessage).toContain("CLI Timeout");
       expect(failureMessage).not.toContain("<summary>stderr");
       expect(failureMessage).not.toContain("<summary>stdout");
-      // CLI_TIMEOUT でも partial 出力がない場合、信頼性警告注記は含めない。
-      // 警告対象となる出力自体が存在しないため、注記を出すと情報ノイズとなる。
       expect(failureMessage).not.toContain(CLI_TIMEOUT_WARNING_NOTE);
       expect(failureMessage).not.toContain("Output reliability is limited");
     });
@@ -448,16 +470,16 @@ describe("processIssue", () => {
         makeProcessResult({ success: false, stderr: "CLI error output" }),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(result).toBe(false);
-      expect(deps.transitionToDone).not.toHaveBeenCalled();
+      expect(result.outcome).toBe("failure");
       expect(deps.postSuccessComment).not.toHaveBeenCalled();
-      expect(deps.transitionToFailed).toHaveBeenCalledOnce();
-      expect(deps.transitionToFailed).toHaveBeenCalledWith(
+      expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
+      expect(deps.applyLabelTransition).toHaveBeenNthCalledWith(
+        2,
         "testowner/testrepo",
         42,
-        PLAN_LABELS,
+        { add: [PLAN_LABELS.failed], remove: [PLAN_LABELS.inProgress] },
       );
       expect(deps.postFailureComment).toHaveBeenCalledOnce();
       const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
@@ -475,9 +497,9 @@ describe("processIssue", () => {
         makeProcessResult({ success: false, stderr: "", stdout: "stdout error" }),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(result).toBe(false);
+      expect(result.outcome).toBe("failure");
       const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
       expect(failureMessage).toContain("CLI Non-zero Exit");
       expect(failureMessage).toContain("Claude Code CLI returned a non-zero exit code");
@@ -492,9 +514,9 @@ describe("processIssue", () => {
         makeProcessResult({ success: false, stderr: "", stdout: "" }),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(result).toBe(false);
+      expect(result.outcome).toBe("failure");
       const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
       expect(failureMessage).toContain("CLI Non-zero Exit");
       expect(failureMessage).toContain("Claude Code CLI returned a non-zero exit code");
@@ -507,14 +529,15 @@ describe("processIssue", () => {
         new WorktreeError("git fetch origin failed", "fetch"),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(result).toBe(false);
-      expect(deps.transitionToFailed).toHaveBeenCalledOnce();
-      expect(deps.transitionToFailed).toHaveBeenCalledWith(
+      expect(result.outcome).toBe("failure");
+      expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
+      expect(deps.applyLabelTransition).toHaveBeenNthCalledWith(
+        2,
         "testowner/testrepo",
         42,
-        PLAN_LABELS,
+        { add: [PLAN_LABELS.failed], remove: [PLAN_LABELS.inProgress] },
       );
       expect(deps.postFailureComment).toHaveBeenCalledOnce();
       const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
@@ -530,14 +553,15 @@ describe("processIssue", () => {
         new WorktreeError("worktree ディレクトリの作成に失敗しました", "mkdir"),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(result).toBe(false);
-      expect(deps.transitionToFailed).toHaveBeenCalledOnce();
-      expect(deps.transitionToFailed).toHaveBeenCalledWith(
+      expect(result.outcome).toBe("failure");
+      expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
+      expect(deps.applyLabelTransition).toHaveBeenNthCalledWith(
+        2,
         "testowner/testrepo",
         42,
-        PLAN_LABELS,
+        { add: [PLAN_LABELS.failed], remove: [PLAN_LABELS.inProgress] },
       );
       expect(deps.postFailureComment).toHaveBeenCalledOnce();
       const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
@@ -553,10 +577,10 @@ describe("processIssue", () => {
         new WorktreeError("worktree の作成に失敗しました", "create"),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(result).toBe(false);
-      expect(deps.transitionToFailed).toHaveBeenCalledOnce();
+      expect(result.outcome).toBe("failure");
+      expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
       expect(deps.postFailureComment).toHaveBeenCalledOnce();
       const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
       expect(failureMessage).toContain("Worktree Creation Error");
@@ -571,14 +595,15 @@ describe("processIssue", () => {
         new Error("worktree creation failed"),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(result).toBe(false);
-      expect(deps.transitionToFailed).toHaveBeenCalledOnce();
-      expect(deps.transitionToFailed).toHaveBeenCalledWith(
+      expect(result.outcome).toBe("failure");
+      expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
+      expect(deps.applyLabelTransition).toHaveBeenNthCalledWith(
+        2,
         "testowner/testrepo",
         42,
-        PLAN_LABELS,
+        { add: [PLAN_LABELS.failed], remove: [PLAN_LABELS.inProgress] },
       );
       expect(deps.postFailureComment).toHaveBeenCalledOnce();
       const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
@@ -593,16 +618,16 @@ describe("processIssue", () => {
   // -----------------------------------------------------------------------
 
   describe("レベル 3 エラー: 成功後の後処理失敗", () => {
-    it("transitionToDone が失敗しても true が返る", async () => {
+    it("done ラベル遷移が失敗しても true が返る", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
-      vi.mocked(deps.transitionToDone).mockRejectedValue(
-        new Error("done label failed"),
-      );
+      vi.mocked(deps.applyLabelTransition)
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error("done label failed"));
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(result).toBe(true);
+      expect(result.outcome).toBe("success");
       expect(deps.postSuccessComment).toHaveBeenCalledOnce();
     });
 
@@ -613,32 +638,36 @@ describe("processIssue", () => {
         new Error("comment post failed"),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(result).toBe(true);
-      expect(deps.transitionToDone).toHaveBeenCalledOnce();
+      expect(result.outcome).toBe("success");
+      expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
     });
   });
 
   describe("レベル 3 エラー: 失敗後の後処理失敗", () => {
-    it("transitionToFailed が失敗しても処理が継続し、postFailureComment が呼ばれる", async () => {
+    it("failed ラベル遷移が失敗しても処理が継続し、postFailureComment が呼ばれる", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
       vi.mocked(deps.runClaude).mockRejectedValue(
         new Error("executor error"),
       );
-      vi.mocked(deps.transitionToFailed).mockRejectedValue(
-        new Error("failed label error"),
+      vi.mocked(deps.applyLabelTransition).mockImplementation(
+        async (_repo, _num, transition) => {
+          if (transition.add.includes(PLAN_LABELS.failed)) {
+            throw new Error("failed label error");
+          }
+        },
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(result).toBe(false);
+      expect(result.outcome).toBe("failure");
       expect(deps.postFailureComment).toHaveBeenCalledOnce();
     });
 
-    it("postFailureComment が失敗しても処理が継続し、transitionToFailed が呼ばれる", async () => {
+    it("postFailureComment が失敗しても処理が継続し、failed ラベル遷移が呼ばれる", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
@@ -649,10 +678,10 @@ describe("processIssue", () => {
         new Error("comment post failed"),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(result).toBe(false);
-      expect(deps.transitionToFailed).toHaveBeenCalledOnce();
+      expect(result.outcome).toBe("failure");
+      expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -661,65 +690,74 @@ describe("processIssue", () => {
   // -----------------------------------------------------------------------
 
   describe("autoImplAfterPlan", () => {
-    it("plan 成功 + autoImplAfterPlan: true で addImplTriggerLabel が呼ばれる", async () => {
+    it("plan 成功 + autoImplAfterPlan: true で impl trigger ラベルが付与される", async () => {
       const issue = makeIssue({ phase: Phase.PLAN });
       const repoConfig = makeRepoConfig({ autoImplAfterPlan: true });
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(result).toBe(true);
-      expect(deps.addImplTriggerLabel).toHaveBeenCalledOnce();
-      expect(deps.addImplTriggerLabel).toHaveBeenCalledWith(
+      expect(result.outcome).toBe("success");
+      expect(deps.applyLabelTransition).toHaveBeenCalledTimes(3);
+      expect(deps.applyLabelTransition).toHaveBeenNthCalledWith(
+        3,
         "testowner/testrepo",
         42,
-        "claude/impl",
+        { add: ["test/impl"], remove: [] },
       );
     });
 
-    it("plan 成功 + autoImplAfterPlan: false で addImplTriggerLabel が呼ばれない", async () => {
+    it("plan 成功 + autoImplAfterPlan: false で impl trigger ラベルが付与されない", async () => {
       const issue = makeIssue({ phase: Phase.PLAN });
       const repoConfig = makeRepoConfig({ autoImplAfterPlan: false });
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(result).toBe(true);
-      expect(deps.addImplTriggerLabel).not.toHaveBeenCalled();
+      expect(result.outcome).toBe("success");
+      expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
     });
 
-    it("impl 成功 + autoImplAfterPlan: true で addImplTriggerLabel が呼ばれない", async () => {
+    it("impl 成功 + autoImplAfterPlan: true で impl trigger ラベルが付与されない", async () => {
       const issue = makeIssue({ phase: Phase.IMPL });
       const repoConfig = makeRepoConfig({ autoImplAfterPlan: true });
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(result).toBe(true);
-      expect(deps.addImplTriggerLabel).not.toHaveBeenCalled();
+      expect(result.outcome).toBe("success");
+      expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
     });
 
-    it("plan 成功 + autoImplAfterPlan: true + addImplTriggerLabel 失敗でも true が返る", async () => {
+    it("plan 成功 + autoImplAfterPlan: true + impl trigger ラベル付与失敗でも true が返る", async () => {
       const issue = makeIssue({ phase: Phase.PLAN });
       const repoConfig = makeRepoConfig({ autoImplAfterPlan: true });
-      vi.mocked(deps.addImplTriggerLabel).mockRejectedValue(
-        new Error("label add failed"),
+      vi.mocked(deps.applyLabelTransition).mockImplementation(
+        async (_repo, _num, transition) => {
+          if (transition.add.includes("test/impl") && transition.remove.length === 0) {
+            throw new Error("label add failed");
+          }
+        },
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(result).toBe(true);
-      expect(deps.addImplTriggerLabel).toHaveBeenCalledOnce();
+      expect(result.outcome).toBe("success");
+      expect(deps.applyLabelTransition).toHaveBeenCalledTimes(3);
     });
 
-    it("plan 成功 + autoImplAfterPlan: true + transitionToDone 失敗時は addImplTriggerLabel が呼ばれない", async () => {
+    it("plan 成功 + autoImplAfterPlan: true + done 遷移失敗時は impl trigger ラベルが付与されない", async () => {
       const issue = makeIssue({ phase: Phase.PLAN });
       const repoConfig = makeRepoConfig({ autoImplAfterPlan: true });
-      vi.mocked(deps.transitionToDone).mockRejectedValue(
-        new Error("done label failed"),
+      vi.mocked(deps.applyLabelTransition).mockImplementation(
+        async (_repo, _num, transition) => {
+          if (transition.add.includes(PLAN_LABELS.done)) {
+            throw new Error("done label failed");
+          }
+        },
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(result).toBe(true);
-      expect(deps.addImplTriggerLabel).not.toHaveBeenCalled();
+      expect(result.outcome).toBe("success");
+      expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -732,15 +770,19 @@ describe("processIssue", () => {
       const issue = makeIssue({ phase: Phase.IMPL });
       const repoConfig = makeRepoConfig();
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(result).toBe(true);
+      expect(result.outcome).toBe("success");
       expect(deps.fetchLinkedPullRequestNumbers).toHaveBeenCalledOnce();
       expect(deps.fetchLinkedPullRequestNumbers).toHaveBeenCalledWith(
         "testowner/testrepo",
         42,
       );
-      expect(deps.transitionToDone).toHaveBeenCalledOnce();
+      expect(deps.applyLabelTransition).toHaveBeenCalledWith(
+        "testowner/testrepo",
+        42,
+        { add: [IMPL_LABELS.done], remove: [IMPL_LABELS.inProgress] },
+      );
       expect(deps.postSuccessComment).toHaveBeenCalledOnce();
     });
 
@@ -749,17 +791,15 @@ describe("processIssue", () => {
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValue([]);
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(result).toBe(false);
-      expect(deps.transitionToFailed).toHaveBeenCalledOnce();
-      expect(deps.transitionToFailed).toHaveBeenCalledWith(
+      expect(result.outcome).toBe("failure");
+      expect(deps.applyLabelTransition).toHaveBeenCalledWith(
         "testowner/testrepo",
         42,
-        IMPL_LABELS,
+        { add: [IMPL_LABELS.failed], remove: [IMPL_LABELS.inProgress] },
       );
       expect(deps.postFailureComment).toHaveBeenCalledOnce();
-      expect(deps.transitionToDone).not.toHaveBeenCalled();
       expect(deps.postSuccessComment).not.toHaveBeenCalled();
     });
 
@@ -774,7 +814,7 @@ describe("processIssue", () => {
         }),
       );
 
-      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
       expect(failureMessage).toContain("No Linked Pull Request");
@@ -790,12 +830,15 @@ describe("processIssue", () => {
         new Error("API error"),
       );
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(result).toBe(true);
-      expect(deps.transitionToDone).toHaveBeenCalledOnce();
+      expect(result.outcome).toBe("success");
+      expect(deps.applyLabelTransition).toHaveBeenCalledWith(
+        "testowner/testrepo",
+        42,
+        { add: [IMPL_LABELS.done], remove: [IMPL_LABELS.inProgress] },
+      );
       expect(deps.postSuccessComment).toHaveBeenCalledOnce();
-      expect(deps.transitionToFailed).not.toHaveBeenCalled();
       expect(deps.postFailureComment).not.toHaveBeenCalled();
     });
 
@@ -803,12 +846,288 @@ describe("processIssue", () => {
       const issue = makeIssue({ phase: Phase.PLAN });
       const repoConfig = makeRepoConfig();
 
-      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, deps);
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(result).toBe(true);
+      expect(result.outcome).toBe("success");
       expect(deps.fetchLinkedPullRequestNumbers).not.toHaveBeenCalled();
-      expect(deps.transitionToDone).toHaveBeenCalledOnce();
+      expect(deps.applyLabelTransition).toHaveBeenCalledWith(
+        "testowner/testrepo",
+        42,
+        { add: [PLAN_LABELS.done], remove: [PLAN_LABELS.inProgress] },
+      );
       expect(deps.postSuccessComment).toHaveBeenCalledOnce();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // spec フェーズ
+  // -----------------------------------------------------------------------
+
+  describe("spec フェーズ", () => {
+    function makeWorkerComment(round: number, body = ""): IssueComment {
+      const marker = formatMarker(round);
+      return {
+        body: body ? `${body}\n\n${marker}` : marker,
+        authorAssociation: "OWNER",
+        createdAt: "2025-01-01T00:00:00Z",
+        viewerDidAuthor: true,
+      };
+    }
+
+    function makeHumanComment(body: string): IssueComment {
+      return {
+        body,
+        authorAssociation: "OWNER",
+        createdAt: "2025-01-02T00:00:00Z",
+        viewerDidAuthor: false,
+      };
+    }
+
+    it("コメント取得の一時的な失敗時にラベルが変わらず failure を返す", async () => {
+      const issue = makeIssue({ phase: Phase.SPEC });
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.fetchIssueComments).mockRejectedValue(
+        new IssueCommentsError("gh timeout", false),
+      );
+
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels.spec.trigger, deps);
+
+      expect(result.outcome).toBe("failure");
+      expect(result.claudeExecuted).toBe(false);
+      expect(deps.applyLabelTransition).not.toHaveBeenCalled();
+      expect(deps.buildPrompt).not.toHaveBeenCalled();
+    });
+
+    it("コメント取得の構造的な失敗時に trigger 経由なら failed 遷移と診断コメントが呼ばれる", async () => {
+      const issue = makeIssue({ phase: Phase.SPEC });
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.fetchIssueComments).mockRejectedValue(
+        new IssueCommentsError("viewerDidAuthor missing", true),
+      );
+
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels.spec.trigger, deps);
+
+      expect(result.outcome).toBe("failure");
+      expect(result.claudeExecuted).toBe(false);
+      expect(deps.applyLabelTransition).toHaveBeenCalledWith(
+        "testowner/testrepo",
+        42,
+        { add: [SPEC_LABELS.failed], remove: [SPEC_LABELS.trigger] },
+      );
+      expect(deps.postFailureComment).toHaveBeenCalledOnce();
+    });
+
+    it("コメント取得の構造的な失敗時に review 経由なら needs-human と診断コメントが呼ばれる", async () => {
+      const issue = makeIssue({
+        phase: Phase.SPEC,
+        labels: [SPEC_LABELS.review],
+      });
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.fetchIssueComments).mockRejectedValue(
+        new IssueCommentsError("JSON parse failed", true),
+      );
+
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels.spec.review, deps);
+
+      expect(result.outcome).toBe("failure");
+      expect(result.claudeExecuted).toBe(false);
+      expect(deps.applyLabelTransition).toHaveBeenCalledWith(
+        "testowner/testrepo",
+        42,
+        { add: [SPEC_LABELS.needsHuman], remove: [SPEC_LABELS.review] },
+      );
+      expect(deps.postFailureComment).toHaveBeenCalledOnce();
+    });
+
+    it("コメント取得の構造的な失敗時に診断コメント投稿が throw しても failure を返す", async () => {
+      const issue = makeIssue({ phase: Phase.SPEC });
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.fetchIssueComments).mockRejectedValue(
+        new IssueCommentsError("viewerDidAuthor missing", true),
+      );
+      vi.mocked(deps.postFailureComment).mockRejectedValue(new Error("comment failed"));
+
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels.spec.trigger, deps);
+
+      expect(result.outcome).toBe("failure");
+      expect(result.claudeExecuted).toBe(false);
+    });
+
+    it("spec trigger では round 1 で postSpecProposalComment が呼ばれる", async () => {
+      const issue = makeIssue({ phase: Phase.SPEC });
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.fetchIssueComments).mockResolvedValue([]);
+      vi.mocked(deps.runClaude).mockResolvedValue(
+        makeProcessResult({ stdout: "spec proposal" }),
+      );
+
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels.spec.trigger, deps);
+
+      expect(result.outcome).toBe("success");
+      expect(result.claudeExecuted).toBe(true);
+      expect(deps.postSpecProposalComment).toHaveBeenCalledWith(
+        "testowner/testrepo",
+        42,
+        "spec proposal",
+        1,
+      );
+    });
+
+    it("spec review entry では thread.round + 1 で postSpecProposalComment が呼ばれる", async () => {
+      const issue = makeIssue({
+        phase: Phase.SPEC,
+        labels: [SPEC_LABELS.inProgress],
+      });
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.fetchIssueComments).mockResolvedValue([
+        makeWorkerComment(1, "proposal v1"),
+        makeHumanComment("fix this"),
+        makeWorkerComment(2, "proposal v2"),
+      ]);
+      vi.mocked(deps.runClaude).mockResolvedValue(
+        makeProcessResult({ stdout: "proposal v3" }),
+      );
+
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels.spec.inProgress, deps);
+
+      expect(result.outcome).toBe("success");
+      expect(deps.postSpecProposalComment).toHaveBeenCalledWith(
+        "testowner/testrepo",
+        42,
+        "proposal v3",
+        3,
+      );
+    });
+
+    it("spec 成功時に提案コメント投稿後に review ラベル遷移が呼ばれる", async () => {
+      const issue = makeIssue({ phase: Phase.SPEC });
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.fetchIssueComments).mockResolvedValue([]);
+      vi.mocked(deps.runClaude).mockResolvedValue(
+        makeProcessResult({ stdout: "spec output" }),
+      );
+
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels.spec.trigger, deps);
+
+      expect(result.outcome).toBe("success");
+      expect(deps.postSpecProposalComment).toHaveBeenCalledOnce();
+      expect(deps.applyLabelTransition).toHaveBeenNthCalledWith(
+        1,
+        "testowner/testrepo",
+        42,
+        { add: [SPEC_LABELS.inProgress], remove: [SPEC_LABELS.trigger] },
+      );
+      expect(deps.applyLabelTransition).toHaveBeenNthCalledWith(
+        2,
+        "testowner/testrepo",
+        42,
+        { add: [SPEC_LABELS.review], remove: [SPEC_LABELS.inProgress] },
+      );
+      expect(deps.postSuccessComment).not.toHaveBeenCalled();
+    });
+
+    it("提案コメント投稿失敗時に failed 遷移と診断コメントが呼ばれる", async () => {
+      const issue = makeIssue({ phase: Phase.SPEC });
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.fetchIssueComments).mockResolvedValue([]);
+      vi.mocked(deps.runClaude).mockResolvedValue(
+        makeProcessResult({ stdout: "spec output" }),
+      );
+      vi.mocked(deps.postSpecProposalComment).mockRejectedValue(
+        new Error("comment post failed"),
+      );
+
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels.spec.trigger, deps);
+
+      expect(result.outcome).toBe("failure");
+      expect(result.claudeExecuted).toBe(true);
+      expect(deps.applyLabelTransition).toHaveBeenCalledWith(
+        "testowner/testrepo",
+        42,
+        { add: [SPEC_LABELS.failed], remove: [SPEC_LABELS.inProgress] },
+      );
+      expect(deps.postFailureComment).toHaveBeenCalledOnce();
+      const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
+      expect(failureMessage).toContain("Spec Proposal Comment Error");
+    });
+
+    it("spec 成功時に review ラベル遷移が throw しても success を返す", async () => {
+      const issue = makeIssue({ phase: Phase.SPEC });
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.fetchIssueComments).mockResolvedValue([]);
+      vi.mocked(deps.runClaude).mockResolvedValue(
+        makeProcessResult({ stdout: "spec output" }),
+      );
+      vi.mocked(deps.applyLabelTransition)
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error("review transition failed"));
+
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels.spec.trigger, deps);
+
+      expect(result.outcome).toBe("success");
+      expect(result.claudeExecuted).toBe(true);
+      expect(deps.postSpecProposalComment).toHaveBeenCalledOnce();
+    });
+
+    it("提案コメント投稿失敗時に review ラベル遷移は呼ばれない", async () => {
+      const issue = makeIssue({ phase: Phase.SPEC });
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.fetchIssueComments).mockResolvedValue([]);
+      vi.mocked(deps.runClaude).mockResolvedValue(
+        makeProcessResult({ stdout: "spec output" }),
+      );
+      vi.mocked(deps.postSpecProposalComment).mockRejectedValue(
+        new Error("comment post failed"),
+      );
+
+      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels.spec.trigger, deps);
+
+      const reviewCalls = vi.mocked(deps.applyLabelTransition).mock.calls.filter(
+        (call) => (call[2] as { add: string[] }).add.includes(SPEC_LABELS.review),
+      );
+      expect(reviewCalls).toHaveLength(0);
+    });
+
+    it("コメント取得の構造的な失敗時にラベル遷移が throw した場合、診断コメントは投稿されない", async () => {
+      const issue = makeIssue({ phase: Phase.SPEC });
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.fetchIssueComments).mockRejectedValue(
+        new IssueCommentsError("viewerDidAuthor missing", true),
+      );
+      vi.mocked(deps.applyLabelTransition).mockRejectedValue(new Error("gh failed"));
+
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels.spec.trigger, deps);
+
+      expect(result.outcome).toBe("failure");
+      expect(deps.postFailureComment).not.toHaveBeenCalled();
+    });
+
+    it("plan フェーズで spec コンテキストが buildPrompt に渡される", async () => {
+      const issue = makeIssue({ phase: Phase.PLAN });
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.fetchIssueComments).mockResolvedValue([
+        makeWorkerComment(1, "agreed specification"),
+      ]);
+
+      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels.plan.trigger, deps);
+
+      const specCtx = vi.mocked(deps.buildPrompt).mock.calls[0][3];
+      expect(specCtx).toContain("Latest specification proposal");
+      expect(specCtx).toContain("agreed specification");
+    });
+
+    it("impl フェーズで spec コンテキストが buildPrompt に渡される", async () => {
+      const issue = makeIssue({ phase: Phase.IMPL });
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.fetchIssueComments).mockResolvedValue([
+        makeWorkerComment(1, "agreed specification"),
+      ]);
+
+      await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels.impl.trigger, deps);
+
+      const specCtx = vi.mocked(deps.buildPrompt).mock.calls[0][3];
+      expect(specCtx).toContain("Latest specification proposal");
+      expect(specCtx).toContain("agreed specification");
     });
   });
 });

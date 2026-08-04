@@ -8,6 +8,7 @@ import {
   type RepositoryConfig,
   type LabelsConfig,
   type PhaseLabels,
+  type SpecPhaseLabels,
 } from "./models.js";
 import { expandTilde } from "../utils/paths.js";
 import type { Language } from "../i18n/types.js";
@@ -25,10 +26,37 @@ export class ConfigValidationError extends Error {
 // ---------- Validation patterns ----------
 
 const OWNER_REPO_PATTERN = /^[a-zA-Z0-9._-]+$/;
-const LABEL_PATTERN = /^[a-zA-Z0-9./:_ -]+$/;
+// Leading hyphen excluded: label names reach `gh label create <name>` as a
+// positional argument, and a name like `--repo` would be read as a flag.
+const LABEL_PATTERN = /^[a-zA-Z0-9./:_ ][a-zA-Z0-9./:_ -]*$/;
 const BRANCH_NAME_PATTERN = /^[a-zA-Z0-9._\/-]+$/;
 const DEFAULT_BRANCH_DEFAULT = "main";
 const PHASE_LABEL_KEYS = ["trigger", "in_progress", "done", "failed"] as const;
+const SPEC_LABEL_KEYS = [...PHASE_LABEL_KEYS, "review", "approved", "needs_human"] as const;
+
+export const DEFAULT_LABELS: LabelsConfig = {
+  spec: {
+    trigger: "ai/spec",
+    inProgress: "ai/spec/in-progress",
+    done: "ai/spec/done",
+    failed: "ai/spec/failed",
+    review: "ai/spec/review",
+    approved: "ai/spec/approved",
+    needsHuman: "ai/spec/needs-human",
+  },
+  plan: {
+    trigger: "ai/plan",
+    inProgress: "ai/plan/in-progress",
+    done: "ai/plan/done",
+    failed: "ai/plan/failed",
+  },
+  impl: {
+    trigger: "ai/impl",
+    inProgress: "ai/impl/in-progress",
+    done: "ai/impl/done",
+    failed: "ai/impl/failed",
+  },
+};
 
 const TIMEOUT_MINUTES_DEFAULT = 60;
 const TIMEOUT_MINUTES_MIN = 1;
@@ -165,43 +193,34 @@ function parseRepositories(raw: unknown): readonly RepositoryConfig[] {
       );
     }
 
-    // labels
-    if (!("labels" in record)) {
-      throw new ConfigValidationError(`${prefix}: 'labels' is required`);
+    // labels (optional — defaults to ai/* when omitted)
+    let labels: LabelsConfig;
+    if ("labels" in record) {
+      const labelsRaw = record["labels"];
+      if (
+        labelsRaw === null ||
+        typeof labelsRaw !== "object" ||
+        Array.isArray(labelsRaw)
+      ) {
+        throw new ConfigValidationError(`${prefix}.labels: must be a mapping`);
+      }
+
+      const labelsRecord = labelsRaw as Record<string, unknown>;
+
+      const spec = "spec" in labelsRecord
+        ? parseSpecPhaseLabels(labelsRecord["spec"], `${prefix}.labels.spec`)
+        : DEFAULT_LABELS.spec;
+      const plan = "plan" in labelsRecord
+        ? parsePhaseLabels(labelsRecord["plan"], `${prefix}.labels.plan`)
+        : DEFAULT_LABELS.plan;
+      const impl = "impl" in labelsRecord
+        ? parsePhaseLabels(labelsRecord["impl"], `${prefix}.labels.impl`)
+        : DEFAULT_LABELS.impl;
+
+      labels = { spec, plan, impl };
+    } else {
+      labels = DEFAULT_LABELS;
     }
-
-    const labelsRaw = record["labels"];
-    if (
-      labelsRaw === null ||
-      typeof labelsRaw !== "object" ||
-      Array.isArray(labelsRaw)
-    ) {
-      throw new ConfigValidationError(`${prefix}.labels: must be a mapping`);
-    }
-
-    const labelsRecord = labelsRaw as Record<string, unknown>;
-
-    if (!("plan" in labelsRecord)) {
-      throw new ConfigValidationError(
-        `${prefix}.labels: 'plan' key is required`,
-      );
-    }
-    if (!("impl" in labelsRecord)) {
-      throw new ConfigValidationError(
-        `${prefix}.labels: 'impl' key is required`,
-      );
-    }
-
-    const plan = parsePhaseLabels(
-      labelsRecord["plan"],
-      `${prefix}.labels.plan`,
-    );
-    const impl = parsePhaseLabels(
-      labelsRecord["impl"],
-      `${prefix}.labels.impl`,
-    );
-
-    const labels: LabelsConfig = { plan, impl };
 
     // priority_labels
     if (!("priority_labels" in record)) {
@@ -337,13 +356,54 @@ function parsePhaseLabels(raw: unknown, phaseName: string): PhaseLabels {
   };
 }
 
+function parseSpecPhaseLabels(raw: unknown, phaseName: string): SpecPhaseLabels {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new ConfigValidationError(`${phaseName}: must be a mapping`);
+  }
+
+  const record = raw as Record<string, unknown>;
+  const values: Record<string, string> = {};
+
+  for (const key of SPEC_LABEL_KEYS) {
+    if (!(key in record)) {
+      throw new ConfigValidationError(
+        `${phaseName}: '${key}' key is required`,
+      );
+    }
+
+    const value = record[key];
+    if (typeof value !== "string") {
+      throw new ConfigValidationError(`${phaseName}.${key}: must be a string`);
+    }
+
+    if (!LABEL_PATTERN.test(value)) {
+      throw new ConfigValidationError(
+        `${phaseName}.${key}: invalid characters in '${value}' ` +
+          `(must match ${LABEL_PATTERN.source})`,
+      );
+    }
+
+    values[key] = value;
+  }
+
+  return {
+    trigger: values["trigger"],
+    inProgress: values["in_progress"],
+    done: values["done"],
+    failed: values["failed"],
+    review: values["review"],
+    approved: values["approved"],
+    needsHuman: values["needs_human"],
+  };
+}
+
 function parseExecution(raw: unknown): Omit<ExecutionConfig, "language"> {
   if (raw === undefined || raw === null) {
     return {
       maxParallel: 1,
       maxIssuesPerRepo: 1,
       autonomy: Autonomy.INTERACTIVE,
-      intervalMinutes: 60,
+      intervalMinutes: 10,
       timeoutMinutes: TIMEOUT_MINUTES_DEFAULT,
     };
   }
@@ -417,7 +477,7 @@ function parseExecution(raw: unknown): Omit<ExecutionConfig, "language"> {
 
   // interval_minutes
   const rawIntervalMinutes =
-    "interval_minutes" in record ? record["interval_minutes"] : 60;
+    "interval_minutes" in record ? record["interval_minutes"] : 10;
 
   if (typeof rawIntervalMinutes !== "number" || !Number.isInteger(rawIntervalMinutes)) {
     throw new ConfigValidationError(

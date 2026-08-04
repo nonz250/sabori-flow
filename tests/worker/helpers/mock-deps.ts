@@ -19,12 +19,11 @@ export function createMockPipelineDeps(
       stderr: "",
       exitCode: 0,
     }),
-    transitionToInProgress: vi.fn().mockResolvedValue(undefined),
-    transitionToDone: vi.fn().mockResolvedValue(undefined),
-    transitionToFailed: vi.fn().mockResolvedValue(undefined),
-    addImplTriggerLabel: vi.fn().mockResolvedValue(undefined),
+    applyLabelTransition: vi.fn().mockResolvedValue(undefined),
     postSuccessComment: vi.fn().mockResolvedValue(undefined),
     postFailureComment: vi.fn().mockResolvedValue(undefined),
+    postSpecProposalComment: vi.fn().mockResolvedValue(undefined),
+    fetchIssueComments: vi.fn().mockResolvedValue([]),
     fetchLinkedPullRequestNumbers: vi.fn().mockResolvedValue([123]),
     withWorktree: vi.fn().mockImplementation(
       async (
@@ -47,7 +46,9 @@ export function createMockWorkerDeps(
   return {
     loadConfig: vi.fn(),
     fetchIssues: vi.fn().mockResolvedValue([]),
-    processIssue: vi.fn().mockResolvedValue(true),
+    processIssue: vi.fn().mockResolvedValue({ outcome: "success", claudeExecuted: true }),
+    resumeSpecReview: vi.fn().mockResolvedValue({ outcome: "deferred", claudeExecuted: false }),
+    ensureLabelsExist: vi.fn().mockResolvedValue(undefined),
     readAuthToken: vi.fn().mockReturnValue(null),
     ...overrides,
   };

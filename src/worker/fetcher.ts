@@ -1,5 +1,5 @@
 import type { Issue, RepositoryConfig } from "./models.js";
-import { Phase, Priority, repoFullName } from "./models.js";
+import { Phase, Priority, PERMITTED_ASSOCIATIONS, repoFullName } from "./models.js";
 import {
   runCommand,
   ProcessTimeoutError,
@@ -27,12 +27,6 @@ const GH_TIMEOUT_MS = 120_000;
 
 const logger = createLogger("fetcher");
 
-/** 処理を許可する authorAssociation の一覧 */
-const PERMITTED_ASSOCIATIONS: ReadonlySet<string> = new Set([
-  "OWNER",
-  "MEMBER",
-  "COLLABORATOR",
-]);
 
 /** GitHub REST API の Issue レスポンス内の label 構造 */
 interface GhLabel {
@@ -58,19 +52,15 @@ interface GhIssueItem {
 export async function fetchIssues(
   repoConfig: RepositoryConfig,
   phase: Phase,
+  label: string,
 ): Promise<readonly Issue[]> {
-  const triggerLabel =
-    phase === Phase.PLAN
-      ? repoConfig.labels.plan.trigger
-      : repoConfig.labels.impl.trigger;
-
   const args = [
     "api",
     `repos/${repoFullName(repoConfig)}/issues`,
     "--method",
     "GET",
     "--field",
-    `labels=${triggerLabel}`,
+    `labels=${label}`,
     "--field",
     "state=open",
     "--field",

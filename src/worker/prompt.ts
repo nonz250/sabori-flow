@@ -19,6 +19,7 @@ export class PromptTemplateError extends Error {
 const logger = createLogger("prompt");
 
 export const TEMPLATE_FILES: Record<Phase, string> = {
+  [Phase.SPEC]: "spec.md",
   [Phase.PLAN]: "plan.md",
   [Phase.IMPL]: "impl.md",
 };
@@ -33,6 +34,7 @@ const MAX_TEMPLATE_SIZE = 100 * 1024;
 const USER_INPUT_KEYS: ReadonlySet<string> = new Set([
   "issue_body",
   "issue_title",
+  "spec",
 ]);
 
 /**
@@ -49,11 +51,20 @@ export function buildPrompt(
   issue: Issue,
   repoConfig: RepositoryConfig,
   language: Language,
+  specContext: string | null = null,
 ): string {
   const userDir = getUserPromptsDir();
   const defaultDir = join(getDefaultPromptsDir(), language);
   const template = loadTemplate(issue.phase, userDir, defaultDir);
-  const variables = buildVariables(issue, repoConfig);
+  const variables = buildVariables(issue, repoConfig, specContext);
+
+  if (specContext !== null && !template.includes("{spec}")) {
+    logger.warn(
+      "Template for %s phase does not contain {spec} placeholder — spec context will be lost",
+      issue.phase,
+    );
+  }
+
   return render(template, variables);
 }
 
@@ -155,10 +166,15 @@ function sanitizeBoundaryInBody(body: string, token: string): string {
 function buildVariables(
   issue: Issue,
   repoConfig: RepositoryConfig,
+  specContext: string | null,
 ): Map<string, string> {
   const token = generateBoundaryToken();
   const rawBody = issue.body ?? "";
   const sanitizedBody = sanitizeBoundaryInBody(rawBody, token);
+
+  const specValue = specContext !== null
+    ? sanitizeBoundaryInBody(specContext, token)
+    : "(no specification has been agreed for this issue)";
 
   return new Map<string, string>([
     ["repo_full_name", repoFullName(repoConfig)],
@@ -170,6 +186,7 @@ function buildVariables(
     ["boundary_open", `<!-- BOUNDARY-${token} DATA START -->`],
     ["boundary_close", `<!-- BOUNDARY-${token} DATA END -->`],
     ["issue_body", sanitizedBody],
+    ["spec", specValue],
   ]);
 }
 

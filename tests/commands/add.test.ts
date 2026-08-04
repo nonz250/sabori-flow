@@ -159,7 +159,7 @@ describe("addCommand - repositories キーの問題", () => {
 });
 
 describe("addCommand - 正常系: 新規追加", () => {
-  it("新規リポジトリが追加され、デフォルト labels/priority_labels が付与される", async () => {
+  it("新規リポジトリが追加され、priority_labels が付与され labels は含まれない", async () => {
     const repoInput = makeRepoInput();
     mockedExistsSync.mockReturnValue(true);
     mockedReadFileSync.mockReturnValue(
@@ -177,11 +177,7 @@ describe("addCommand - 正常系: 新規追加", () => {
     expect(repos[0].owner).toBe("test-owner");
     expect(repos[0].repo).toBe("test-repo");
     expect(repos[0].local_path).toBe("/tmp/test-owner/test-repo");
-
-    // デフォルト labels が付与されている
-    const labels = repos[0].labels as Record<string, Record<string, string>>;
-    expect(labels.plan.trigger).toBe("claude/plan");
-    expect(labels.impl.trigger).toBe("claude/impl");
+    expect(repos[0]).not.toHaveProperty("labels");
 
     // デフォルト priority_labels が付与されている
     const priorityLabels = repos[0].priority_labels as string[];
@@ -205,8 +201,8 @@ describe("addCommand - 正常系: 既存リポジトリがある状態での新�
       repo: "existing-repo",
       local_path: "/tmp/existing-owner/existing-repo",
       labels: {
-        plan: { trigger: "claude/plan" },
-        impl: { trigger: "claude/impl" },
+        plan: { trigger: "test/plan" },
+        impl: { trigger: "test/impl" },
       },
       priority_labels: ["priority:high"],
     };
@@ -375,10 +371,7 @@ describe("addCommand - 重複: 上書き Yes", () => {
     const repos = written.repositories as Array<Record<string, unknown>>;
     expect(repos).toHaveLength(1);
     expect(repos[0].local_path).toBe("/new/path");
-
-    // デフォルト labels が新しいエントリに付与されている
-    const labels = repos[0].labels as Record<string, Record<string, string>>;
-    expect(labels.plan.trigger).toBe("claude/plan");
+    expect(repos[0]).not.toHaveProperty("labels");
   });
 });
 

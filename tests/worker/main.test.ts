@@ -6,6 +6,7 @@ import {
   makeRepoConfig,
   makeIssue,
   makeAppConfig,
+  SPEC_LABELS,
 } from "./helpers/factories.js";
 import { createMockWorkerDeps } from "./helpers/mock-deps.js";
 import type { WorkerDeps } from "../../src/worker/main.js";
@@ -73,7 +74,7 @@ describe("workerMain", () => {
           makeIssue({ number: 42, title: "Feature request", priority: Priority.HIGH }),
         ])
         .mockResolvedValueOnce([]);
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -81,21 +82,14 @@ describe("workerMain", () => {
       expect(deps.processIssue).toHaveBeenCalledOnce();
     });
 
-    it("Issue 取得成功だが processIssue が全件失敗すると 1 が返る", async () => {
+    it("全ステップで processIssue が失敗し空ステップもなければ 1 が返る", async () => {
       vi.mocked(deps.loadConfig).mockReturnValue(makeAppConfig());
-      vi.mocked(deps.fetchIssues)
-        .mockResolvedValueOnce([
-          makeIssue({ number: 42, title: "Feature request", priority: Priority.HIGH }),
-        ])
-        .mockResolvedValueOnce([
-          makeIssue({ number: 43, title: "Another issue", phase: Phase.IMPL }),
-        ]);
-      vi.mocked(deps.processIssue).mockResolvedValue(false);
+      vi.mocked(deps.fetchIssues).mockRejectedValue(new Error("gh failed"));
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "failure", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
       expect(result).toBe(1);
-      expect(deps.processIssue).toHaveBeenCalledTimes(2);
     });
 
     it("Issue 0 件の場合は processIssue が呼ばれず 0 が返る", async () => {
@@ -119,7 +113,7 @@ describe("workerMain", () => {
       vi.mocked(deps.fetchIssues)
         .mockRejectedValueOnce(new Error("gh failed"))
         .mockResolvedValueOnce([makeIssue({ phase: Phase.IMPL })]);
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -131,7 +125,7 @@ describe("workerMain", () => {
       vi.mocked(deps.fetchIssues)
         .mockRejectedValueOnce(new Error("parse failed"))
         .mockResolvedValueOnce([makeIssue({ phase: Phase.IMPL })]);
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -173,7 +167,7 @@ describe("workerMain", () => {
       vi.mocked(deps.fetchIssues)
         .mockResolvedValueOnce([makeIssue({ number: 10, phase: Phase.PLAN })])
         .mockResolvedValueOnce([]);
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -181,13 +175,10 @@ describe("workerMain", () => {
       expect(deps.processIssue).toHaveBeenCalledOnce();
     });
 
-    it("Issue が取得されたが processIssue が全件失敗すると 1 が返る", async () => {
+    it("全ステップで fetchIssues が失敗すると 1 が返る", async () => {
       vi.mocked(deps.loadConfig).mockReturnValue(makeAppConfig());
-      // 両フェーズで Issue が取得され、全件 processIssue が失敗
-      vi.mocked(deps.fetchIssues)
-        .mockResolvedValueOnce([makeIssue({ number: 10, phase: Phase.PLAN })])
-        .mockResolvedValueOnce([makeIssue({ number: 20, phase: Phase.IMPL })]);
-      vi.mocked(deps.processIssue).mockResolvedValue(false);
+      vi.mocked(deps.fetchIssues).mockRejectedValue(new Error("gh failed"));
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "failure", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -223,8 +214,8 @@ describe("workerMain", () => {
         ])
         .mockResolvedValueOnce([]);
       vi.mocked(deps.processIssue)
-        .mockResolvedValueOnce(false)
-        .mockResolvedValueOnce(true);
+        .mockResolvedValueOnce({ outcome: "failure", claudeExecuted: true })
+        .mockResolvedValueOnce({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -238,14 +229,14 @@ describe("workerMain", () => {
   // -----------------------------------------------------------------------
 
   describe("リポジトリ処理", () => {
-    it("plan と impl の両フェーズが処理される", async () => {
+    it("全 4 ステップが処理される (impl → plan → spec/review → spec)", async () => {
       vi.mocked(deps.loadConfig).mockReturnValue(makeAppConfig());
       vi.mocked(deps.fetchIssues).mockResolvedValue([]);
 
       await workerMain("/path/to/config.yml", deps);
 
-      // 1 リポジトリ x 2 フェーズ = 2 回の fetchIssues 呼び出し
-      expect(deps.fetchIssues).toHaveBeenCalledTimes(2);
+      // 1 リポジトリ x 4 ステップ = 4 回の fetchIssues 呼び出し
+      expect(deps.fetchIssues).toHaveBeenCalledTimes(4);
     });
 
     it("plan が成功し impl が失敗しても 0 が返る", async () => {
@@ -253,7 +244,7 @@ describe("workerMain", () => {
       vi.mocked(deps.fetchIssues)
         .mockResolvedValueOnce([makeIssue({ phase: Phase.PLAN })])
         .mockRejectedValueOnce(new Error("impl fetch failed"));
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -265,7 +256,7 @@ describe("workerMain", () => {
       vi.mocked(deps.fetchIssues)
         .mockRejectedValueOnce(new Error("plan fetch failed"))
         .mockResolvedValueOnce([makeIssue({ phase: Phase.IMPL })]);
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -277,7 +268,7 @@ describe("workerMain", () => {
       vi.mocked(deps.fetchIssues)
         .mockResolvedValueOnce([makeIssue({ phase: Phase.PLAN })])
         .mockResolvedValueOnce([makeIssue({ phase: Phase.IMPL })]);
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -313,8 +304,8 @@ describe("workerMain", () => {
 
       await workerMain("/path/to/config.yml", deps);
 
-      // 3 リポジトリ x 2 フェーズ = 6 回の fetchIssues 呼び出し
-      expect(deps.fetchIssues).toHaveBeenCalledTimes(6);
+      // 3 リポジトリ x 4 ステップ = 12 回の fetchIssues 呼び出し
+      expect(deps.fetchIssues).toHaveBeenCalledTimes(12);
     });
 
     it("processIssue が例外を投げるリポジトリがあっても他のリポジトリは処理が継続する", async () => {
@@ -339,7 +330,7 @@ describe("workerMain", () => {
         return [];
       });
 
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -368,7 +359,7 @@ describe("workerMain", () => {
           ? [makeIssue({ phase: Phase.PLAN })]
           : [];
       });
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -395,7 +386,7 @@ describe("workerMain", () => {
           makeIssue({ number: 5, phase: Phase.PLAN }),
         ])
         .mockResolvedValueOnce([]);
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -414,7 +405,7 @@ describe("workerMain", () => {
           makeIssue({ number: 3, phase: Phase.PLAN }),
         ])
         .mockResolvedValueOnce([]);
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -432,7 +423,7 @@ describe("workerMain", () => {
           makeIssue({ number: 2, phase: Phase.PLAN }),
         ])
         .mockResolvedValueOnce([]);
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -440,20 +431,21 @@ describe("workerMain", () => {
       expect(deps.processIssue).toHaveBeenCalledTimes(2);
     });
 
-    it("plan で上限に達すると impl フェーズの fetchIssues が呼ばれない", async () => {
+    it("impl で上限に達すると後続ステップの Issue は quota 超過でスキップされる", async () => {
       vi.mocked(deps.loadConfig).mockReturnValue(
         makeAppConfig({ execution: { maxIssuesPerRepo: 1 } }),
       );
-      vi.mocked(deps.fetchIssues)
-        .mockResolvedValueOnce([
-          makeIssue({ number: 1, phase: Phase.PLAN }),
-        ]);
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.fetchIssues).mockImplementation(async (_repo, _phase, label) => {
+        if (label === "test/impl") return [makeIssue({ number: 1, phase: Phase.IMPL })];
+        if (label === "test/plan") return [makeIssue({ number: 2, phase: Phase.PLAN })];
+        return [];
+      });
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       await workerMain("/path/to/config.yml", deps);
 
-      // plan の fetchIssues のみ呼ばれ、impl の fetchIssues は呼ばれない
-      expect(deps.fetchIssues).toHaveBeenCalledTimes(1);
+      // impl で 1 件消費 → plan は quota 超過で processIssue に到達しない
+      // ただし fetchIssues は全 4 ステップで呼ばれる (review はまだ Issue を引いてから判定する)
       expect(deps.processIssue).toHaveBeenCalledTimes(1);
     });
 
@@ -471,7 +463,7 @@ describe("workerMain", () => {
           makeIssue({ number: 11, phase: Phase.IMPL }),
           makeIssue({ number: 12, phase: Phase.IMPL }),
         ]);
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -491,7 +483,7 @@ describe("workerMain", () => {
           makeIssue({ number: 11, phase: Phase.IMPL }),
           makeIssue({ number: 12, phase: Phase.IMPL }),
         ]);
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -509,12 +501,84 @@ describe("workerMain", () => {
           makeIssue({ number: 1, phase: Phase.PLAN }),
           makeIssue({ number: 2, phase: Phase.PLAN }),
         ]);
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
 
       expect(result).toBe(0);
       expect(deps.processIssue).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // 同一サイクル内の二重処理防止
+  // -----------------------------------------------------------------------
+
+  describe("同一サイクル内の二重処理防止", () => {
+    it("同じ Issue が複数ステップで取得された場合、2 回目はスキップされ WARNING が出る", async () => {
+      vi.mocked(deps.loadConfig).mockReturnValue(makeAppConfig());
+      const duplicateIssue = makeIssue({
+        number: 42,
+        phase: Phase.SPEC,
+        labels: [SPEC_LABELS.review, SPEC_LABELS.trigger],
+      });
+      vi.mocked(deps.fetchIssues).mockImplementation(async (_repo, _phase, label) => {
+        if (label === SPEC_LABELS.review) return [duplicateIssue];
+        if (label === SPEC_LABELS.trigger) return [duplicateIssue];
+        return [];
+      });
+      vi.mocked(deps.resumeSpecReview).mockResolvedValue({ outcome: "deferred", claudeExecuted: false });
+
+      mockLoggerInstance.warn.mockClear();
+      await workerMain("/path/to/config.yml", deps);
+
+      expect(deps.resumeSpecReview).toHaveBeenCalledTimes(1);
+      expect(deps.processIssue).not.toHaveBeenCalled();
+      expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
+        expect.stringContaining("#%s"),
+        expect.any(String),
+        42,
+      );
+    });
+
+    it("異なる Issue 番号は二重処理防止の対象にならない", async () => {
+      vi.mocked(deps.loadConfig).mockReturnValue(makeAppConfig());
+      vi.mocked(deps.fetchIssues).mockImplementation(async (_repo, _phase, label) => {
+        if (label === SPEC_LABELS.review) return [makeIssue({ number: 10, phase: Phase.SPEC })];
+        if (label === SPEC_LABELS.trigger) return [makeIssue({ number: 20, phase: Phase.SPEC })];
+        return [];
+      });
+      vi.mocked(deps.resumeSpecReview).mockResolvedValue({ outcome: "deferred", claudeExecuted: false });
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
+
+      await workerMain("/path/to/config.yml", deps);
+
+      expect(deps.resumeSpecReview).toHaveBeenCalledTimes(1);
+      expect(deps.processIssue).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // spec review の revise による quota 消費
+  // -----------------------------------------------------------------------
+
+  describe("spec review の revise による quota 消費", () => {
+    it("requiresQuota: false のステップでも claudeExecuted: true を返すと remaining を消費する", async () => {
+      vi.mocked(deps.loadConfig).mockReturnValue(
+        makeAppConfig({ execution: { maxIssuesPerRepo: 1 } }),
+      );
+      vi.mocked(deps.fetchIssues).mockImplementation(async (_repo, _phase, label) => {
+        if (label === SPEC_LABELS.review) return [makeIssue({ number: 10, phase: Phase.SPEC })];
+        if (label === SPEC_LABELS.trigger) return [makeIssue({ number: 20, phase: Phase.SPEC })];
+        return [];
+      });
+      vi.mocked(deps.resumeSpecReview).mockResolvedValue({ outcome: "success", claudeExecuted: true });
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
+
+      await workerMain("/path/to/config.yml", deps);
+
+      expect(deps.resumeSpecReview).toHaveBeenCalledTimes(1);
+      expect(deps.processIssue).not.toHaveBeenCalled();
     });
   });
 
@@ -607,7 +671,7 @@ describe("workerMain", () => {
       vi.mocked(deps.fetchIssues)
         .mockResolvedValueOnce([makeIssue({ phase: Phase.PLAN })])
         .mockResolvedValueOnce([]);
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       await workerMain("/path/to/config.yml", deps);
 
@@ -618,6 +682,7 @@ describe("workerMain", () => {
         expect.anything(),
         expect.anything(),
         "sk-ant-oat01-example",
+        expect.any(String),
       );
     });
 
@@ -629,7 +694,7 @@ describe("workerMain", () => {
       vi.mocked(deps.fetchIssues)
         .mockResolvedValueOnce([makeIssue({ phase: Phase.PLAN })])
         .mockResolvedValueOnce([]);
-      vi.mocked(deps.processIssue).mockResolvedValue(true);
+      vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "success", claudeExecuted: true });
 
       await workerMain("/path/to/config.yml", deps);
 
@@ -639,6 +704,7 @@ describe("workerMain", () => {
         expect.anything(),
         expect.anything(),
         null,
+        expect.any(String),
       );
     });
 

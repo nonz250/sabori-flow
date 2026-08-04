@@ -100,16 +100,16 @@ describe("repoFullName", () => {
       defaultBranch: "main",
       labels: {
         plan: {
-          trigger: "claude/plan",
-          inProgress: "claude/plan:in-progress",
-          done: "claude/plan:done",
-          failed: "claude/plan:failed",
+          trigger: "test/plan",
+          inProgress: "test/plan/in-progress",
+          done: "test/plan/done",
+          failed: "test/plan/failed",
         },
         impl: {
-          trigger: "claude/impl",
-          inProgress: "claude/impl:in-progress",
-          done: "claude/impl:done",
-          failed: "claude/impl:failed",
+          trigger: "test/impl",
+          inProgress: "test/impl/in-progress",
+          done: "test/impl/done",
+          failed: "test/impl/failed",
         },
       },
       priorityLabels: ["priority/high"],
@@ -126,7 +126,7 @@ describe("型の構造テスト", () => {
       number: 1,
       title: "Test issue",
       body: "Issue body",
-      labels: ["claude/plan"],
+      labels: ["test/plan"],
       url: "https://github.com/owner/repo/issues/1",
       authorAssociation: "OWNER",
       phase: Phase.PLAN,
@@ -155,19 +155,19 @@ describe("型の構造テスト", () => {
 
   it("AppConfig インターフェースに準拠するオブジェクトが作成できる", () => {
     const phaseLabels: PhaseLabels = {
-      trigger: "claude/plan",
-      inProgress: "claude/plan:in-progress",
-      done: "claude/plan:done",
-      failed: "claude/plan:failed",
+      trigger: "test/plan",
+      inProgress: "test/plan/in-progress",
+      done: "test/plan/done",
+      failed: "test/plan/failed",
     };
 
     const labelsConfig: LabelsConfig = {
       plan: phaseLabels,
       impl: {
-        trigger: "claude/impl",
-        inProgress: "claude/impl:in-progress",
-        done: "claude/impl:done",
-        failed: "claude/impl:failed",
+        trigger: "test/impl",
+        inProgress: "test/impl/in-progress",
+        done: "test/impl/done",
+        failed: "test/impl/failed",
       },
     };
 

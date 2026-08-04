@@ -2,9 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("node:fs", () => ({
   appendFileSync: vi.fn(),
-  lstatSync: vi.fn(() => ({ isSymbolicLink: () => false })),
+  lstatSync: vi.fn(() => ({ isSymbolicLink: () => false, mtime: new Date() })),
   mkdirSync: vi.fn(),
   readdirSync: vi.fn(() => []),
+  renameSync: vi.fn(),
   unlinkSync: vi.fn(),
 }));
 
@@ -13,6 +14,7 @@ import {
   lstatSync,
   mkdirSync,
   readdirSync,
+  renameSync,
   unlinkSync,
 } from "node:fs";
 import {
@@ -29,6 +31,10 @@ describe("logger", () => {
   beforeEach(() => {
     resetLoggerForTest();
     vi.clearAllMocks();
+    vi.mocked(lstatSync).mockReturnValue({
+      isSymbolicLink: () => false,
+      mtime: new Date(),
+    } as unknown as ReturnType<typeof lstatSync>);
     consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
@@ -185,7 +191,116 @@ describe("logger", () => {
     });
   });
 
-  describe("rotateOldLogs", () => {
+  describe("rotateOldLogs — worker.log の rename", () => {
+    it("mtime が前日の worker.log が worker.log.<mtime の日付> にリネームされる", () => {
+      configureLogger({ logDir: "/tmp/test-logs", retentionDays: 7 });
+
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      vi.mocked(lstatSync).mockReturnValue({
+        isSymbolicLink: () => false,
+        mtime: yesterday,
+      } as unknown as ReturnType<typeof lstatSync>);
+
+      rotateOldLogs();
+
+      const expectedDateStr = [
+        yesterday.getFullYear(),
+        String(yesterday.getMonth() + 1).padStart(2, "0"),
+        String(yesterday.getDate()).padStart(2, "0"),
+      ].join("-");
+      expect(renameSync).toHaveBeenCalledWith(
+        "/tmp/test-logs/worker.log",
+        `/tmp/test-logs/worker.log.${expectedDateStr}`,
+      );
+    });
+
+    it("UTC で日付が前日になる早朝の mtime でもローカル日付で命名される", () => {
+      configureLogger({ logDir: "/tmp/test-logs", retentionDays: 7 });
+
+      // 03:00 local: still the previous day in UTC anywhere east of Greenwich
+      const earlyMorning = new Date();
+      earlyMorning.setDate(earlyMorning.getDate() - 1);
+      earlyMorning.setHours(3, 0, 0, 0);
+
+      vi.mocked(lstatSync).mockReturnValue({
+        isSymbolicLink: () => false,
+        mtime: earlyMorning,
+      } as unknown as ReturnType<typeof lstatSync>);
+
+      rotateOldLogs();
+
+      const expectedDateStr = [
+        earlyMorning.getFullYear(),
+        String(earlyMorning.getMonth() + 1).padStart(2, "0"),
+        String(earlyMorning.getDate()).padStart(2, "0"),
+      ].join("-");
+      expect(renameSync).toHaveBeenCalledWith(
+        "/tmp/test-logs/worker.log",
+        `/tmp/test-logs/worker.log.${expectedDateStr}`,
+      );
+    });
+
+    it("リネーム後に retentionDays 超過分が削除される", () => {
+      configureLogger({ logDir: "/tmp/test-logs", retentionDays: 7 });
+
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      const oldDate = new Date();
+      oldDate.setDate(oldDate.getDate() - 10);
+      const oldFileName = `worker.log.${oldDate.toISOString().slice(0, 10)}`;
+
+      vi.mocked(lstatSync).mockReturnValue({
+        isSymbolicLink: () => false,
+        mtime: yesterday,
+      } as unknown as ReturnType<typeof lstatSync>);
+      vi.mocked(readdirSync).mockReturnValue(
+        [oldFileName] as unknown as ReturnType<typeof readdirSync>,
+      );
+
+      rotateOldLogs();
+
+      expect(renameSync).toHaveBeenCalledOnce();
+      expect(unlinkSync).toHaveBeenCalledWith(`/tmp/test-logs/${oldFileName}`);
+    });
+
+    it("同日 2 回目の起動ではリネームが起きない", () => {
+      configureLogger({ logDir: "/tmp/test-logs", retentionDays: 7 });
+
+      vi.mocked(lstatSync).mockReturnValue({
+        isSymbolicLink: () => false,
+        mtime: new Date(),
+      } as unknown as ReturnType<typeof lstatSync>);
+
+      rotateOldLogs();
+
+      expect(renameSync).not.toHaveBeenCalled();
+    });
+
+    it("worker.log がシンボリックリンクならリネームをスキップして WARNING", () => {
+      configureLogger({ logDir: "/tmp/test-logs", retentionDays: 7 });
+
+      vi.mocked(lstatSync).mockReturnValue({
+        isSymbolicLink: () => true,
+        mtime: new Date(0),
+      } as unknown as ReturnType<typeof lstatSync>);
+
+      const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      rotateOldLogs();
+
+      expect(renameSync).not.toHaveBeenCalled();
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        "[logger] WARNING: Skipping symbolic link: worker.log",
+      );
+
+      consoleWarnSpy.mockRestore();
+    });
+  });
+
+  describe("rotateOldLogs — 古いログの削除", () => {
     it("retentionDays を超えた古いファイルが削除される", () => {
       configureLogger({
         logDir: "/tmp/test-logs",
