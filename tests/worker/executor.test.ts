@@ -414,6 +414,7 @@ describe("runClaude", () => {
       } else {
         process.env[ENV_KEY] = savedEnv;
       }
+      delete process.env.SABORI_TEST_MARKER;
     });
 
     it("authToken 指定時、runCommand の env に CLAUDE_CODE_OAUTH_TOKEN が渡される", async () => {
@@ -444,8 +445,6 @@ describe("runClaude", () => {
 
       const options = mockedRunCommand.mock.calls[0][2];
       expect(options?.env?.SABORI_TEST_MARKER).toBe("marker-value");
-
-      delete process.env.SABORI_TEST_MARKER;
     });
 
     it("authToken 指定時も process.env は変異しない", async () => {
@@ -464,8 +463,6 @@ describe("runClaude", () => {
 
       const options = mockedRunCommand.mock.calls[0][2];
       expect(options?.env?.SABORI_TEST_MARKER).toBe("marker-value");
-
-      delete process.env.SABORI_TEST_MARKER;
     });
   });
 
@@ -526,6 +523,7 @@ describe("runClaude", () => {
 
       const options = mockedRunCommand.mock.calls[0][2];
       expect(options?.env?.CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS).toBe("3600000");
+      expect(process.env.CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS).toBe("1000");
     });
   });
 });
