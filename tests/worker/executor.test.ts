@@ -468,6 +468,66 @@ describe("runClaude", () => {
       delete process.env.SABORI_TEST_MARKER;
     });
   });
+
+  describe("バックグラウンド待機上限", () => {
+    const ENV_KEY = "CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS";
+    let savedEnv: string | undefined;
+
+    beforeEach(() => {
+      savedEnv = process.env[ENV_KEY];
+      delete process.env[ENV_KEY];
+    });
+
+    afterEach(() => {
+      if (savedEnv === undefined) {
+        delete process.env[ENV_KEY];
+      } else {
+        process.env[ENV_KEY] = savedEnv;
+      }
+    });
+
+    it("authToken 未指定でも CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS が env に渡される", async () => {
+      mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
+
+      await runClaude("prompt text");
+
+      const options = mockedRunCommand.mock.calls[0][2];
+      expect(options?.env?.CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS).toBe("3600000");
+    });
+
+    it("authToken 指定時も上限とトークンが両方 env に含まれる", async () => {
+      mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
+
+      await runClaude("prompt text", { authToken: "sk-ant-oat01-example" });
+
+      const options = mockedRunCommand.mock.calls[0][2];
+      expect(options?.env).toEqual(
+        expect.objectContaining({
+          CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS: "3600000",
+          CLAUDE_CODE_OAUTH_TOKEN: "sk-ant-oat01-example",
+        }),
+      );
+    });
+
+    it("timeoutMs を既定と異なる値にしても上限は変わらない", async () => {
+      mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
+
+      await runClaude("prompt text", { timeoutMs: 600_000 });
+
+      const options = mockedRunCommand.mock.calls[0][2];
+      expect(options?.env?.CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS).toBe("3600000");
+    });
+
+    it("process.env に既存値があっても worker の値で上書きされる", async () => {
+      process.env.CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS = "1000";
+      mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
+
+      await runClaude("prompt text");
+
+      const options = mockedRunCommand.mock.calls[0][2];
+      expect(options?.env?.CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS).toBe("3600000");
+    });
+  });
 });
 
 describe("resolveClaudeAutonomyFlags", () => {
