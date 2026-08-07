@@ -221,6 +221,16 @@ describe("inspectConfig - language source detection", () => {
     expect(result.language.source).toBe("default");
     expect(result.language.value).toBe("ja");
   });
+
+  it("language written with no value (null) in raw produces source 'default'", () => {
+    const config = makeConfig();
+    const raw = { repositories: [makeRawRepo()], language: null };
+
+    const result = inspectConfig(config, raw);
+
+    expect(result.language.source).toBe("default");
+    expect(result.language.value).toBe("ja");
+  });
 });
 
 // ---------- Tests: labels comparison ----------
