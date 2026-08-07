@@ -216,10 +216,11 @@ function sourced<T>(
   if (rawRecord === null) {
     return { value, source: "default" };
   }
-  // A key written with no value (e.g. `language:`) parses to null, and the
-  // corresponding parser falls back to its default the same as an absent
-  // key, so provenance must follow suit. `!== null` (not a falsy check)
-  // keeps legitimate values like `false` or `0` classified as "file".
+  // `language:` written with no value parses to null, and parseLanguage()
+  // then falls back to the default just as it does for an absent key, so
+  // provenance must follow suit. (Every other nullable key is rejected by
+  // loadConfig() before reaching here.) `!== null` rather than a falsy
+  // check keeps legitimate values like `false` or `0` classified as "file".
   const isWritten = key in rawRecord && rawRecord[key] !== null;
   const source: ValueSource = isWritten ? "file" : "default";
   return { value, source };
