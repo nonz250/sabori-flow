@@ -208,6 +208,20 @@ The impl phase also fails when a run finishes without a pull request linked to t
 2. Fix the Issue content as needed
 3. Remove the `failed` label and re-apply the trigger label (`ai/spec`, `ai/plan`, or `ai/impl`)
 
+### Viewing the Current Configuration
+
+```bash
+npx sabori-flow show
+```
+
+Displays the effective configuration (with defaults applied) in a human-readable format. Values not explicitly set in `config.yml` are marked with `*`.
+
+Use `--verbose` to expand all label definitions and show resolved local paths.
+
+```bash
+npx sabori-flow show --verbose
+```
+
 ### Operations
 
 **Check registration status:**

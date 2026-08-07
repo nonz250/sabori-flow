@@ -36,12 +36,14 @@ src/
   index.ts          # CLI エントリポイント
   worker.ts         # ワーカーエントリポイント
   commands/          # CLI コマンド
-    init.ts, install.ts, uninstall.ts, add.ts
+    init.ts, install.ts, uninstall.ts, add.ts, show.ts
     helpers/
       repository-prompt.ts  # 対話入力の共通ロジック（init/add で共有）
+      config-render.ts      # show コマンドの表示整形（純粋関数）
   worker/            # ワーカー本体
     main.ts          # メインロジック、STEPS ループ、並列実行制御
     config.ts        # config.yml 読み込み・バリデーション
+    config-inspect.ts # config.yml の実効値と由来の判定（show コマンド用）
     models.ts        # データモデル（interface, enum）
     fetcher.ts       # gh api で Issue 取得・優先度ソート
     pipeline.ts      # 1 Issue の処理パイプライン + resumeSpecReview（DI パターン）
@@ -118,6 +120,7 @@ spec の review 状態では、ワーカーが毎サイクル評価を行う。�
   - `tests/worker/helpers/mock-deps.ts`: DI 用モック生成（`createMockPipelineDeps()`, `createMockWorkerDeps()`）
 - 方針: 依存性注入 + vitest の `vi.fn()` によるモックベースの単体テスト
 - 注意: `vi.mock` ファクトリ由来の `vi.fn()` は `restoreAllMocks` / `clearMocks` では実装（`mockImplementation`）がリセットされない。テスト内で throw 等を仕込むモックは `beforeEach` で `mockReset()` して既定を再設定する（`tests/commands/install.test.ts`, `tests/commands/set-token.test.ts` 参照）
+- 注意: vitest は `fs` と `node:fs` を同一モジュールとして解決する。両方を別々に `vi.mock` すると `node:fs` 側のファクトリだけが両方に適用され、`fs` 側で定義した `default` エクスポートが失われる。片方のモジュールを default import、もう片方を名前付き import している実装をテストする場合は、`node:fs` の 1 ファクトリに `default` と名前付きの両方を含める（`tests/commands/show.test.ts` 参照）
 - カバレッジ除外: `src/index.ts`, `src/worker.ts`（エントリポイント）
 
 ### npm スクリプト

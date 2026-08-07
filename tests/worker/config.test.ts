@@ -905,6 +905,22 @@ describe("loadConfig - local_path validation", () => {
     );
   });
 
+  it("local_path containing a control character is rejected", () => {
+    const escapeChar = String.fromCharCode(0x1b);
+    const yaml = VALID_YAML.replace(
+      "local_path: /tmp/my-org/my-repo",
+      `local_path: "/tmp/my-org/my-repo${escapeChar}"`,
+    );
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      ConfigValidationError,
+    );
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /local_path: must not contain control characters/,
+    );
+  });
+
   it("local_path が存在しないパスの場合にエラーになる", () => {
     mockYaml(VALID_YAML);
     mockedRealpathSync.mockImplementation(() => {

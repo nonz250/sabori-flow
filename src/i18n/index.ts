@@ -3,6 +3,7 @@ import YAML from "yaml";
 import type { Language, MessageKeys } from "./types.js";
 import { DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES } from "./types.js";
 import { messages } from "./messages.js";
+import { CONFIG_YAML_PARSE_OPTIONS } from "../utils/config-defaults.js";
 
 export type { Language, MessageKeys } from "./types.js";
 export { SUPPORTED_LANGUAGES, DEFAULT_LANGUAGE } from "./types.js";
@@ -38,7 +39,7 @@ export function t(
 export function loadLanguageFromConfig(configPath: string): Language {
   try {
     const raw = readFileSync(configPath, "utf-8");
-    const data = YAML.parse(raw, { maxAliasCount: 100 }) as unknown;
+    const data = YAML.parse(raw, CONFIG_YAML_PARSE_OPTIONS) as unknown;
     if (data !== null && typeof data === "object" && !Array.isArray(data)) {
       const record = data as Record<string, unknown>;
       const lang = record["language"];
