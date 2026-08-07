@@ -34,10 +34,11 @@ export function showCommand(
     console.log("");
     console.log(lines.join("\n"));
 
+    console.log("");
     if (hasDefaultValues) {
-      console.log("");
       console.log(t("show.defaultLegend"));
     }
+    console.log(t("show.labelColumnLegend"));
   } catch (error) {
     if (error instanceof ConfigValidationError) {
       console.error(

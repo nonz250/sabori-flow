@@ -108,7 +108,9 @@ const jaMessages: MessageKeys = {
     "先に `sabori-flow init` を実行してください。",
   "show.header": "設定ファイル: {path}",
   "show.defaultLegend":
-    "* は config.yml に記述がなく、デフォルト値が適用された項目です。LABELS / PRIORITY 列の default はデフォルト値と一致、custom は異なることを示します。",
+    "* は config.yml に記述がなく、デフォルト値が適用された項目です。",
+  "show.labelColumnLegend":
+    "LABELS / PRIORITY 列の default はデフォルト値と一致、custom は異なることを示します。",
   "show.configValidationError":
     "Error: config.yml のバリデーションに失敗しました: {message}",
   "show.unexpectedError": "予期しないエラーが発生しました:",
@@ -228,7 +230,9 @@ const enMessages: MessageKeys = {
   "show.runInitFirst": "Run `sabori-flow init` first.",
   "show.header": "Config file: {path}",
   "show.defaultLegend":
-    "* = not set in config.yml; the default value is applied. In the LABELS / PRIORITY columns, default means it matches the built-in default, custom means it differs.",
+    "* = not set in config.yml; the default value is applied.",
+  "show.labelColumnLegend":
+    "In the LABELS / PRIORITY columns, default means it matches the built-in default, custom means it differs.",
   "show.configValidationError":
     "Error: config.yml validation failed: {message}",
   "show.unexpectedError": "Unexpected error:",

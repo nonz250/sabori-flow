@@ -284,6 +284,35 @@ describe("showCommand - defaultLegend", () => {
   });
 });
 
+// ---------- Tests: labelColumnLegend ----------
+
+describe("showCommand - labelColumnLegend", () => {
+  function hasLabelColumnLegend(): boolean {
+    return consoleSpy.log.mock.calls.some(
+      ([msg]) =>
+        typeof msg === "string" &&
+        msg.includes("LABELS") &&
+        msg.includes("PRIORITY"),
+    );
+  }
+
+  it("outputs labelColumnLegend when hasDefaultValues is true", () => {
+    setupNormalFlow({ hasDefaultValues: true });
+
+    showCommand();
+
+    expect(hasLabelColumnLegend()).toBe(true);
+  });
+
+  it("outputs labelColumnLegend when hasDefaultValues is false", () => {
+    setupNormalFlow({ hasDefaultValues: false });
+
+    showCommand();
+
+    expect(hasLabelColumnLegend()).toBe(true);
+  });
+});
+
 // ---------- Tests: verbose option ----------
 
 describe("showCommand - verbose option", () => {

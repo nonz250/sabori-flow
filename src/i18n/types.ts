@@ -82,6 +82,7 @@ export interface MessageKeys {
   "show.runInitFirst": string;
   "show.header": string;
   "show.defaultLegend": string;
+  "show.labelColumnLegend": string;
   "show.configValidationError": string;
   "show.unexpectedError": string;
 
