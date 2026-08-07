@@ -160,7 +160,7 @@ function setupNormalFlow(overrides?: {
 // ---------- Tests: config.yml not found ----------
 
 describe("showCommand - config.yml not found", () => {
-  it("outputs configNotFound and runInitFirst to stderr", () => {
+  it("tells the user config.yml is missing and suggests running init", () => {
     mockedFs.existsSync.mockReturnValue(false);
 
     showCommand();
@@ -193,7 +193,7 @@ describe("showCommand - config.yml not found", () => {
 // ---------- Tests: ConfigValidationError ----------
 
 describe("showCommand - ConfigValidationError", () => {
-  it("outputs configValidationError with error message", () => {
+  it("reports the config validation failure reason to the user", () => {
     mockedFs.existsSync.mockReturnValue(true);
     mockedLoadConfig.mockImplementation(() => {
       throw new ConfigValidationError("max_parallel: must be >= 1");
@@ -221,7 +221,7 @@ describe("showCommand - ConfigValidationError", () => {
 // ---------- Tests: unexpected error ----------
 
 describe("showCommand - unexpected error", () => {
-  it("outputs unexpectedError message", () => {
+  it("reports an unexpected error along with the original error object", () => {
     mockedFs.existsSync.mockReturnValue(true);
     mockedLoadConfig.mockImplementation(() => {
       throw new TypeError("something went wrong");

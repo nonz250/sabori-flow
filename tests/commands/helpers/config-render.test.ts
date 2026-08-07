@@ -308,8 +308,13 @@ describe("renderConfigInspection - default marker", () => {
 // ---------- Tests: hasDefaultValues ----------
 
 describe("renderConfigInspection - hasDefaultValues", () => {
-  it("all file-specified produces hasDefaultValues === false", () => {
-    const inspection = makeInspection({
+  // Every field below is sourced "file"; each it.each case flips exactly one
+  // back to "default" so that field's individual contribution to
+  // hasDefaultValues is proven. A single "some field is default" test can't
+  // tell the difference from a mutation that drops one entry out of the
+  // internal sourcedFields/hasDefaults checks in config-render.ts.
+  function allFileInspection(): ConfigInspection {
+    return makeInspection({
       repositories: [
         makeRepoInspection({
           defaultBranch: s("develop", "file"),
@@ -325,35 +330,89 @@ describe("renderConfigInspection - hasDefaultValues", () => {
       }),
       language: s<Language>("en", "file"),
     });
+  }
 
-    const { hasDefaultValues } = renderConfigInspection(inspection, {
+  it("all file-specified produces hasDefaultValues === false", () => {
+    const { hasDefaultValues } = renderConfigInspection(allFileInspection(), {
       verbose: false,
     });
 
     expect(hasDefaultValues).toBe(false);
   });
 
-  it("any default-sourced field produces hasDefaultValues === true", () => {
-    const inspection = makeInspection({
-      repositories: [
-        makeRepoInspection({ defaultBranch: s("main") }),
-      ],
-      execution: makeExecInspection({
-        maxParallel: s(1, "file"),
-        maxIssuesPerRepo: s(1, "file"),
-        autonomy: s<Autonomy>("interactive", "file"),
-        intervalMinutes: s(60, "file"),
-        timeoutMinutes: s(60, "file"),
+  it.each<[string, (inspection: ConfigInspection) => ConfigInspection]>([
+    [
+      "repositories[0].defaultBranch",
+      (inspection) => ({
+        ...inspection,
+        repositories: [
+          { ...inspection.repositories[0], defaultBranch: s("main") },
+        ],
       }),
-      language: s<Language>("ja", "file"),
-    });
+    ],
+    [
+      "repositories[0].autoImplAfterPlan",
+      (inspection) => ({
+        ...inspection,
+        repositories: [
+          { ...inspection.repositories[0], autoImplAfterPlan: s(false) },
+        ],
+      }),
+    ],
+    [
+      "execution.maxParallel",
+      (inspection) => ({
+        ...inspection,
+        execution: { ...inspection.execution, maxParallel: s(1) },
+      }),
+    ],
+    [
+      "execution.maxIssuesPerRepo",
+      (inspection) => ({
+        ...inspection,
+        execution: { ...inspection.execution, maxIssuesPerRepo: s(1) },
+      }),
+    ],
+    [
+      "execution.autonomy",
+      (inspection) => ({
+        ...inspection,
+        execution: {
+          ...inspection.execution,
+          autonomy: s<Autonomy>("interactive"),
+        },
+      }),
+    ],
+    [
+      "execution.intervalMinutes",
+      (inspection) => ({
+        ...inspection,
+        execution: { ...inspection.execution, intervalMinutes: s(60) },
+      }),
+    ],
+    [
+      "execution.timeoutMinutes",
+      (inspection) => ({
+        ...inspection,
+        execution: { ...inspection.execution, timeoutMinutes: s(60) },
+      }),
+    ],
+    [
+      "language",
+      (inspection) => ({ ...inspection, language: s<Language>("ja") }),
+    ],
+  ])(
+    "%s alone sourced as 'default' produces hasDefaultValues === true",
+    (_field, applyDefault) => {
+      const inspection = applyDefault(allFileInspection());
 
-    const { hasDefaultValues } = renderConfigInspection(inspection, {
-      verbose: false,
-    });
+      const { hasDefaultValues } = renderConfigInspection(inspection, {
+        verbose: false,
+      });
 
-    expect(hasDefaultValues).toBe(true);
-  });
+      expect(hasDefaultValues).toBe(true);
+    },
+  );
 });
 
 // ---------- Tests: label detail sections ----------
@@ -559,6 +618,90 @@ describe("renderConfigInspection - local_path sections", () => {
   });
 });
 
+// ---------- Tests: blank lines across multiple repositories ----------
+
+// The single-repository cases above never exercise the "is there content
+// from an earlier repo" checks that gate each blank line, since lines.length
+// is always 0 the first time a block is written. These pin the multi-repo
+// behavior directly.
+describe("renderConfigInspection - blank lines across repositories", () => {
+  it("a blank line separates one repo's labels block from the next repo's priority_labels-only block", () => {
+    const repoA = makeRepoInspection({
+      owner: "repoa",
+      repo: "app",
+      fullName: "repoa/app",
+      labels: c(CUSTOM_LABELS, false),
+      priorityLabels: c<readonly string[]>(
+        ["priority:high", "priority:low"],
+        true,
+      ),
+    });
+    const repoB = makeRepoInspection({
+      owner: "repob",
+      repo: "app",
+      fullName: "repob/app",
+      labels: c(DEFAULT_LABELS, true),
+      priorityLabels: c<readonly string[]>(["custom:urgent"], false),
+    });
+    const inspection = makeInspection({ repositories: [repoA, repoB] });
+
+    const { lines } = renderConfigInspection(inspection, { verbose: false });
+
+    const labelsStart = lines.indexOf("repoa/app labels");
+    expect(labelsStart).toBeGreaterThan(-1);
+    // header + 15 label entries (7 spec + 4 plan + 4 impl)
+    const priorityHeaderIndex = labelsStart + 1 + 15 + 1;
+    expect(lines[labelsStart + 1 + 15]).toBe("");
+    expect(lines[priorityHeaderIndex]).toBe("repob/app priority_labels");
+  });
+
+  it("a blank line separates two repositories' local_path blocks in verbose mode", () => {
+    const repoA = makeRepoInspection({
+      owner: "repoa",
+      repo: "app",
+      fullName: "repoa/app",
+      rawLocalPath: "~/projects/repoa",
+      localPath: "/home/user/projects/repoa",
+    });
+    const repoB = makeRepoInspection({
+      owner: "repob",
+      repo: "app",
+      fullName: "repob/app",
+      rawLocalPath: "~/projects/repob",
+      localPath: "/home/user/projects/repob",
+    });
+    const inspection = makeInspection({ repositories: [repoA, repoB] });
+
+    const { lines } = renderConfigInspection(inspection, { verbose: true });
+
+    const firstBlockStart = lines.indexOf("repoa/app local_path");
+    expect(firstBlockStart).toBeGreaterThan(-1);
+    // header + config line + resolved line
+    expect(lines[firstBlockStart + 3]).toBe("");
+    expect(lines[firstBlockStart + 4]).toBe("repob/app local_path");
+  });
+
+  it("no blank line separates a single repo's own labels block from its priority_labels block", () => {
+    const inspection = makeInspection({
+      repositories: [
+        makeRepoInspection({
+          labels: c(CUSTOM_LABELS, false),
+          priorityLabels: c<readonly string[]>(["custom:urgent"], false),
+        }),
+      ],
+    });
+
+    const { lines } = renderConfigInspection(inspection, { verbose: false });
+
+    const labelsStart = lines.indexOf("acme/app labels");
+    expect(labelsStart).toBeGreaterThan(-1);
+    // The 15th label entry is immediately followed by the priority_labels
+    // header, with no blank line in between (unlike the repo-boundary case
+    // above).
+    expect(lines[labelsStart + 1 + 15]).toBe("acme/app priority_labels");
+  });
+});
+
 // ---------- Tests: execution section ----------
 
 describe("renderConfigInspection - execution section", () => {
@@ -619,5 +762,28 @@ describe("renderConfigInspection - output format", () => {
     const { lines } = renderConfigInspection(inspection, { verbose: true });
 
     expect(lines[lines.length - 1]).not.toBe("");
+  });
+});
+
+// ---------- Tests: defensive fallback (unreachable via the CLI) ----------
+
+// config.ts's parseRepositories() rejects an empty repositories array before
+// a ConfigInspection can be built, so the show command never calls this with
+// zero repositories. renderConfigInspection() is exported and unit-tested
+// directly, though, so this pins that it degrades gracefully (no crash from
+// e.g. an unguarded array access) rather than relying on that upstream
+// validation as the only safeguard.
+describe("renderConfigInspection - empty repositories array (unreachable via the CLI)", () => {
+  it("renders a zero-count table with no data rows and continues to the next section", () => {
+    const inspection = makeInspection({ repositories: [] });
+
+    const { lines } = renderConfigInspection(inspection, { verbose: false });
+
+    expect(lines[0]).toBe("repositories (0)");
+    expect(lines[1]).toContain("REPOSITORY");
+    // No data row and no label/local_path sections for a repo that doesn't
+    // exist: the next content is the execution section, one blank line down.
+    expect(lines[2]).toBe("");
+    expect(lines[3]).toBe("execution");
   });
 });

@@ -24,6 +24,16 @@ beforeEach(() => {
 
 // ---------- Helpers ----------
 
+// Deliberately local rather than reusing tests/worker/helpers/factories.ts's
+// makeRepoConfig()/makeAppConfig(): compareLabels()/comparePriorityLabels()
+// in the module under test diff the given labels against the real
+// DEFAULT_LABELS/getDefaultPriorityLabels() constants, so a "default"
+// fixture here must equal those exact constants. factories.ts intentionally
+// uses distinct "test/spec"-style labels instead (so fixtures built there
+// are recognizable as stubs in other suites' output), which would make
+// every "matchesDefault === true" case below fail if reused as-is. Since
+// almost every field would need overriding anyway to restore this file's
+// values, delegating buys no real reduction in duplication.
 function makeRepo(overrides?: Partial<RepositoryConfig>): RepositoryConfig {
   return {
     owner: "test-org",
@@ -274,6 +284,58 @@ describe("inspectConfig - labels comparison", () => {
 
     expect(result.repositories[0].labels.matchesDefault).toBe(false);
   });
+
+  // The 3 cases above only ever diverge on the last field of the &&-chain
+  // they exercise (impl's last phase field, spec's last own field), so a
+  // mutant that drops an earlier &&-clause (e.g. the whole plan comparison,
+  // or spec's `review`/`approved` checks) would still pass them. Each case
+  // below isolates a single earlier field instead, with every other field
+  // and phase left at its default.
+
+  it("different plan.trigger label alone produces matchesDefault === false", () => {
+    const modified: LabelsConfig = {
+      ...DEFAULT_LABELS,
+      plan: { ...DEFAULT_LABELS.plan, trigger: "custom/plan" },
+    };
+    const config = makeConfig({
+      repositories: [makeRepo({ labels: modified })],
+    });
+    const raw = { repositories: [makeRawRepo()] };
+
+    const result = inspectConfig(config, raw);
+
+    expect(result.repositories[0].labels.matchesDefault).toBe(false);
+  });
+
+  it("different spec.review label alone produces matchesDefault === false", () => {
+    const modified: LabelsConfig = {
+      ...DEFAULT_LABELS,
+      spec: { ...DEFAULT_LABELS.spec, review: "custom/spec:review" },
+    };
+    const config = makeConfig({
+      repositories: [makeRepo({ labels: modified })],
+    });
+    const raw = { repositories: [makeRawRepo()] };
+
+    const result = inspectConfig(config, raw);
+
+    expect(result.repositories[0].labels.matchesDefault).toBe(false);
+  });
+
+  it("different spec.approved label alone produces matchesDefault === false", () => {
+    const modified: LabelsConfig = {
+      ...DEFAULT_LABELS,
+      spec: { ...DEFAULT_LABELS.spec, approved: "custom/spec:approved" },
+    };
+    const config = makeConfig({
+      repositories: [makeRepo({ labels: modified })],
+    });
+    const raw = { repositories: [makeRawRepo()] };
+
+    const result = inspectConfig(config, raw);
+
+    expect(result.repositories[0].labels.matchesDefault).toBe(false);
+  });
 });
 
 // ---------- Tests: priority_labels comparison ----------
@@ -328,6 +390,24 @@ describe("inspectConfig - local_path", () => {
 
     expect(result.repositories[0].rawLocalPath).toBe("~/repos/x");
     expect(result.repositories[0].localPath).toBe("/home/user/repos/x");
+  });
+
+  it("local_path missing from an otherwise matched raw entry produces rawLocalPath === null", () => {
+    const config = makeConfig();
+    const raw = { repositories: [makeRawRepo({ local_path: undefined })] };
+
+    const result = inspectConfig(config, raw);
+
+    expect(result.repositories[0].rawLocalPath).toBeNull();
+  });
+
+  it("non-string local_path in an otherwise matched raw entry produces rawLocalPath === null", () => {
+    const config = makeConfig();
+    const raw = { repositories: [makeRawRepo({ local_path: 123 })] };
+
+    const result = inspectConfig(config, raw);
+
+    expect(result.repositories[0].rawLocalPath).toBeNull();
   });
 });
 
@@ -399,6 +479,35 @@ describe("inspectConfig - raw document fallback", () => {
     expect(result.repositories[1].defaultBranch.value).toBe("develop");
   });
 
+  // Unreachable via the CLI in practice (config.yml's repositories list and
+  // the parsed AppConfig always have the same length), but inspectConfig()
+  // zips them by index via config.repositories.map(), so an extra raw entry
+  // simply falls outside that iteration rather than being validated away.
+  // Pin that it's silently ignored instead of e.g. shifting other entries.
+  it("a raw repositories array longer than config.repositories ignores the extra entries", () => {
+    const config = makeConfig({
+      repositories: [
+        makeRepo({ owner: "org-a", repo: "repo-a", defaultBranch: "develop" }),
+      ],
+    });
+    const raw = {
+      repositories: [
+        makeRawRepo({
+          owner: "org-a",
+          repo: "repo-a",
+          default_branch: "develop",
+        }),
+        makeRawRepo({ owner: "org-b", repo: "repo-b" }),
+      ],
+    };
+
+    const result = inspectConfig(config, raw);
+
+    expect(result.repositories).toHaveLength(1);
+    expect(result.repositories[0].defaultBranch.source).toBe("file");
+    expect(result.repositories[0].defaultBranch.value).toBe("develop");
+  });
+
   it("raw entry with mismatched owner/repo is treated as absent", () => {
     const config = makeConfig({
       repositories: [makeRepo({ owner: "real-org", repo: "real-repo" })],
@@ -412,6 +521,61 @@ describe("inspectConfig - raw document fallback", () => {
           default_branch: "other-branch",
         },
       ],
+    };
+
+    const result = inspectConfig(config, raw);
+
+    expect(result.repositories[0].defaultBranch.source).toBe("default");
+    expect(result.repositories[0].rawLocalPath).toBeNull();
+  });
+
+  it("repositories key that is not an array falls back to 'default' for every repository", () => {
+    const config = makeConfig({
+      repositories: [
+        makeRepo({ owner: "org-a", repo: "repo-a" }),
+        makeRepo({ owner: "org-b", repo: "repo-b", defaultBranch: "develop" }),
+      ],
+    });
+    const raw = { repositories: "not-an-array" };
+
+    const result = inspectConfig(config, raw);
+
+    expect(result.repositories[0].defaultBranch.source).toBe("default");
+    expect(result.repositories[1].defaultBranch.source).toBe("default");
+    expect(result.repositories[1].defaultBranch.value).toBe("develop");
+  });
+
+  it("a non-object element falls back to 'default' at that index while other elements are still matched", () => {
+    const config = makeConfig({
+      repositories: [
+        makeRepo({ owner: "org-a", repo: "repo-a" }),
+        makeRepo({ owner: "org-b", repo: "repo-b", defaultBranch: "develop" }),
+      ],
+    });
+    const raw = {
+      repositories: [
+        123,
+        makeRawRepo({
+          owner: "org-b",
+          repo: "repo-b",
+          default_branch: "develop",
+        }),
+      ],
+    };
+
+    const result = inspectConfig(config, raw);
+
+    expect(result.repositories[0].defaultBranch.source).toBe("default");
+    expect(result.repositories[1].defaultBranch.source).toBe("file");
+    expect(result.repositories[1].defaultBranch.value).toBe("develop");
+  });
+
+  it("owner/repo fields that are not strings fall back to 'default' for that repository", () => {
+    const config = makeConfig({
+      repositories: [makeRepo({ owner: "real-org", repo: "real-repo" })],
+    });
+    const raw = {
+      repositories: [{ owner: 1, repo: 2, local_path: "/x" }],
     };
 
     const result = inspectConfig(config, raw);
