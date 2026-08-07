@@ -34,6 +34,9 @@ const OWNER_REPO_PATTERN = /^[a-zA-Z0-9._-]+$/;
 // positional argument, and a name like `--repo` would be read as a flag.
 const LABEL_PATTERN = /^[a-zA-Z0-9./:_ ][a-zA-Z0-9./:_ -]*$/;
 const BRANCH_NAME_PATTERN = /^[a-zA-Z0-9._\/-]+$/;
+// local_path is echoed verbatim in the `show` command and log output, so
+// control characters are rejected here for display/log safety.
+const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/;
 const DEFAULT_BRANCH_DEFAULT = "main";
 const PHASE_LABEL_KEYS = ["trigger", "in_progress", "done", "failed"] as const;
 const SPEC_LABEL_KEYS = [...PHASE_LABEL_KEYS, "review", "approved", "needs_human"] as const;
@@ -177,6 +180,12 @@ function parseRepositories(raw: unknown): readonly RepositoryConfig[] {
     if (typeof rawLocalPath !== "string" || rawLocalPath === "") {
       throw new ConfigValidationError(
         `${prefix}.local_path: must be a non-empty string`,
+      );
+    }
+
+    if (CONTROL_CHARACTER_PATTERN.test(rawLocalPath)) {
+      throw new ConfigValidationError(
+        `${prefix}.local_path: must not contain control characters`,
       );
     }
 
