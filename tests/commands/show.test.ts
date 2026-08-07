@@ -2,15 +2,23 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ---------- Mocks ----------
 
-vi.mock("fs", () => ({
+// showCommand() reaches two different fs entry points: its own `fs.existsSync`
+// (imported as the default export of "fs") and, before that,
+// loadLanguageFromConfig()'s `readFileSync` (a named export of "node:fs").
+// Vitest resolves "fs" and "node:fs" to the same underlying module, so
+// mocking both specifiers separately makes the "node:fs" factory silently
+// win for both — a `vi.mock("fs", ...)` alongside this one would have its
+// `default` export ignored, breaking the default-imported `fs.existsSync`.
+// One factory covering both the default and named shape avoids that trap.
+vi.mock("node:fs", () => ({
   default: {
     existsSync: vi.fn(),
-    readFileSync: vi.fn(),
     writeFileSync: vi.fn(),
     mkdirSync: vi.fn(),
     copyFileSync: vi.fn(),
     chmodSync: vi.fn(),
   },
+  readFileSync: vi.fn(),
 }));
 
 vi.mock("../../src/worker/config.js", () => ({
@@ -44,6 +52,7 @@ vi.mock("../../src/utils/paths.js", async (importOriginal) => {
 // ---------- Imports ----------
 
 import fs from "fs";
+import { readFileSync } from "node:fs";
 import {
   loadConfig,
   ConfigValidationError,
@@ -57,6 +66,7 @@ import { getConfigPath } from "../../src/utils/paths.js";
 import { showCommand } from "../../src/commands/show.js";
 
 const mockedFs = vi.mocked(fs);
+const mockedReadFileSync = vi.mocked(readFileSync);
 const mockedLoadConfig = vi.mocked(loadConfig);
 const mockedReadRawConfigDocument = vi.mocked(readRawConfigDocument);
 const mockedInspectConfig = vi.mocked(inspectConfig);
@@ -88,6 +98,15 @@ beforeEach(() => {
   mockedReadRawConfigDocument.mockReset();
   mockedInspectConfig.mockReset();
   mockedRenderConfigInspection.mockReset();
+
+  // mockReset() clears the throw-on-call implementation a previous test may
+  // have set; reassert it so every test starts from the same ENOENT
+  // fallback (mockReset()/restoreAllMocks() don't restore factory-created
+  // vi.fn() implementations, so this must be redone every time).
+  mockedReadFileSync.mockReset();
+  mockedReadFileSync.mockImplementation(() => {
+    throw new Error("no config");
+  });
 
   consoleSpy = {
     log: vi.spyOn(console, "log").mockImplementation(() => {}),
