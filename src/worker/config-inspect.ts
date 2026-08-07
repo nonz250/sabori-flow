@@ -7,13 +7,11 @@ import type {
   LabelsConfig,
   PhaseLabels,
   RepositoryConfig,
+  SpecPhaseLabels,
 } from "./models.js";
 import type { Language } from "../i18n/types.js";
-import { CONFIG_YAML_PARSE_OPTIONS } from "./config.js";
-import {
-  getDefaultLabels,
-  getDefaultPriorityLabels,
-} from "../utils/config-defaults.js";
+import { CONFIG_YAML_PARSE_OPTIONS, DEFAULT_LABELS } from "./config.js";
+import { getDefaultPriorityLabels } from "../utils/config-defaults.js";
 
 // ---------- Public types ----------
 
@@ -162,21 +160,33 @@ function inspectExecution(
 
 function phaseLabelsMatchDefault(
   actual: PhaseLabels,
-  defaultPhase: { trigger: string; in_progress: string; done: string; failed: string },
+  defaultPhase: PhaseLabels,
 ): boolean {
   return (
     actual.trigger === defaultPhase.trigger &&
-    actual.inProgress === defaultPhase.in_progress &&
+    actual.inProgress === defaultPhase.inProgress &&
     actual.done === defaultPhase.done &&
     actual.failed === defaultPhase.failed
   );
 }
 
+function specLabelsMatchDefault(
+  actual: SpecPhaseLabels,
+  defaultPhase: SpecPhaseLabels,
+): boolean {
+  return (
+    phaseLabelsMatchDefault(actual, defaultPhase) &&
+    actual.review === defaultPhase.review &&
+    actual.approved === defaultPhase.approved &&
+    actual.needsHuman === defaultPhase.needsHuman
+  );
+}
+
 function compareLabels(labels: LabelsConfig): Compared<LabelsConfig> {
-  const defaults = getDefaultLabels();
   const matchesDefault =
-    phaseLabelsMatchDefault(labels.plan, defaults.plan) &&
-    phaseLabelsMatchDefault(labels.impl, defaults.impl);
+    specLabelsMatchDefault(labels.spec, DEFAULT_LABELS.spec) &&
+    phaseLabelsMatchDefault(labels.plan, DEFAULT_LABELS.plan) &&
+    phaseLabelsMatchDefault(labels.impl, DEFAULT_LABELS.impl);
   return { value: labels, matchesDefault };
 }
 

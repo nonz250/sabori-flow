@@ -23,21 +23,39 @@ function c<T>(value: T, matchesDefault = true): Compared<T> {
 }
 
 const DEFAULT_LABELS: LabelsConfig = {
+  spec: {
+    trigger: "ai/spec",
+    inProgress: "ai/spec/in-progress",
+    done: "ai/spec/done",
+    failed: "ai/spec/failed",
+    review: "ai/spec/review",
+    approved: "ai/spec/approved",
+    needsHuman: "ai/spec/needs-human",
+  },
   plan: {
-    trigger: "claude/plan",
-    inProgress: "claude/plan:in-progress",
-    done: "claude/plan:done",
-    failed: "claude/plan:failed",
+    trigger: "ai/plan",
+    inProgress: "ai/plan/in-progress",
+    done: "ai/plan/done",
+    failed: "ai/plan/failed",
   },
   impl: {
-    trigger: "claude/impl",
-    inProgress: "claude/impl:in-progress",
-    done: "claude/impl:done",
-    failed: "claude/impl:failed",
+    trigger: "ai/impl",
+    inProgress: "ai/impl/in-progress",
+    done: "ai/impl/done",
+    failed: "ai/impl/failed",
   },
 };
 
 const CUSTOM_LABELS: LabelsConfig = {
+  spec: {
+    trigger: "my/spec",
+    inProgress: "my/spec:wip",
+    done: "my/spec:ok",
+    failed: "my/spec:ng",
+    review: "my/spec:review",
+    approved: "my/spec:approved",
+    needsHuman: "my/spec:human",
+  },
   plan: {
     trigger: "my/plan",
     inProgress: "my/plan:wip",
@@ -354,6 +372,37 @@ describe("renderConfigInspection - label detail sections", () => {
     expect(joined).toContain("acme/app labels");
     expect(joined).toContain("plan.trigger");
     expect(joined).toContain("my/plan");
+  });
+
+  it("label detail block lists every spec, plan and impl key in config.yml order", () => {
+    const inspection = makeInspection({
+      repositories: [
+        makeRepoInspection({ labels: c(CUSTOM_LABELS, false) }),
+      ],
+    });
+
+    const { lines } = renderConfigInspection(inspection, { verbose: false });
+
+    const start = lines.indexOf("acme/app labels");
+    const block = lines.slice(start + 1, start + 16);
+    expect(block.map((line) => line.trim().split(/\s+/)[0])).toEqual([
+      "spec.trigger",
+      "spec.in_progress",
+      "spec.done",
+      "spec.failed",
+      "spec.review",
+      "spec.approved",
+      "spec.needs_human",
+      "plan.trigger",
+      "plan.in_progress",
+      "plan.done",
+      "plan.failed",
+      "impl.trigger",
+      "impl.in_progress",
+      "impl.done",
+      "impl.failed",
+    ]);
+    expect(block[6]).toContain("my/spec:human");
   });
 
   it("default labels repo does not show detail block without verbose", () => {

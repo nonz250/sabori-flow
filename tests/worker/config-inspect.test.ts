@@ -13,10 +13,8 @@ import type {
   ExecutionConfig,
   LabelsConfig,
 } from "../../src/worker/models.js";
-import {
-  getDefaultLabels,
-  getDefaultPriorityLabels,
-} from "../../src/utils/config-defaults.js";
+import { getDefaultPriorityLabels } from "../../src/utils/config-defaults.js";
+import { DEFAULT_LABELS } from "../../src/worker/config.js";
 
 const mockedReadFileSync = vi.mocked(readFileSync);
 
@@ -26,31 +24,13 @@ beforeEach(() => {
 
 // ---------- Helpers ----------
 
-function makeDefaultAppLabels(): LabelsConfig {
-  const d = getDefaultLabels();
-  return {
-    plan: {
-      trigger: d.plan.trigger,
-      inProgress: d.plan.in_progress,
-      done: d.plan.done,
-      failed: d.plan.failed,
-    },
-    impl: {
-      trigger: d.impl.trigger,
-      inProgress: d.impl.in_progress,
-      done: d.impl.done,
-      failed: d.impl.failed,
-    },
-  };
-}
-
 function makeRepo(overrides?: Partial<RepositoryConfig>): RepositoryConfig {
   return {
     owner: "test-org",
     repo: "test-repo",
     localPath: "/resolved/repos/test-repo",
     defaultBranch: "main",
-    labels: makeDefaultAppLabels(),
+    labels: DEFAULT_LABELS,
     priorityLabels: getDefaultPriorityLabels(),
     autoImplAfterPlan: false,
     ...overrides,
@@ -256,10 +236,24 @@ describe("inspectConfig - labels comparison", () => {
   });
 
   it("different impl.failed label produces matchesDefault === false", () => {
-    const labels = makeDefaultAppLabels();
     const modified: LabelsConfig = {
-      ...labels,
-      impl: { ...labels.impl, failed: "custom/impl:failed" },
+      ...DEFAULT_LABELS,
+      impl: { ...DEFAULT_LABELS.impl, failed: "custom/impl:failed" },
+    };
+    const config = makeConfig({
+      repositories: [makeRepo({ labels: modified })],
+    });
+    const raw = { repositories: [makeRawRepo()] };
+
+    const result = inspectConfig(config, raw);
+
+    expect(result.repositories[0].labels.matchesDefault).toBe(false);
+  });
+
+  it("different spec.needs_human label produces matchesDefault === false", () => {
+    const modified: LabelsConfig = {
+      ...DEFAULT_LABELS,
+      spec: { ...DEFAULT_LABELS.spec, needsHuman: "custom/spec:needs-human" },
     };
     const config = makeConfig({
       repositories: [makeRepo({ labels: modified })],

@@ -3,6 +3,7 @@ import type {
   RepositoryInspection,
   Sourced,
 } from "../../worker/config-inspect.js";
+import type { LabelsConfig, PhaseLabels } from "../../worker/models.js";
 
 // ---------- Public types ----------
 
@@ -145,19 +146,9 @@ function renderLabelSections(
     if (!showLabels && !showPriority) continue;
 
     if (showLabels) {
-      const labelEntries: [string, string][] = [
-        ["plan.trigger", repo.labels.value.plan.trigger],
-        ["plan.in_progress", repo.labels.value.plan.inProgress],
-        ["plan.done", repo.labels.value.plan.done],
-        ["plan.failed", repo.labels.value.plan.failed],
-        ["impl.trigger", repo.labels.value.impl.trigger],
-        ["impl.in_progress", repo.labels.value.impl.inProgress],
-        ["impl.done", repo.labels.value.impl.done],
-        ["impl.failed", repo.labels.value.impl.failed],
-      ];
       if (lines.length > 0) lines.push("");
       lines.push(`${repo.fullName} labels`);
-      lines.push(...renderKeyValueLines(labelEntries));
+      lines.push(...renderKeyValueLines(buildLabelEntries(repo.labels.value)));
     }
 
     if (showPriority) {
@@ -170,6 +161,31 @@ function renderLabelSections(
   }
 
   return lines;
+}
+
+// Key order follows config.yml's schema so the block can be copied back into
+// the file as-is.
+function buildLabelEntries(labels: LabelsConfig): [string, string][] {
+  return [
+    ...phaseLabelEntries("spec", labels.spec),
+    ["spec.review", labels.spec.review],
+    ["spec.approved", labels.spec.approved],
+    ["spec.needs_human", labels.spec.needsHuman],
+    ...phaseLabelEntries("plan", labels.plan),
+    ...phaseLabelEntries("impl", labels.impl),
+  ];
+}
+
+function phaseLabelEntries(
+  phase: string,
+  labels: PhaseLabels,
+): [string, string][] {
+  return [
+    [`${phase}.trigger`, labels.trigger],
+    [`${phase}.in_progress`, labels.inProgress],
+    [`${phase}.done`, labels.done],
+    [`${phase}.failed`, labels.failed],
+  ];
 }
 
 // ---------- Local path sections (verbose only) ----------
