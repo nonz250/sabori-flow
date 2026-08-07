@@ -92,6 +92,7 @@ describe("runClaude", () => {
           input: "Fix the bug in module Y",
           cwd: undefined,
           timeoutMs: 3_600_000,
+          env: expect.any(Object),
         },
       );
     });
@@ -413,6 +414,7 @@ describe("runClaude", () => {
       } else {
         process.env[ENV_KEY] = savedEnv;
       }
+      delete process.env.SABORI_TEST_MARKER;
     });
 
     it("authToken 指定時、runCommand の env に CLAUDE_CODE_OAUTH_TOKEN が渡される", async () => {
@@ -426,13 +428,23 @@ describe("runClaude", () => {
       );
     });
 
-    it("authToken 未指定時、runCommand に env が渡されない", async () => {
+    it("authToken 未指定時、env に CLAUDE_CODE_OAUTH_TOKEN が含まれない", async () => {
       mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
 
       await runClaude("prompt text");
 
       const options = mockedRunCommand.mock.calls[0][2];
-      expect(options?.env).toBeUndefined();
+      expect(options?.env?.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
+    });
+
+    it("authToken 未指定時も env は既存の process.env を継承する", async () => {
+      process.env.SABORI_TEST_MARKER = "marker-value";
+      mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
+
+      await runClaude("prompt text");
+
+      const options = mockedRunCommand.mock.calls[0][2];
+      expect(options?.env?.SABORI_TEST_MARKER).toBe("marker-value");
     });
 
     it("authToken 指定時も process.env は変異しない", async () => {
@@ -451,8 +463,67 @@ describe("runClaude", () => {
 
       const options = mockedRunCommand.mock.calls[0][2];
       expect(options?.env?.SABORI_TEST_MARKER).toBe("marker-value");
+    });
+  });
 
-      delete process.env.SABORI_TEST_MARKER;
+  describe("バックグラウンド待機上限", () => {
+    const ENV_KEY = "CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS";
+    let savedEnv: string | undefined;
+
+    beforeEach(() => {
+      savedEnv = process.env[ENV_KEY];
+      delete process.env[ENV_KEY];
+    });
+
+    afterEach(() => {
+      if (savedEnv === undefined) {
+        delete process.env[ENV_KEY];
+      } else {
+        process.env[ENV_KEY] = savedEnv;
+      }
+    });
+
+    it("authToken 未指定でも CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS が env に渡される", async () => {
+      mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
+
+      await runClaude("prompt text");
+
+      const options = mockedRunCommand.mock.calls[0][2];
+      expect(options?.env?.CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS).toBe("3600000");
+    });
+
+    it("authToken 指定時も上限とトークンが両方 env に含まれる", async () => {
+      mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
+
+      await runClaude("prompt text", { authToken: "sk-ant-oat01-example" });
+
+      const options = mockedRunCommand.mock.calls[0][2];
+      expect(options?.env).toEqual(
+        expect.objectContaining({
+          CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS: "3600000",
+          CLAUDE_CODE_OAUTH_TOKEN: "sk-ant-oat01-example",
+        }),
+      );
+    });
+
+    it("timeoutMs を既定と異なる値にしても上限は変わらない", async () => {
+      mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
+
+      await runClaude("prompt text", { timeoutMs: 600_000 });
+
+      const options = mockedRunCommand.mock.calls[0][2];
+      expect(options?.env?.CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS).toBe("3600000");
+    });
+
+    it("process.env に既存値があっても worker の値で上書きされる", async () => {
+      process.env.CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS = "1000";
+      mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
+
+      await runClaude("prompt text");
+
+      const options = mockedRunCommand.mock.calls[0][2];
+      expect(options?.env?.CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS).toBe("3600000");
+      expect(process.env.CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS).toBe("1000");
     });
   });
 });
