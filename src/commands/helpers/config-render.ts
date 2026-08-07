@@ -152,6 +152,9 @@ function renderLabelSections(
     }
 
     if (showPriority) {
+      // No blank line when this repo's labels block was just printed: a
+      // blank line is reserved for repository boundaries, so the
+      // labels/priority_labels pair for one repo stays visually together.
       if (lines.length > 0 && !showLabels) lines.push("");
       lines.push(`${repo.fullName} priority_labels`);
       for (const label of repo.priorityLabels.value) {
@@ -163,8 +166,7 @@ function renderLabelSections(
   return lines;
 }
 
-// Key order follows config.yml's schema so the block can be copied back into
-// the file as-is.
+// Key order follows config.yml's schema: spec, then plan, then impl.
 function buildLabelEntries(labels: LabelsConfig): [string, string][] {
   return [
     ...phaseLabelEntries("spec", labels.spec),
