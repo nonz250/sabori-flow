@@ -102,21 +102,30 @@ Claude には [Scheduled Tasks](https://code.claude.com/docs/en/scheduled-tasks)
 ## セットアップ
 
 ```bash
-# 1. 対話的に config.yml を作成
-npx sabori-flow init
+# 1. クローンしてビルド
+git clone https://github.com/nonz250/sabori-flow.git
+cd sabori-flow
+npm install
+npm run build
+npm link
 
-# 2. launchd に登録して定期実行を開始
-npx sabori-flow install
+# 2. 対話的に config.yml を作成
+sabori-flow init
+
+# 3. launchd に登録して定期実行を開始
+sabori-flow install
 ```
 
 `install` コマンドは plist 生成と launchd への登録を行います。
+
+> **Note:** sabori-flow が npm に公開された後は、`npx sabori-flow` でも利用可能になります。
 
 ### リポジトリの追加
 
 既存の `config.yml` に新しいリポジトリを追加するには
 
 ```bash
-npx sabori-flow add
+sabori-flow add
 ```
 
 owner、repo、ローカルパスを対話的に入力し、`config.yml` にエントリを追加します。同じ owner/repo が既に存在する場合は上書き確認が表示されます。
@@ -140,7 +149,7 @@ npx sabori-flow set-token
 ### アンインストール
 
 ```bash
-npx sabori-flow uninstall
+sabori-flow uninstall
 ```
 
 launchd からの登録解除と plist の削除が行われます。`~/.sabori-flow/` 全体（設定、プロンプト、ログ、認証トークン）を削除するかどうかの確認も表示されます。
@@ -258,7 +267,7 @@ launchctl start com.github.sabori-flow
 
 ## 設定
 
-設定ファイルは `~/.sabori-flow/config.yml` に保存されます。`config.yml.example` を参考に作成するか、`npx sabori-flow init` で対話的に生成できます。
+設定ファイルは `~/.sabori-flow/config.yml` に保存されます。`config.yml.example` を参考に作成するか、`sabori-flow init` で対話的に生成できます。
 
 ```yaml
 repositories:
@@ -296,7 +305,7 @@ language: ja
 | `execution.timeout_minutes` | Claude CLI の実行タイムアウト（分、1-240）。デフォルトは `60` |
 | `language` | CLI メッセージおよびプロンプトテンプレートの言語（`ja` / `en`）。デフォルトは `ja` |
 
-> **Note:** `config.yml` を編集した後は、`npx sabori-flow reinstall` を実行して launchd に変更を反映してください。
+> **Note:** `config.yml` を編集した後は、`sabori-flow reinstall` を実行して launchd に変更を反映してください。
 
 ## セキュリティ
 
@@ -305,11 +314,11 @@ language: ja
 - `execution.autonomy: auto` — Claude Code の `--permission-mode auto` を使用。分類器が危険操作 (デプロイ・大規模削除等) のみブロックし、それ以外は自動承認します。Claude Code v2.1.83 以降および Max / Team / Enterprise プランが必要です。
 - `execution.autonomy: full` — `--dangerously-skip-permissions` を付与し、マシン上でほぼ任意の操作を許可します。`auto` が使用できない場合のみ検討してください。
 
-デフォルトの `npx` 方式では、実行時に npm レジストリからパッケージを取得します。万が一 npm パッケージが侵害された場合、悪意あるコードがスケジューラにより自動実行される可能性があります。
+`npx` を使用する場合（npm 公開後）、実行時に npm レジストリからパッケージを取得します。万が一 npm パッケージが侵害された場合、悪意あるコードがスケジューラにより自動実行される可能性があります。[セットアップ](#セットアップ)で説明している `npm link` によるローカルビルド方式を使えば、実行前にコードを監査できるため、このリスクを回避できます。
 
 加えて、入力検証・出力サニタイズ・プロセス隔離など、多層的なセキュリティ対策が組み込まれています。
 
-このリスクを軽減したい場合、`--local` フラグを使用して、チーム全体でローカルコードを監査し、監査済みのローカルビルドとして実行してください。
+さらなる隔離が必要な場合は、`--local` フラグを使用して、`npm link` を介さずビルド済みコピーから直接実行してください。
 
 ```bash
 git clone https://github.com/nonz250/sabori-flow.git
