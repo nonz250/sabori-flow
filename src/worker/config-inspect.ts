@@ -10,8 +10,11 @@ import type {
   SpecPhaseLabels,
 } from "./models.js";
 import type { Language } from "../i18n/types.js";
-import { CONFIG_YAML_PARSE_OPTIONS, DEFAULT_LABELS } from "./config.js";
-import { getDefaultPriorityLabels } from "../utils/config-defaults.js";
+import { DEFAULT_LABELS } from "./config.js";
+import {
+  CONFIG_YAML_PARSE_OPTIONS,
+  getDefaultPriorityLabels,
+} from "../utils/config-defaults.js";
 
 // ---------- Public types ----------
 

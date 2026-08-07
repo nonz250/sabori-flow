@@ -11,12 +11,9 @@ import {
   type SpecPhaseLabels,
 } from "./models.js";
 import { expandTilde } from "../utils/paths.js";
+import { CONFIG_YAML_PARSE_OPTIONS } from "../utils/config-defaults.js";
 import type { Language } from "../i18n/types.js";
 import { SUPPORTED_LANGUAGES, DEFAULT_LANGUAGE } from "../i18n/types.js";
-
-// ---------- YAML parse options (shared with config-inspect) ----------
-
-export const CONFIG_YAML_PARSE_OPTIONS = { maxAliasCount: 100 } as const;
 
 // ---------- Custom error ----------
 

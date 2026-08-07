@@ -3,6 +3,7 @@ import { confirm } from "@inquirer/prompts";
 import YAML from "yaml";
 import { getConfigPath } from "../utils/paths.js";
 import {
+  CONFIG_YAML_PARSE_OPTIONS,
   getDefaultPriorityLabels,
 } from "../utils/config-defaults.js";
 import { promptRepository } from "./helpers/repository-prompt.js";
@@ -24,7 +25,7 @@ export async function addCommand(): Promise<void> {
     let config: unknown;
     try {
       const raw = readFileSync(getConfigPath(), "utf-8");
-      config = YAML.parse(raw, { maxAliasCount: 100 });
+      config = YAML.parse(raw, CONFIG_YAML_PARSE_OPTIONS);
     } catch {
       console.error(t("add.configReadFailed"));
       return;
