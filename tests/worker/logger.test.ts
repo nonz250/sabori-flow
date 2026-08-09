@@ -298,6 +298,42 @@ describe("logger", () => {
 
       consoleWarnSpy.mockRestore();
     });
+
+    it("worker.log が存在しなくても例外を投げない", () => {
+      configureLogger({ logDir: "/tmp/test-logs", retentionDays: 7 });
+
+      vi.mocked(lstatSync).mockImplementation((path) => {
+        if (path === "/tmp/test-logs/worker.log") {
+          const error = new Error("ENOENT: no such file or directory");
+          (error as NodeJS.ErrnoException).code = "ENOENT";
+          throw error;
+        }
+        return {
+          isSymbolicLink: () => false,
+          mtime: new Date(),
+        } as unknown as ReturnType<typeof lstatSync>;
+      });
+
+      expect(() => rotateOldLogs()).not.toThrow();
+      expect(renameSync).not.toHaveBeenCalled();
+    });
+
+    it("rename が失敗しても例外を投げない", () => {
+      configureLogger({ logDir: "/tmp/test-logs", retentionDays: 7 });
+
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      vi.mocked(lstatSync).mockReturnValue({
+        isSymbolicLink: () => false,
+        mtime: yesterday,
+      } as unknown as ReturnType<typeof lstatSync>);
+      vi.mocked(renameSync).mockImplementationOnce(() => {
+        throw new Error("permission denied");
+      });
+
+      expect(() => rotateOldLogs()).not.toThrow();
+    });
   });
 
   describe("rotateOldLogs — 古いログの削除", () => {
@@ -335,8 +371,9 @@ describe("logger", () => {
     });
 
     it("シンボリックリンクの場合は削除をスキップする", () => {
+      const logDir = "/tmp/test-logs";
       configureLogger({
-        logDir: "/tmp/test-logs",
+        logDir,
         retentionDays: 7,
       });
 
@@ -348,15 +385,25 @@ describe("logger", () => {
         [oldFileName] as unknown as ReturnType<typeof readdirSync>,
       );
 
-      vi.mocked(lstatSync).mockReturnValue({
-        isSymbolicLink: () => true,
-      } as unknown as ReturnType<typeof lstatSync>);
+      // worker.log itself must not look like a symlink here, or the rename
+      // guard warns too and the assertion below stops proving anything.
+      vi.mocked(lstatSync).mockImplementation((path) => {
+        if (path === `${logDir}/worker.log`) {
+          return {
+            isSymbolicLink: () => false,
+            mtime: new Date(),
+          } as unknown as ReturnType<typeof lstatSync>;
+        }
+        return {
+          isSymbolicLink: () => true,
+        } as unknown as ReturnType<typeof lstatSync>;
+      });
 
       const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
       rotateOldLogs();
 
-      expect(lstatSync).toHaveBeenCalledWith(`/tmp/test-logs/${oldFileName}`);
+      expect(lstatSync).toHaveBeenCalledWith(`${logDir}/${oldFileName}`);
       expect(unlinkSync).not.toHaveBeenCalled();
       expect(consoleWarnSpy).toHaveBeenCalledWith(
         `[logger] WARNING: Skipping symbolic link: ${oldFileName}`,
