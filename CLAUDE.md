@@ -48,6 +48,7 @@ src/
     fetcher.ts       # gh api で Issue 取得・優先度ソート
     pipeline.ts      # 1 Issue の処理パイプライン + resumeSpecReview（DI パターン）
     prompt.ts        # プロンプトテンプレート読み込み・展開
+    prompt-migration.ts # フラットレイアウト→言語別ディレクトリへの移行
     executor.ts      # Claude CLI 実行
     worktree.ts      # git worktree ライフサイクル管理
     label.ts         # ラベル遷移操作（applyLabelTransition）
@@ -143,7 +144,7 @@ spec の review 状態では、ワーカーが毎サイクル評価を行う。�
 |---|---|
 | 設定ファイル | `~/.sabori-flow/config.yml` |
 | 認証トークン | `~/.sabori-flow/auth-token` |
-| プロンプトテンプレート | `~/.sabori-flow/prompts/` |
+| プロンプトテンプレート | `~/.sabori-flow/prompts/{lang}/` |
 | ログ | `~/.sabori-flow/logs/` |
 | git worktree | `~/.sabori-flow/worktrees/<owner>/<repo>/issue-<番号>-<タイムスタンプ>/` |
 | plist バックアップ | `~/.sabori-flow/com.github.sabori-flow.plist` |
@@ -152,11 +153,11 @@ spec の review 状態では、ワーカーが毎サイクル評価を行う。�
 
 ### プロンプトテンプレート
 
-パッケージ同梱テンプレートは `prompts/{lang}/` に言語別で配置される。`init` コマンド実行時に選択言語のテンプレートが `~/.sabori-flow/prompts/` にコピーされ、ユーザーが自由にカスタマイズ可能。
+パッケージ同梱テンプレートは `prompts/{lang}/` に言語別で配置される。`init` コマンド実行時に選択言語のテンプレートが `~/.sabori-flow/prompts/{lang}/` にコピーされ、ユーザーが自由にカスタマイズ可能。ワーカー起動時およびinit実行時に、旧フラットレイアウト（`~/.sabori-flow/prompts/` 直下）のテンプレートを言語別ディレクトリへ自動移行する。
 
 テンプレート読み込みの優先順位（2 層フォールバック）:
 
-1. `~/.sabori-flow/prompts/`（ユーザー共通、init 時にコピー）
+1. `~/.sabori-flow/prompts/{lang}/`（ユーザーカスタム、init 時にコピー）
 2. パッケージ同梱 `prompts/{lang}/`（フォールバック）
 
 

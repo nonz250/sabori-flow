@@ -583,6 +583,31 @@ describe("workerMain", () => {
   });
 
   // -----------------------------------------------------------------------
+  // migrateFlatPromptTemplates
+  // -----------------------------------------------------------------------
+
+  describe("migrateFlatPromptTemplates", () => {
+    it("workerMain calls migrateFlatPromptTemplates with appConfig.language", async () => {
+      vi.mocked(deps.loadConfig).mockReturnValue(makeAppConfig({ language: "ja" }));
+      vi.mocked(deps.fetchIssues).mockResolvedValue([]);
+
+      await workerMain("/path/to/config.yml", deps);
+
+      expect(deps.migrateFlatPromptTemplates).toHaveBeenCalledOnce();
+      expect(deps.migrateFlatPromptTemplates).toHaveBeenCalledWith("ja");
+    });
+
+    it("workerMain calls migrateFlatPromptTemplates with 'en' when language is en", async () => {
+      vi.mocked(deps.loadConfig).mockReturnValue(makeAppConfig({ language: "en" }));
+      vi.mocked(deps.fetchIssues).mockResolvedValue([]);
+
+      await workerMain("/path/to/config.yml", deps);
+
+      expect(deps.migrateFlatPromptTemplates).toHaveBeenCalledWith("en");
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // autonomy startup ログ
   // -----------------------------------------------------------------------
 
