@@ -845,6 +845,26 @@ describe("processIssue", () => {
       expect(deps.postFailureComment).not.toHaveBeenCalled();
     });
 
+    it("再開後の PR 問い合わせが throw した場合も検証をスキップし done に進む", async () => {
+      const issue = makeIssue({ phase: Phase.IMPL });
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.fetchLinkedPullRequestNumbers)
+        .mockResolvedValueOnce([])
+        .mockRejectedValueOnce(new Error("API error"));
+
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
+
+      expect(result.outcome).toBe("success");
+      expect(deps.runClaude).toHaveBeenCalledTimes(2);
+      expect(deps.applyLabelTransition).toHaveBeenCalledWith(
+        "testowner/testrepo",
+        42,
+        { add: [IMPL_LABELS.done], remove: [IMPL_LABELS.inProgress] },
+      );
+      expect(deps.postSuccessComment).toHaveBeenCalledOnce();
+      expect(deps.postFailureComment).not.toHaveBeenCalled();
+    });
+
     it("plan フェーズでは PR 検証をスキップし done に進む", async () => {
       const issue = makeIssue({ phase: Phase.PLAN });
       const repoConfig = makeRepoConfig();
