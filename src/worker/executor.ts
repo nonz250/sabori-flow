@@ -33,6 +33,7 @@ export interface RunClaudeOptions {
   readonly timeoutMs?: number;
   readonly autonomy?: Autonomy;
   readonly authToken?: string;
+  readonly continueSession?: boolean;
 }
 
 /**
@@ -53,7 +54,7 @@ export async function runClaude(
 
   const autonomy = options?.autonomy ?? Autonomy.INTERACTIVE;
   const autonomyFlags = resolveClaudeAutonomyFlags(autonomy);
-  const args = ["-p", ...autonomyFlags];
+  const args = ["-p", ...(options?.continueSession ? ["--continue"] : []), ...autonomyFlags];
 
   const env: NodeJS.ProcessEnv = {
     ...process.env,
