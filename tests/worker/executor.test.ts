@@ -399,6 +399,60 @@ describe("runClaude", () => {
     });
   });
 
+  describe("continueSession オプション", () => {
+    it("continueSession が true の場合 --continue が -p の直後に含まれる", async () => {
+      mockedRunCommand.mockResolvedValue({
+        success: true,
+        stdout: "",
+        stderr: "",
+      });
+
+      await runClaude("prompt text", { continueSession: true });
+
+      const args = mockedRunCommand.mock.calls[0][1];
+      expect(args).toEqual(["-p", "--continue"]);
+    });
+
+    it("continueSession: true と autonomy: auto を併用すると --continue の後に --permission-mode auto が続く", async () => {
+      mockedRunCommand.mockResolvedValue({
+        success: true,
+        stdout: "",
+        stderr: "",
+      });
+
+      await runClaude("prompt text", { continueSession: true, autonomy: "auto" });
+
+      const args = mockedRunCommand.mock.calls[0][1];
+      expect(args).toEqual(["-p", "--continue", "--permission-mode", "auto"]);
+    });
+
+    it("continueSession が false の場合 --continue が含まれない", async () => {
+      mockedRunCommand.mockResolvedValue({
+        success: true,
+        stdout: "",
+        stderr: "",
+      });
+
+      await runClaude("prompt text", { continueSession: false });
+
+      const args = mockedRunCommand.mock.calls[0][1];
+      expect(args).toEqual(["-p"]);
+    });
+
+    it("continueSession 未指定の場合 --continue が含まれない", async () => {
+      mockedRunCommand.mockResolvedValue({
+        success: true,
+        stdout: "",
+        stderr: "",
+      });
+
+      await runClaude("prompt text");
+
+      const args = mockedRunCommand.mock.calls[0][1];
+      expect(args).toEqual(["-p"]);
+    });
+  });
+
   describe("authToken オプション", () => {
     const ENV_KEY = "CLAUDE_CODE_OAUTH_TOKEN";
     let savedEnv: string | undefined;
