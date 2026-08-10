@@ -943,6 +943,17 @@ describe("formatFailureDiagnostics", () => {
     expect(result).toContain("**Category:** No Linked Pull Request");
   });
 
+  it("IMPL_NO_CHANGE_REQUIRED カテゴリが正しいラベルで表示される", () => {
+    const diag: FailureDiagnostics = {
+      category: FailureCategory.IMPL_NO_CHANGE_REQUIRED,
+      summary: "Claude Code reported that no code change is required for this issue",
+    };
+
+    const result = formatFailureDiagnostics(diag);
+
+    expect(result).toContain("**Category:** No Change Required (reported by Claude)");
+  });
+
   it("SPEC_PROPOSAL_COMMENT カテゴリが正しいラベルで表示される", () => {
     const diag: FailureDiagnostics = {
       category: FailureCategory.SPEC_PROPOSAL_COMMENT,
