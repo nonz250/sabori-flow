@@ -156,6 +156,7 @@ export const FailureCategory = {
   CLI_TIMEOUT: "cli_timeout",
   CLI_PERMISSION_DENIED: "cli_permission_denied",
   IMPL_NO_LINKED_PR: "impl_no_linked_pr",
+  IMPL_NO_CHANGE_REQUIRED: "impl_no_change_required",
   WORKTREE_CREATION: "worktree_creation",
   GIT_FETCH: "git_fetch",
   SPEC_PROPOSAL_COMMENT: "spec_proposal_comment",

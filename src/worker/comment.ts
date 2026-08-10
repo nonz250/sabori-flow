@@ -195,6 +195,7 @@ const FAILURE_CATEGORY_LABELS: Record<FailureCategory, string> = {
   [FailureCategory.CLI_TIMEOUT]: "CLI Timeout",
   [FailureCategory.CLI_PERMISSION_DENIED]: "CLI Permission Denied (auto mode classifier)",
   [FailureCategory.IMPL_NO_LINKED_PR]: "No Linked Pull Request",
+  [FailureCategory.IMPL_NO_CHANGE_REQUIRED]: "No Change Required (reported by Claude)",
   [FailureCategory.WORKTREE_CREATION]: "Worktree Creation Error",
   [FailureCategory.GIT_FETCH]: "Git Fetch Error",
   [FailureCategory.SPEC_PROPOSAL_COMMENT]: "Spec Proposal Comment Error",
