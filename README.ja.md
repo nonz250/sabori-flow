@@ -204,6 +204,8 @@ spec フェーズはオプションです。`ai/plan` や `ai/impl` を直接付
 
 impl フェーズは、Issue に紐づく PR が作られないまま終了した場合も失敗になります。紐づけは PR 本文のクローズキーワード（`close <issue_url>`。同梱の impl テンプレートが Claude に記載を指示しています）に依存し、PR のベースはデフォルトブランチである必要があります。
 
+`claude -p` はモデルが最終メッセージを返した時点で終了するため、作業が未完了のまま正常終了することがあります。紐づく PR が見つからなかった場合、ワーカーは worktree を保持したままセッションを 1 回だけ再開し、Claude に続きを終わらせます。再開は `execution.timeout_minutes` の残予算内で行われ、残りが 5 分を切っている場合は行いません（`timeout_minutes` が小さいと再開されません）。
+
 1. `~/.sabori-flow/logs/worker.log` で詳細を確認
 2. 必要に応じて Issue の内容を修正
 3. `failed` ラベルを外して、trigger ラベル（`ai/spec`、`ai/plan`、`ai/impl`）を再度付ける
@@ -293,7 +295,7 @@ language: ja
 | `execution.max_issues_per_repo` | リポジトリあたりの Issue 処理上限。デフォルトは `1` |
 | `execution.autonomy` | CLI の自律実行レベル: `interactive`（各操作にユーザー承認が必要、推奨デフォルト）、`auto`（Claude Code の `--permission-mode auto`。分類器が危険操作のみブロック。launchd 無人実行に推奨。Claude Code v2.1.83 以降および Max / Team / Enterprise プランが必要）、`full`（`--dangerously-skip-permissions`、無制限）、`sandboxed`（将来の非-Claude CLI（OpenAI Codex 等）向け予約値、現状は interactive にフォールバック）。デフォルトは `interactive` |
 | `execution.interval_minutes` | スケジュール実行間隔（分、10-1440）。デフォルトは `10` |
-| `execution.timeout_minutes` | Claude CLI の実行タイムアウト（分、1-240）。デフォルトは `60` |
+| `execution.timeout_minutes` | Claude CLI の実行タイムアウト（分、1-240）。デフォルトは `60`。impl の再開を含むセッション全体の予算 |
 | `language` | CLI メッセージおよびプロンプトテンプレートの言語（`ja` / `en`）。デフォルトは `ja` |
 
 > **Note:** `config.yml` を編集した後は、`npx sabori-flow reinstall` を実行して launchd に変更を反映してください。
