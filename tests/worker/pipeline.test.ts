@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import { processIssue } from "../../src/worker/pipeline.js";
 import { Phase } from "../../src/worker/models.js";
@@ -7,6 +7,7 @@ import { ExecutorTimeoutError } from "../../src/worker/executor.js";
 import { WorktreeError } from "../../src/worker/worktree.js";
 import { IssueCommentsError } from "../../src/worker/issue-comments.js";
 import { CLI_TIMEOUT_WARNING_NOTE } from "../../src/worker/comment.js";
+import { IMPL_NO_CHANGE_MARKER, IMPL_RESUME_PROMPTS } from "../../src/worker/prompt.js";
 import { formatMarker } from "../../src/worker/spec-thread.js";
 import {
   makeRepoConfig,
@@ -801,6 +802,8 @@ describe("processIssue", () => {
       );
       expect(deps.postFailureComment).toHaveBeenCalledOnce();
       expect(deps.postSuccessComment).not.toHaveBeenCalled();
+      // PR が最後まで見つからないため、初回に加えて再開セッションも起動する。
+      expect(deps.runClaude).toHaveBeenCalledTimes(2);
     });
 
     it("impl で PR が 0 件の場合の失敗コメントに No Linked Pull Request と stdout/stderr が含まれ Exit Code は含まれない", async () => {
@@ -842,6 +845,26 @@ describe("processIssue", () => {
       expect(deps.postFailureComment).not.toHaveBeenCalled();
     });
 
+    it("再開後の PR 問い合わせが throw した場合も検証をスキップし done に進む", async () => {
+      const issue = makeIssue({ phase: Phase.IMPL });
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.fetchLinkedPullRequestNumbers)
+        .mockResolvedValueOnce([])
+        .mockRejectedValueOnce(new Error("API error"));
+
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
+
+      expect(result.outcome).toBe("success");
+      expect(deps.runClaude).toHaveBeenCalledTimes(2);
+      expect(deps.applyLabelTransition).toHaveBeenCalledWith(
+        "testowner/testrepo",
+        42,
+        { add: [IMPL_LABELS.done], remove: [IMPL_LABELS.inProgress] },
+      );
+      expect(deps.postSuccessComment).toHaveBeenCalledOnce();
+      expect(deps.postFailureComment).not.toHaveBeenCalled();
+    });
+
     it("plan フェーズでは PR 検証をスキップし done に進む", async () => {
       const issue = makeIssue({ phase: Phase.PLAN });
       const repoConfig = makeRepoConfig();
@@ -856,6 +879,374 @@ describe("processIssue", () => {
         { add: [PLAN_LABELS.done], remove: [PLAN_LABELS.inProgress] },
       );
       expect(deps.postSuccessComment).toHaveBeenCalledOnce();
+    });
+
+    // -------------------------------------------------------------------
+    // セッション再開: 起動条件と転送
+    // -------------------------------------------------------------------
+
+    describe("セッション再開: 起動条件と転送", () => {
+      it("PR が 0 件のとき runClaude が 2 回呼ばれる", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValue([]);
+
+        await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
+
+        expect(deps.runClaude).toHaveBeenCalledTimes(2);
+      });
+
+      it("2 回目の runClaude は worktree の cwd で continueSession: true を指定する", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValue([]);
+
+        await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
+
+        const calls = vi.mocked(deps.runClaude).mock.calls;
+        expect(calls[1][1]).toEqual(
+          expect.objectContaining({ cwd: calls[0][1].cwd, continueSession: true }),
+        );
+      });
+
+      it("2 回目の runClaude の第 1 引数が言語別の再開プロンプトと一致する", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValue([]);
+
+        await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
+
+        const resumePrompt = vi.mocked(deps.runClaude).mock.calls[1][0];
+        expect(resumePrompt).toBe(IMPL_RESUME_PROMPTS[DEFAULT_EXECUTION_CONFIG.language]);
+      });
+
+      it("セッション再開時に buildPrompt は再呼び出しされない", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValue([]);
+
+        await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
+
+        expect(deps.buildPrompt).toHaveBeenCalledOnce();
+      });
+
+      it("2 回目の runClaude に autonomy と authToken が転送される", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        const executionConfig: ExecutionConfig = { ...DEFAULT_EXECUTION_CONFIG, autonomy: "full" };
+        vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValue([]);
+
+        await processIssue(issue, repoConfig, executionConfig, "sk-ant-oat01-example", repoConfig.labels[issue.phase].trigger, deps);
+
+        const resumeOptions = vi.mocked(deps.runClaude).mock.calls[1][1];
+        expect(resumeOptions).toEqual(
+          expect.objectContaining({ autonomy: "full", authToken: "sk-ant-oat01-example" }),
+        );
+      });
+    });
+
+    // -------------------------------------------------------------------
+    // セッション再開: 結果の分岐
+    // -------------------------------------------------------------------
+
+    describe("セッション再開: 結果の分岐", () => {
+      it("再開で PR ができた場合は done 遷移する", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        vi.mocked(deps.fetchLinkedPullRequestNumbers)
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([123]);
+        vi.mocked(deps.runClaude)
+          .mockResolvedValueOnce(makeProcessResult({ stdout: "initial output" }))
+          .mockResolvedValueOnce(makeProcessResult({ stdout: "resumed output" }));
+
+        const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
+
+        expect(result.outcome).toBe("success");
+        expect(deps.applyLabelTransition).toHaveBeenCalledWith(
+          "testowner/testrepo",
+          42,
+          { add: [IMPL_LABELS.done], remove: [IMPL_LABELS.inProgress] },
+        );
+      });
+
+      it("再開で PR ができた場合、成功コメントに初回と再開の両方の出力が含まれる", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        vi.mocked(deps.fetchLinkedPullRequestNumbers)
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([123]);
+        vi.mocked(deps.runClaude)
+          .mockResolvedValueOnce(makeProcessResult({ stdout: "initial output" }))
+          .mockResolvedValueOnce(makeProcessResult({ stdout: "resumed output" }));
+
+        await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
+
+        const comment = vi.mocked(deps.postSuccessComment).mock.calls[0][2];
+        expect(comment).toContain("initial output");
+        expect(comment).toContain("resumed output");
+      });
+
+      it("再開しても PR がない場合は IMPL_NO_LINKED_PR で failed になり runClaude はちょうど 2 回呼ばれる", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValue([]);
+
+        const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
+
+        expect(result.outcome).toBe("failure");
+        expect(deps.runClaude).toHaveBeenCalledTimes(2);
+        const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
+        expect(failureMessage).toContain("**Category:** No Linked Pull Request");
+        expect(failureMessage).toContain("the resume attempt did not produce one");
+      });
+
+      it("再開の stdout に no-change マーカー行がある場合、失敗コメントに No Change Required が含まれる", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValue([]);
+        vi.mocked(deps.runClaude)
+          .mockResolvedValueOnce(makeProcessResult({ stdout: "initial output" }))
+          .mockResolvedValueOnce(
+            makeProcessResult({
+              stdout: `No code change is needed for this issue.\n${IMPL_NO_CHANGE_MARKER}`,
+            }),
+          );
+
+        const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
+
+        expect(result.outcome).toBe("failure");
+        const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
+        expect(failureMessage).toContain("**Category:** No Change Required (reported by Claude)");
+      });
+
+      it("no-change マーカーが行全体ではなく地の文に埋め込まれている場合は IMPL_NO_LINKED_PR になる", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValue([]);
+        vi.mocked(deps.runClaude)
+          .mockResolvedValueOnce(makeProcessResult({ stdout: "initial output" }))
+          .mockResolvedValueOnce(
+            makeProcessResult({
+              stdout: `We discussed it, but ${IMPL_NO_CHANGE_MARKER} was only mentioned in passing.`,
+            }),
+          );
+
+        const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
+
+        expect(result.outcome).toBe("failure");
+        const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
+        expect(failureMessage).toContain("**Category:** No Linked Pull Request");
+        expect(failureMessage).not.toContain("No Change Required (reported by Claude)");
+      });
+
+      it("再開が ExecutorTimeoutError を投げた場合は CLI_TIMEOUT の診断になる", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValueOnce([]);
+        vi.mocked(deps.runClaude)
+          .mockResolvedValueOnce(makeProcessResult({ stdout: "initial output" }))
+          .mockRejectedValueOnce(
+            makeExecutorTimeoutError({
+              timeoutMs: 250_000,
+              stdout: "partial resume stdout",
+              stderr: "partial resume stderr",
+            }),
+          );
+
+        const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
+
+        expect(result.outcome).toBe("failure");
+        const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
+        expect(failureMessage).toContain("**Category:** CLI Timeout");
+        expect(failureMessage).toContain("Claude Code CLI timed out while resuming the impl session");
+        expect(failureMessage).toContain("initial output");
+        expect(failureMessage).toContain("partial resume stdout");
+      });
+
+      it("再開が非タイムアウト例外を投げた場合は CLI_EXECUTION_ERROR の診断になり WORKTREE_CREATION にならない", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValueOnce([]);
+        vi.mocked(deps.runClaude)
+          .mockResolvedValueOnce(makeProcessResult({ stdout: "initial output" }))
+          .mockRejectedValueOnce(new Error("resume execution failed"));
+
+        const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
+
+        expect(result.outcome).toBe("failure");
+        const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
+        expect(failureMessage).toContain("**Category:** CLI Execution Error");
+        expect(failureMessage).toContain("Claude Code CLI execution failed while resuming the impl session");
+        expect(failureMessage).not.toContain("Worktree Creation Error");
+      });
+
+      it("再開が非 0 終了した場合は IMPL_NO_LINKED_PR で再開側の stderr と Exit Code が含まれる", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValue([]);
+        vi.mocked(deps.runClaude)
+          .mockResolvedValueOnce(makeProcessResult({ stdout: "initial output" }))
+          .mockResolvedValueOnce(
+            makeProcessResult({ success: false, stdout: "resume stdout", stderr: "resume stderr" }),
+          );
+
+        await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
+
+        const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
+        expect(failureMessage).toContain("**Category:** No Linked Pull Request");
+        expect(failureMessage).toContain("resume stderr");
+        expect(failureMessage).toContain("**Exit Code:** 1");
+      });
+    });
+
+    // -------------------------------------------------------------------
+    // セッション再開: 予算の境界
+    // -------------------------------------------------------------------
+
+    describe("セッション再開: 予算の境界", () => {
+      const MS_PER_MINUTE = 60_000;
+      // pipeline.ts の private 定数 MIN_IMPL_RESUME_BUDGET_MS (非 export) と同じ値。
+      const MIN_IMPL_RESUME_BUDGET_MS = 5 * MS_PER_MINUTE;
+      const TOTAL_TIMEOUT_MS = DEFAULT_EXECUTION_CONFIG.timeoutMinutes * MS_PER_MINUTE;
+
+      beforeEach(() => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+      });
+
+      afterEach(() => {
+        vi.useRealTimers();
+      });
+
+      it("残予算が MIN_IMPL_RESUME_BUDGET_MS ちょうどのとき再開する", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValue([]);
+        vi.mocked(deps.runClaude).mockImplementationOnce(async () => {
+          vi.advanceTimersByTime(TOTAL_TIMEOUT_MS - MIN_IMPL_RESUME_BUDGET_MS);
+          return makeProcessResult();
+        });
+
+        await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
+
+        expect(deps.runClaude).toHaveBeenCalledTimes(2);
+      });
+
+      it("残予算が MIN_IMPL_RESUME_BUDGET_MS より 1ms 少ないとき再開しない", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValue([]);
+        vi.mocked(deps.runClaude).mockImplementationOnce(async () => {
+          vi.advanceTimersByTime(TOTAL_TIMEOUT_MS - MIN_IMPL_RESUME_BUDGET_MS + 1);
+          return makeProcessResult();
+        });
+
+        await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
+
+        expect(deps.runClaude).toHaveBeenCalledTimes(1);
+      });
+
+      it("再開しない場合の失敗コメントに予算不足の summary が含まれる", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValue([]);
+        vi.mocked(deps.runClaude).mockImplementationOnce(async () => {
+          vi.advanceTimersByTime(TOTAL_TIMEOUT_MS - MIN_IMPL_RESUME_BUDGET_MS + 1);
+          return makeProcessResult();
+        });
+
+        await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
+
+        const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
+        expect(failureMessage).toContain(
+          "not enough of the timeout budget remained to resume the session",
+        );
+      });
+
+      it("2 回目の runClaude の timeoutMs に残予算そのものが渡される", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        const elapsedMs = 10 * MS_PER_MINUTE;
+        vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValue([]);
+        vi.mocked(deps.runClaude).mockImplementationOnce(async () => {
+          vi.advanceTimersByTime(elapsedMs);
+          return makeProcessResult();
+        });
+
+        await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
+
+        const resumeOptions = vi.mocked(deps.runClaude).mock.calls[1][1];
+        expect(resumeOptions.timeoutMs).toBe(TOTAL_TIMEOUT_MS - elapsedMs);
+      });
+    });
+
+    // -------------------------------------------------------------------
+    // セッション再開: 再開しない経路のガード
+    // -------------------------------------------------------------------
+
+    describe("セッション再開: 再開しない経路のガード", () => {
+      it("初回で PR が見つかる場合、runClaude は 1 回だけ呼ばれる", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+
+        await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
+
+        expect(deps.runClaude).toHaveBeenCalledTimes(1);
+      });
+
+      it("PR 照会自体が throw した場合は再開せず runClaude は 1 回だけ呼ばれる", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        vi.mocked(deps.fetchLinkedPullRequestNumbers).mockRejectedValue(new Error("API error"));
+
+        await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
+
+        expect(deps.runClaude).toHaveBeenCalledTimes(1);
+      });
+
+      it("plan フェーズでは runClaude が 1 回だけ呼ばれる", async () => {
+        const issue = makeIssue({ phase: Phase.PLAN });
+        const repoConfig = makeRepoConfig();
+
+        await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
+
+        expect(deps.runClaude).toHaveBeenCalledTimes(1);
+      });
+
+      it("spec フェーズでは runClaude が 1 回だけ呼ばれる", async () => {
+        const issue = makeIssue({ phase: Phase.SPEC });
+        const repoConfig = makeRepoConfig();
+
+        await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
+
+        expect(deps.runClaude).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    // -------------------------------------------------------------------
+    // セッション再開: 出力のサニタイズ
+    // -------------------------------------------------------------------
+
+    describe("セッション再開: 出力のサニタイズ", () => {
+      it("初回と再開の両方の出力に含まれるシークレットが成功コメントで両方とも REDACTED になる", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        const initialSecret = "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijkl";
+        const resumeSecret = "ghp_ZYXWVUTSRQPONMLKJIHGFEDCBAzyxwvutsrqponm";
+        vi.mocked(deps.fetchLinkedPullRequestNumbers)
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([123]);
+        vi.mocked(deps.runClaude)
+          .mockResolvedValueOnce(makeProcessResult({ stdout: `token: ${initialSecret}` }))
+          .mockResolvedValueOnce(makeProcessResult({ stdout: `token: ${resumeSecret}` }));
+
+        await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
+
+        const comment = vi.mocked(deps.postSuccessComment).mock.calls[0][2];
+        const redactedCount = (comment.match(/\[REDACTED\]/g) ?? []).length;
+        expect(redactedCount).toBe(2);
+      });
     });
   });
 

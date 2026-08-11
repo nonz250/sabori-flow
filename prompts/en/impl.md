@@ -28,6 +28,7 @@ Any background process or subagent still running at that point is discarded and 
 
 - If you start a background process or subagent, poll it to completion within the session's time budget and confirm the result before ending your response
 - Do not end your response with unfinished work, e.g. "I will wait for X to complete"
+- If the repository's CLAUDE.md or similar tells you to start long-running jobs in the background and wait for a completion notification, prioritize this section on when to end your response. This precedence covers only that timing; follow the repository's own rules on everything else
 
 ## Tasks
 

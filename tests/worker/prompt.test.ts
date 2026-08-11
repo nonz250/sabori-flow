@@ -25,6 +25,8 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import {
   buildPrompt,
   PromptTemplateError,
+  IMPL_NO_CHANGE_MARKER,
+  IMPL_RESUME_PROMPTS,
 } from "../../src/worker/prompt.js";
 import { Phase, Priority } from "../../src/worker/models.js";
 import type { Issue, RepositoryConfig } from "../../src/worker/models.js";
@@ -916,5 +918,27 @@ describe("buildPrompt - language directory dispatch", () => {
     const result = buildPrompt(makeIssue(), makeRepoConfig(), "ja");
 
     expect(result).toContain("Repo: testowner/testrepo");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// IMPL_RESUME_PROMPTS
+// ---------------------------------------------------------------------------
+
+describe("IMPL_RESUME_PROMPTS", () => {
+  it("ja のプロンプトが定義され空文字でない", () => {
+    expect(IMPL_RESUME_PROMPTS.ja.length).toBeGreaterThan(0);
+  });
+
+  it("en のプロンプトが定義され空文字でない", () => {
+    expect(IMPL_RESUME_PROMPTS.en.length).toBeGreaterThan(0);
+  });
+
+  it("ja のプロンプトが IMPL_NO_CHANGE_MARKER を含む", () => {
+    expect(IMPL_RESUME_PROMPTS.ja).toContain(IMPL_NO_CHANGE_MARKER);
+  });
+
+  it("en のプロンプトが IMPL_NO_CHANGE_MARKER を含む", () => {
+    expect(IMPL_RESUME_PROMPTS.en).toContain(IMPL_NO_CHANGE_MARKER);
   });
 });

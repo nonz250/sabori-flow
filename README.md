@@ -204,6 +204,8 @@ When processing fails, a `failed` label is applied and a failure comment is post
 
 The impl phase also fails when a run finishes without a pull request linked to the Issue. Linking relies on a closing keyword (`close <issue_url>`, which the bundled impl template instructs Claude to include) in a pull request that targets the default branch.
 
+Because `claude -p` terminates as soon as the model returns its final message, a run can exit successfully while work is still unfinished. When no linked pull request is found, the worker keeps the worktree and resumes the session once so Claude can finish. The resume runs within whatever is left of `execution.timeout_minutes`, and is skipped when less than five minutes remain — so a small `timeout_minutes` disables it.
+
 1. Check `~/.sabori-flow/logs/worker.log` for details
 2. Fix the Issue content as needed
 3. Remove the `failed` label and re-apply the trigger label (`ai/spec`, `ai/plan`, or `ai/impl`)
@@ -293,7 +295,7 @@ Labels default to `ai/*` (e.g. `ai/spec`, `ai/plan/in-progress`). To customize p
 | `execution.max_issues_per_repo` | Maximum number of issues to process per repository. Default is `1` |
 | `execution.autonomy` | CLI autonomy level: `interactive` (requires user approval for each action — recommended default), `auto` (Claude Code's `--permission-mode auto`; classifier blocks only dangerous actions — recommended for unattended launchd runs, requires Claude Code v2.1.83+ and a Max/Team/Enterprise plan), `full` (`--dangerously-skip-permissions`, unrestricted), `sandboxed` (reserved for future non-Claude CLIs such as OpenAI Codex; currently falls back to interactive). Default is `interactive` |
 | `execution.interval_minutes` | Scheduled execution interval in minutes (10-1440). Default is `10` |
-| `execution.timeout_minutes` | Claude CLI execution timeout in minutes (1-240). Default is `60` |
+| `execution.timeout_minutes` | Claude CLI execution timeout in minutes (1-240). Default is `60`. Budgets the whole impl session, including a possible resume |
 | `language` | Language for CLI messages and prompt templates (`ja` / `en`). Default is `ja` |
 
 > **Note:** After editing `config.yml`, run `npx sabori-flow reinstall` to apply the changes to launchd.

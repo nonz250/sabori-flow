@@ -2,7 +2,7 @@ import type { Language } from "../i18n/types.js";
 import type { Issue, IssueComment, PhaseLabels, RepositoryConfig, ExecutionConfig, FailureDiagnostics, StepResult, SpecPhaseLabels } from "./models.js";
 import { Autonomy, Phase, FailureCategory, repoFullName } from "./models.js";
 import type { ProcessResult } from "./process.js";
-import { buildPrompt } from "./prompt.js";
+import { buildPrompt, IMPL_NO_CHANGE_MARKER, IMPL_RESUME_PROMPTS } from "./prompt.js";
 import { runClaude, ExecutorTimeoutError } from "./executor.js";
 import { applyLabelTransition } from "./label.js";
 import type { LabelTransition } from "./label.js";
@@ -24,13 +24,22 @@ const logger = createLogger("pipeline");
 
 const MS_PER_MINUTE = 60_000;
 
+// Not a guarantee of "enough time to re-verify" — that cost is entirely
+// repository-dependent and unknowable to the worker. This floor only exists
+// to skip the resume when so little budget remains that launching claude
+// again would just discard context without a realistic chance to reach
+// `gh pr create`.
+const MIN_IMPL_RESUME_BUDGET_MS = 5 * MS_PER_MINUTE;
+
+const RESUME_OUTPUT_SEPARATOR = "\n\n--- resumed session ---\n\n";
+
 // ---------- Dependency Injection ----------
 
 export interface PipelineDeps {
   buildPrompt: (issue: Issue, repoConfig: RepositoryConfig, language: Language, specContext?: string | null) => string;
   runClaude: (
     prompt: string,
-    options: { cwd: string; autonomy?: Autonomy; timeoutMs?: number; authToken?: string },
+    options: { cwd: string; autonomy?: Autonomy; timeoutMs?: number; authToken?: string; continueSession?: boolean },
   ) => Promise<ProcessResult>;
   applyLabelTransition: (
     repo: string,
@@ -171,6 +180,12 @@ export async function processIssue(
           return { outcome: "failure", claudeExecuted: false };
         }
 
+        // Anchored before the initial call (not after it returns) so
+        // timeoutMinutes bounds the whole impl session — initial attempt
+        // plus a possible resume — as a single wall-clock budget, rather
+        // than granting the resume a fresh timeoutMinutes of its own.
+        const implDeadlineMs = Date.now() + executionConfig.timeoutMinutes * MS_PER_MINUTE;
+
         let result: ProcessResult;
         try {
           result = await deps.runClaude(prompt, {
@@ -231,23 +246,23 @@ export async function processIssue(
         // background processes or subagents it spawned are still running.
         // Exit code alone therefore cannot confirm that impl actually
         // produced a deliverable.
-        if (
-          issue.phase === Phase.IMPL &&
-          !(await implPullRequestCheckPassed(deps, repo, issue.number))
-        ) {
-          logger.error(
-            "Issue #%s: impl が成功終了しましたが紐づく PR がありません [repo=%s]",
-            issue.number,
+        let successOutput = result.stdout;
+        if (issue.phase === Phase.IMPL) {
+          const completion = await resolveImplCompletion(
+            deps,
             repo,
+            issue,
+            executionConfig,
+            authToken,
+            worktreePath,
+            result,
+            implDeadlineMs,
           );
-          await handleFailure(deps, repo, issue.number, phaseLabels, {
-            category: FailureCategory.IMPL_NO_LINKED_PR,
-            summary:
-              "Claude Code CLI exited 0, but no pull request is linked to close this issue",
-            stdout: result.stdout,
-            stderr: result.stderr,
-          });
-          return { outcome: "failure", claudeExecuted: true };
+          if (!completion.linked) {
+            await handleFailure(deps, repo, issue.number, phaseLabels, completion.diagnostics);
+            return { outcome: "failure", claudeExecuted: true };
+          }
+          successOutput = completion.stdout;
         }
 
         // plan/impl success: done + success comment (level 3)
@@ -286,7 +301,7 @@ export async function processIssue(
         }
 
         try {
-          await deps.postSuccessComment(repo, issue.number, sanitizeOutput(result.stdout));
+          await deps.postSuccessComment(repo, issue.number, sanitizeOutput(successOutput));
         } catch (error: unknown) {
           const errorMessage = error instanceof Error ? error.message : String(error);
           logger.warn(
@@ -622,6 +637,133 @@ export async function resumeSpecReview(
     case "wait":
       return { outcome: "deferred", claudeExecuted: false };
   }
+}
+
+type ImplCompletion =
+  | { readonly linked: true; readonly stdout: string }
+  | { readonly linked: false; readonly diagnostics: FailureDiagnostics };
+
+async function resolveImplCompletion(
+  deps: PipelineDeps,
+  repo: string,
+  issue: Issue,
+  executionConfig: ExecutionConfig,
+  authToken: string | null,
+  worktreePath: string,
+  initialResult: ProcessResult,
+  deadlineMs: number,
+): Promise<ImplCompletion> {
+  if (await implPullRequestCheckPassed(deps, repo, issue.number)) {
+    return { linked: true, stdout: initialResult.stdout };
+  }
+
+  const remainingMs = deadlineMs - Date.now();
+  if (remainingMs < MIN_IMPL_RESUME_BUDGET_MS) {
+    logger.error(
+      "Issue #%s: impl が成功終了しましたが紐づく PR がなく、タイムアウト予算が残っていないため再開しません [repo=%s]",
+      issue.number,
+      repo,
+    );
+    return {
+      linked: false,
+      diagnostics: {
+        category: FailureCategory.IMPL_NO_LINKED_PR,
+        summary:
+          "Claude Code CLI exited 0 without a linked pull request; not enough of the timeout budget remained to resume the session",
+        stdout: initialResult.stdout,
+        stderr: initialResult.stderr,
+      },
+    };
+  }
+
+  logger.info(
+    "Issue #%s: impl が成功終了しましたが紐づく PR がないためセッションを再開します [repo=%s, remainingMs=%s]",
+    issue.number,
+    repo,
+    remainingMs,
+  );
+
+  let resumeResult: ProcessResult;
+  try {
+    // --continue resolves the conversation by cwd, and worktreePath is
+    // unique per issue run (issue-<number>-<timestamp>), so concurrent
+    // issues under max_parallel > 1 can never resume each other's session.
+    resumeResult = await deps.runClaude(IMPL_RESUME_PROMPTS[executionConfig.language], {
+      cwd: worktreePath,
+      autonomy: executionConfig.autonomy,
+      timeoutMs: remainingMs,
+      authToken: authToken ?? undefined,
+      continueSession: true,
+    });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error(
+      "Issue #%s: impl セッションの再開に失敗しました [repo=%s]: %s",
+      issue.number,
+      repo,
+      errorMessage,
+    );
+    if (error instanceof ExecutorTimeoutError) {
+      return {
+        linked: false,
+        diagnostics: {
+          category: FailureCategory.CLI_TIMEOUT,
+          summary: "Claude Code CLI timed out while resuming the impl session",
+          timeoutMs: error.timeoutMs,
+          errorMessage,
+          stdout: initialResult.stdout + RESUME_OUTPUT_SEPARATOR + error.stdout,
+          stderr: initialResult.stderr + RESUME_OUTPUT_SEPARATOR + error.stderr,
+        },
+      };
+    }
+    return {
+      linked: false,
+      diagnostics: {
+        category: FailureCategory.CLI_EXECUTION_ERROR,
+        summary: "Claude Code CLI execution failed while resuming the impl session",
+        errorMessage,
+        stdout: initialResult.stdout,
+        stderr: initialResult.stderr,
+      },
+    };
+  }
+
+  if (await implPullRequestCheckPassed(deps, repo, issue.number)) {
+    return {
+      linked: true,
+      stdout: initialResult.stdout + RESUME_OUTPUT_SEPARATOR + resumeResult.stdout,
+    };
+  }
+
+  logger.error(
+    "Issue #%s: セッション再開後も紐づく PR がありません [repo=%s]",
+    issue.number,
+    repo,
+  );
+
+  if (resumeResult.stdout.split("\n").some((line) => line.trim() === IMPL_NO_CHANGE_MARKER)) {
+    return {
+      linked: false,
+      diagnostics: {
+        category: FailureCategory.IMPL_NO_CHANGE_REQUIRED,
+        summary: "Claude Code reported that no code change is required for this issue",
+        stdout: initialResult.stdout + RESUME_OUTPUT_SEPARATOR + resumeResult.stdout,
+        stderr: initialResult.stderr + RESUME_OUTPUT_SEPARATOR + resumeResult.stderr,
+      },
+    };
+  }
+
+  return {
+    linked: false,
+    diagnostics: {
+      category: FailureCategory.IMPL_NO_LINKED_PR,
+      summary:
+        "Claude Code CLI exited 0 without a linked pull request; the resume attempt did not produce one",
+      stdout: initialResult.stdout + RESUME_OUTPUT_SEPARATOR + resumeResult.stdout,
+      stderr: initialResult.stderr + RESUME_OUTPUT_SEPARATOR + resumeResult.stderr,
+      exitCode: resumeResult.success ? undefined : resumeResult.exitCode,
+    },
+  };
 }
 
 /**

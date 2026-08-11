@@ -75,7 +75,7 @@ src/
    - git worktree 作成（`~/.sabori-flow/worktrees/<owner>/<repo>/issue-<番号>-<タイムスタンプ>/` に `origin/<default_branch>` を起点にブランチを作成）
    - プロンプト生成（テンプレート + Issue 情報）
    - `claude -p` を worktree 内で実行（`execution.autonomy` に応じてフラグを付与）
-   - impl のみ: Issue に紐づく PR の存在を検証（0 件なら失敗扱い。検証自体が失敗した場合は WARNING を残して成功扱い）
+   - impl のみ: Issue に紐づく PR の存在を検証。0 件なら worktree を保持したまま `claude -p --continue` でセッションを 1 回だけ再開し、再照会する（検証自体が失敗した場合は WARNING を残して成功扱い）
    - 成功: 出力サニタイズ後、done ラベル + 成功コメント / 失敗: failed ラベル + 構造化された失敗診断コメント（カテゴリ、stderr、stdout、exit code 等）
    - worktree 削除（finally）
 
@@ -90,10 +90,18 @@ spec の review 状態では、ワーカーが毎サイクル評価を行う。�
 ### エラーハンドリング 3 段階
 
 - **レベル 1**: trigger→in-progress 失敗 → 即中断、次回リトライ可能
-- **レベル 2**: プロンプト生成/CLI 実行失敗/impl の PR 未作成 → failed 遷移 + 構造化された失敗診断コメント（`FailureDiagnostics` → `formatFailureDiagnostics()` でフォーマット）
+- **レベル 2**: プロンプト生成/CLI 実行失敗/再開後も impl の PR が未作成 → failed 遷移 + 構造化された失敗診断コメント（`FailureDiagnostics` → `formatFailureDiagnostics()` でフォーマット）
 - **レベル 3**: 後処理（done/failed ラベル遷移、コメント投稿）失敗 → ログ WARNING のみ
 
 `:failed` に遷移した Issue は trigger ラベルが剥がれるため、次回フェッチ対象から外れる (自動リトライされない)。再実行するにはユーザーが手動で trigger ラベル (`ai/spec` 等) を再付与する必要がある。
+
+### impl セッションの再開
+
+`claude -p` はモデルが最終メッセージを返した時点で終了するため、モデルがバックグラウンドの検証完了を待つつもりでターンを終えると exit 0 のまま PR が作られない。impl で PR が 0 件だった場合、worktree を保持したまま `claude -p --continue` でセッションを 1 回だけ再開し、PR を再照会する。
+
+`execution.timeout_minutes` は初回実行と再開を合わせた壁時計予算として扱う。初回実行の直前に deadline を確定し、再開には残予算を渡す。残予算が `MIN_IMPL_RESUME_BUDGET_MS` (5 分) を下回る場合は再開しない。
+
+再開後も PR が無い場合、Claude が最終行に no-change マーカーを出力していれば `IMPL_NO_CHANGE_REQUIRED`、そうでなければ `IMPL_NO_LINKED_PR` として failed に遷移する。マーカーはユーザー制御の Issue 本文が混ざったモデル出力なので信頼境界ではない。診断カテゴリを分けるだけで、終端ラベルは `:failed` (人間ゲート) のまま変えない。
 
 ### 並列実行
 

@@ -82,6 +82,10 @@ describe("FailureCategory", () => {
     expect(FailureCategory.IMPL_NO_LINKED_PR).toBe("impl_no_linked_pr");
   });
 
+  it("IMPL_NO_CHANGE_REQUIRED の値が 'impl_no_change_required' である", () => {
+    expect(FailureCategory.IMPL_NO_CHANGE_REQUIRED).toBe("impl_no_change_required");
+  });
+
   it("WORKTREE_CREATION の値が 'worktree_creation' である", () => {
     expect(FailureCategory.WORKTREE_CREATION).toBe("worktree_creation");
   });
