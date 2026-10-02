@@ -58,7 +58,7 @@ import type { RepositoryInput } from "../../src/commands/helpers/repository-prom
 import { setTokenCommand } from "../../src/commands/set-token.js";
 import { getBaseDir, getConfigPath, getUserPromptsDir, getUserPromptsLanguageDir, getDefaultPromptsDir } from "../../src/utils/paths.js";
 import { migrateFlatPromptTemplates } from "../../src/worker/prompt-migration.js";
-import { Autonomy } from "../../src/worker/models.js";
+import { Agent, Autonomy } from "../../src/worker/models.js";
 import type { Language } from "../../src/i18n/types.js";
 
 const mockedFs = vi.mocked(fs);
@@ -88,6 +88,7 @@ function makeRepoInput(overrides?: Partial<RepositoryInput>): RepositoryInput {
 
 interface InitPromptAnswers {
   language?: Language;
+  agent?: Agent;
   autonomy?: Autonomy;
   intervalMinutes?: string;
 }
@@ -99,6 +100,7 @@ interface InitPromptAnswers {
  */
 function setupInitPrompts(answers: InitPromptAnswers = {}): void {
   const language: Language = answers.language ?? "ja";
+  const agent: Agent = answers.agent ?? Agent.CLAUDE;
   const autonomy: Autonomy = answers.autonomy ?? Autonomy.INTERACTIVE;
   const intervalMinutes = answers.intervalMinutes ?? "10";
 
@@ -110,6 +112,9 @@ function setupInitPrompts(answers: InitPromptAnswers = {}): void {
       msgStr.toLowerCase().includes("autonomy")
     ) {
       return autonomy;
+    }
+    if (msgStr.includes("実行エージェント") || msgStr.toLowerCase().includes("execution agent")) {
+      return agent;
     }
     return language;
   });
@@ -323,6 +328,24 @@ describe("initCommand - 認証トークン設定ステップ", () => {
       true,
     );
   });
+
+  it("Codex 選択時は Claude トークンを尋ねず codex login を案内する", async () => {
+    setupInitPrompts({ agent: Agent.CODEX });
+    mockExistsSyncForConfig(false);
+    mockedPromptRepository.mockResolvedValueOnce(makeRepoInput());
+    mockedConfirm.mockResolvedValueOnce(false); // 別リポジトリ追加: No
+
+    await runInitCommand();
+
+    expect(mockedSetTokenCommand).not.toHaveBeenCalled();
+    expect(mockedConfirm.mock.calls.some((call) => {
+      const msg = (call[0] as { message?: unknown }).message;
+      return typeof msg === "string" && msg.includes("トークン");
+    })).toBe(false);
+    expect(consoleSpy.log).toHaveBeenCalledWith(
+      expect.stringContaining("codex login"),
+    );
+  });
 });
 
 describe("initCommand - 書き込まれる YAML の内容", () => {
@@ -368,6 +391,19 @@ describe("initCommand - 書き込まれる YAML の内容", () => {
     expect(execution).not.toHaveProperty("log_dir");
     expect(execution.max_parallel).toBe(1);
     expect(execution.max_issues_per_repo).toBe(1);
+    expect(execution.agent).toBe("claude");
+  });
+
+  it("Codex を選択した場合 execution.agent が 'codex' になる", async () => {
+    setupInitPrompts({ agent: Agent.CODEX });
+    mockExistsSyncForConfig(false);
+    mockedPromptRepository.mockResolvedValueOnce(makeRepoInput());
+    mockedConfirm.mockResolvedValueOnce(false);
+
+    await runInitCommand();
+
+    const execution = parseWrittenYaml().execution as Record<string, unknown>;
+    expect(execution.agent).toBe("codex");
   });
 
   it("execution セクションに interval_minutes と timeout_minutes が含まれる", async () => {

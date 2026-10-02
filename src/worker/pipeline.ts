@@ -694,9 +694,9 @@ async function resolveImplCompletion(
 
   let resumeResult: ProcessResult;
   try {
-    // --continue resolves the conversation by cwd, and worktreePath is
-    // unique per issue run (issue-<number>-<timestamp>), so concurrent
-    // issues under max_parallel > 1 can never resume each other's session.
+    // Both Claude --continue and Codex exec resume --last resolve the
+    // conversation by cwd. worktreePath is unique per issue run, so
+    // concurrent issues cannot resume each other's session.
     resumeResult = await deps.runAgent(IMPL_RESUME_PROMPTS[executionConfig.language], {
       cwd: worktreePath,
       agent: executionConfig.agent,

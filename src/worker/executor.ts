@@ -230,13 +230,16 @@ export function resolveCodexAutonomyFlags(autonomy: Autonomy): readonly string[]
   }
 }
 
-/** `codex exec resume` supports --yolo but not --sandbox. */
+/**
+ * `codex exec resume` supports --yolo but not --sandbox. For other modes,
+ * Codex restores the resumed session's original sandbox configuration.
+ */
 function resolveCodexResumeAutonomyFlags(autonomy: Autonomy): readonly string[] {
   return autonomy === Autonomy.FULL ? ["--yolo"] : [];
 }
 
 /**
- * エンジンに応じた CLI を実行するディスパッチ関数。
+ * エージェントに応じた CLI を実行するディスパッチ関数。
  */
 export async function runAgent(
   agent: Agent,

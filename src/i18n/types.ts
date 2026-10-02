@@ -13,6 +13,7 @@ export interface MessageKeys {
   "init.runInstallNext": string;
   "init.setTokenNow": string;
   "init.tokenSkipped": string;
+  "init.codexAuthHint": string;
   "init.templateExists": string;
   "init.templateSkipped": string;
   "init.templatesCopied": string;

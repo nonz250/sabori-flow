@@ -53,6 +53,7 @@ function makeExecution(
   return {
     maxParallel: 1,
     maxIssuesPerRepo: 1,
+    agent: "claude" as const,
     autonomy: "interactive" as const,
     intervalMinutes: 60,
     timeoutMinutes: 60,
@@ -169,7 +170,7 @@ describe("inspectConfig - auto_impl_after_plan source detection", () => {
 // ---------- Tests: execution source detection ----------
 
 describe("inspectConfig - execution source detection", () => {
-  it("execution key omitted in raw makes all 5 items 'default'", () => {
+  it("execution key omitted in raw makes all 6 items 'default'", () => {
     const config = makeConfig();
     const raw = { repositories: [makeRawRepo()] };
 
@@ -177,6 +178,7 @@ describe("inspectConfig - execution source detection", () => {
 
     expect(result.execution.maxParallel.source).toBe("default");
     expect(result.execution.maxIssuesPerRepo.source).toBe("default");
+    expect(result.execution.agent.source).toBe("default");
     expect(result.execution.autonomy.source).toBe("default");
     expect(result.execution.intervalMinutes.source).toBe("default");
     expect(result.execution.timeoutMinutes.source).toBe("default");
@@ -186,12 +188,13 @@ describe("inspectConfig - execution source detection", () => {
     const config = makeConfig({
       execution: makeExecution({
         maxParallel: 4,
+        agent: "codex" as const,
         autonomy: "full" as const,
       }),
     });
     const raw = {
       repositories: [makeRawRepo()],
-      execution: { max_parallel: 4, autonomy: "full" },
+      execution: { max_parallel: 4, agent: "codex", autonomy: "full" },
     };
 
     const result = inspectConfig(config, raw);
@@ -199,6 +202,8 @@ describe("inspectConfig - execution source detection", () => {
     expect(result.execution.maxParallel.source).toBe("file");
     expect(result.execution.maxParallel.value).toBe(4);
     expect(result.execution.maxIssuesPerRepo.source).toBe("default");
+    expect(result.execution.agent.source).toBe("file");
+    expect(result.execution.agent.value).toBe("codex");
     expect(result.execution.autonomy.source).toBe("file");
     expect(result.execution.autonomy.value).toBe("full");
     expect(result.execution.intervalMinutes.source).toBe("default");

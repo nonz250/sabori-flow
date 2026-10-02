@@ -229,6 +229,7 @@ function renderExecutionSection(execution: ConfigInspection["execution"]): {
   const entries: [string, string][] = [
     ["max_parallel", formatSourced(execution.maxParallel)],
     ["max_issues_per_repo", formatSourced(execution.maxIssuesPerRepo)],
+    ["agent", formatSourced(execution.agent)],
     ["autonomy", formatSourced(execution.autonomy)],
     ["interval_minutes", formatSourced(execution.intervalMinutes)],
     ["timeout_minutes", formatSourced(execution.timeoutMinutes)],
@@ -237,6 +238,7 @@ function renderExecutionSection(execution: ConfigInspection["execution"]): {
   const sourcedFields = [
     execution.maxParallel,
     execution.maxIssuesPerRepo,
+    execution.agent,
     execution.autonomy,
     execution.intervalMinutes,
     execution.timeoutMinutes,

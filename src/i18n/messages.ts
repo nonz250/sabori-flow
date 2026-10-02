@@ -12,6 +12,8 @@ const jaMessages: MessageKeys = {
   "init.setTokenNow": "Claude 認証トークンを今すぐ設定しますか?",
   "init.tokenSkipped":
     "後で `sabori-flow set-token` で設定できます。",
+  "init.codexAuthHint":
+    "Codex CLI の認証を確認してください。未認証の場合は `codex login` を実行してください。",
   "init.templateExists": "{file} は既に存在します。上書きしますか?",
   "init.templateSkipped": "スキップしました: {file}",
   "init.templatesCopied":
@@ -142,6 +144,8 @@ const enMessages: MessageKeys = {
   "init.runInstallNext": "Next, run `sabori-flow install`.",
   "init.setTokenNow": "Set the Claude auth token now?",
   "init.tokenSkipped": "You can set it later with `sabori-flow set-token`.",
+  "init.codexAuthHint":
+    "Verify Codex CLI authentication. Run `codex login` if you are not signed in.",
   "init.templateExists": "{file} already exists. Overwrite?",
   "init.templateSkipped": "Skipped: {file}",
   "init.templatesCopied": "\nPrompt templates copied to: {dir}",
