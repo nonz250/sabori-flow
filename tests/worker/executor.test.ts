@@ -652,7 +652,7 @@ describe("runCodex", () => {
   });
 
   describe("プロンプトの渡し方", () => {
-    it("プロンプトが位置引数として渡され stdin (input) は使用されない", async () => {
+    it("プロンプトが stdin から渡される", async () => {
       mockedRunCommand.mockResolvedValue({
         success: true,
         stdout: "Codex output",
@@ -665,8 +665,8 @@ describe("runCodex", () => {
       expect(mockedRunCommand).toHaveBeenCalledOnce();
       expect(mockedRunCommand).toHaveBeenCalledWith(
         "codex",
-        ["exec", prompt],
-        { cwd: undefined, timeoutMs: 3_600_000 },
+        ["exec", "-"],
+        { input: prompt, cwd: undefined, timeoutMs: 3_600_000 },
       );
     });
   });
@@ -715,7 +715,7 @@ describe("runCodex", () => {
   });
 
   describe("autonomy オプション", () => {
-    it("autonomy が full の場合 --dangerously-bypass-approvals-and-sandbox が含まれる", async () => {
+    it("autonomy が full の場合 --yolo が含まれる", async () => {
       mockedRunCommand.mockResolvedValue({
         success: true,
         stdout: "",
@@ -725,10 +725,10 @@ describe("runCodex", () => {
       await runCodex("prompt text", { autonomy: "full" });
 
       const args = mockedRunCommand.mock.calls[0][1];
-      expect(args).toContain("--dangerously-bypass-approvals-and-sandbox");
+      expect(args).toContain("--yolo");
     });
 
-    it("autonomy が sandboxed の場合 --full-auto が含まれる", async () => {
+    it("autonomy が sandboxed の場合 workspace-write sandbox が含まれる", async () => {
       mockedRunCommand.mockResolvedValue({
         success: true,
         stdout: "",
@@ -738,7 +738,7 @@ describe("runCodex", () => {
       await runCodex("prompt text", { autonomy: "sandboxed" });
 
       const args = mockedRunCommand.mock.calls[0][1];
-      expect(args).toContain("--full-auto");
+      expect(args).toEqual(["exec", "--sandbox", "workspace-write", "-"]);
     });
 
     it("autonomy が interactive の場合 追加フラグが含まれない", async () => {
@@ -751,7 +751,19 @@ describe("runCodex", () => {
       await runCodex("prompt text", { autonomy: "interactive" });
 
       const args = mockedRunCommand.mock.calls[0][1];
-      expect(args).toEqual(["exec", "prompt text"]);
+      expect(args).toEqual(["exec", "-"]);
+    });
+
+    it("continueSession の場合は最新の cwd セッションを --yolo で再開する", async () => {
+      mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
+
+      await runCodex("continue", { autonomy: "full", continueSession: true });
+
+      expect(mockedRunCommand).toHaveBeenCalledWith(
+        "codex",
+        ["exec", "resume", "--yolo", "--last", "-"],
+        { input: "continue", cwd: undefined, timeoutMs: 3_600_000 },
+      );
     });
   });
 
@@ -799,12 +811,13 @@ describe("runCodex", () => {
 // =========================================================================
 
 describe("resolveCodexAutonomyFlags", () => {
-  it("full の場合 --dangerously-bypass-approvals-and-sandbox を返す", () => {
-    expect(resolveCodexAutonomyFlags("full")).toEqual(["--dangerously-bypass-approvals-and-sandbox"]);
+  it("full の場合 --yolo を返す", () => {
+    expect(resolveCodexAutonomyFlags("full")).toEqual(["--yolo"]);
   });
 
-  it("sandboxed の場合 --full-auto を返す", () => {
-    expect(resolveCodexAutonomyFlags("sandboxed")).toEqual(["--full-auto"]);
+  it("auto と sandboxed の場合 workspace-write sandbox を返す", () => {
+    expect(resolveCodexAutonomyFlags("auto")).toEqual(["--sandbox", "workspace-write"]);
+    expect(resolveCodexAutonomyFlags("sandboxed")).toEqual(["--sandbox", "workspace-write"]);
   });
 
   it("interactive の場合 空配列を返す", () => {
@@ -844,7 +857,7 @@ describe("runAgent", () => {
     );
   });
 
-  it("agent が 'codex' の場合 runCodex にディスパッチされる (位置引数)", async () => {
+  it("agent が 'codex' の場合 runCodex にディスパッチされる (stdin 経由)", async () => {
     mockedRunCommand.mockResolvedValue({
       success: true,
       stdout: "Codex output",
@@ -855,11 +868,11 @@ describe("runAgent", () => {
 
     expect(result.success).toBe(true);
     expect(result.stdout).toBe("Codex output");
-    // runCodex は位置引数を使い、input は渡さない
+    // runCodex は `-` を指定して stdin を使う
     expect(mockedRunCommand).toHaveBeenCalledWith(
       "codex",
-      ["exec", "test prompt"],
-      { cwd: undefined, timeoutMs: 3_600_000 },
+      ["exec", "-"],
+      { input: "test prompt", cwd: undefined, timeoutMs: 3_600_000 },
     );
   });
 });

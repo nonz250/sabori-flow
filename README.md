@@ -4,7 +4,7 @@
 
 <h1>sabori-flow</h1>
 
-<p><strong>Automated GitHub Issue resolver powered by Claude Code CLI.</strong><br>
+<p><strong>Automated GitHub Issue resolver powered by Claude Code CLI or OpenAI Codex CLI.</strong><br>
 Add a label to an Issue -- sabori-flow handles the rest: planning, implementation, and pull request creation.</p>
 
 <p>
@@ -53,7 +53,7 @@ If someone has to sit there clicking "Allow" over and over, that defeats the pur
 
 ### LLM-agnostic architecture
 
-The AI agent is a single CLI call in the pipeline. It currently uses Claude Code CLI, but any CLI-based AI agent (OpenAI Codex, GitHub Copilot CLI, etc.) can be swapped in without changing the workflow. *(Multi-engine support is planned but not yet implemented.)*
+The AI agent is a single CLI call in the pipeline. Choose Claude Code CLI or OpenAI Codex CLI with `execution.agent`.
 
 The workflow design matters more than which LLM you plug into it.
 
@@ -97,6 +97,7 @@ Claude offers [Scheduled Tasks](https://code.claude.com/docs/en/scheduled-tasks)
 - macOS
 - Node.js v24+
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (`claude`)
+- [OpenAI Codex CLI](https://developers.openai.com/codex/cli/reference) (`codex`, when using `execution.agent: codex`)
 - [GitHub CLI](https://cli.github.com/) (`gh`) -- must be authenticated
 
 ## Setup
@@ -274,7 +275,8 @@ repositories:
 execution:
   max_parallel: 1
   max_issues_per_repo: 1
-  autonomy: interactive
+  agent: codex
+  autonomy: full # Uses --yolo with Codex
   interval_minutes: 10
   timeout_minutes: 60
 
@@ -293,9 +295,10 @@ Labels default to `ai/*` (e.g. `ai/spec`, `ai/plan/in-progress`). To customize p
 | `repositories[].priority_labels` | Priority labels. Issues with labels higher in the list are processed first |
 | `execution.max_parallel` | Number of parallel executions. Default is `1` (sequential) |
 | `execution.max_issues_per_repo` | Maximum number of issues to process per repository. Default is `1` |
-| `execution.autonomy` | CLI autonomy level: `interactive` (requires user approval for each action — recommended default), `auto` (Claude Code's `--permission-mode auto`; classifier blocks only dangerous actions — recommended for unattended launchd runs, requires Claude Code v2.1.83+ and a Max/Team/Enterprise plan), `full` (`--dangerously-skip-permissions`, unrestricted), `sandboxed` (reserved for future non-Claude CLIs such as OpenAI Codex; currently falls back to interactive). Default is `interactive` |
+| `execution.agent` | Execution agent: `claude` / `codex`. Default is `claude` |
+| `execution.autonomy` | CLI autonomy level. For Codex, `full` uses `--yolo`, while `auto` / `sandboxed` use `--sandbox workspace-write`. Claude maps these values to its permission modes. Default is `interactive` |
 | `execution.interval_minutes` | Scheduled execution interval in minutes (10-1440). Default is `10` |
-| `execution.timeout_minutes` | Claude CLI execution timeout in minutes (1-240). Default is `60`. Budgets the whole impl session, including a possible resume |
+| `execution.timeout_minutes` | Agent CLI execution timeout in minutes (1-240). Default is `60`. Budgets the whole impl session, including a possible resume |
 | `language` | Language for CLI messages and prompt templates (`ja` / `en`). Default is `ja` |
 
 > **Note:** After editing `config.yml`, run `npx sabori-flow reinstall` to apply the changes to launchd.
@@ -306,6 +309,7 @@ By default, this tool runs Claude Code CLI in `interactive` mode, which requires
 
 - `execution.autonomy: auto` — Claude Code's `--permission-mode auto`. A classifier blocks dangerous actions (deploys, mass deletions, etc.) and auto-approves the rest. Requires Claude Code v2.1.83+ and a Max/Team/Enterprise plan.
 - `execution.autonomy: full` — passes `--dangerously-skip-permissions`, allowing nearly arbitrary operations on your machine. Use only when `auto` is not available.
+- For Codex unattended runs, use `full` to pass `--yolo`. This disables approvals and sandboxing, so restrict it to an externally isolated runner. Use `auto` or `sandboxed` to retain the workspace-write sandbox.
 
 By default, the `npx` installation fetches packages from the npm registry at runtime. If the npm package were compromised, malicious code could be executed automatically by the scheduler.
 

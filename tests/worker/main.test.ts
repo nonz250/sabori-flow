@@ -755,7 +755,7 @@ describe("workerMain", () => {
 
       expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
         "autonomy is set to 'full'. %s.",
-        "Codex CLI will run with --dangerously-bypass-approvals-and-sandbox",
+        "Codex CLI will run with --yolo",
       );
     });
 

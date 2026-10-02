@@ -166,10 +166,8 @@ export function resolveAutonomyLogMessage(
 /**
  * OpenAI Codex CLI を実行し、結果を返す。
  *
- * プロンプトは位置引数として渡す（Codex CLI は stdin 非対応）。
- *
- * NOTE: プロンプトがコマンドライン引数に含まれるため、
- * `ps` コマンド等で他のプロセスから可視になる点に注意。
+ * プロンプトは `-` を指定して stdin から渡す。これにより長い Issue 本文や
+ * シークレットを含み得るプロンプトがプロセス一覧へ露出しない。
  */
 export async function runCodex(
   prompt: string,
@@ -179,21 +177,27 @@ export async function runCodex(
 
   const autonomy = options?.autonomy ?? Autonomy.INTERACTIVE;
   const autonomyFlags = resolveCodexAutonomyFlags(autonomy);
-  const args = ["exec", ...autonomyFlags, prompt];
+  const args = options?.continueSession
+    ? ["exec", "resume", ...resolveCodexResumeAutonomyFlags(autonomy), "--last", "-"]
+    : ["exec", ...autonomyFlags, "-"];
 
   try {
     return await runCommand(
       "codex",
       args,
       {
+        input: prompt,
         cwd: options?.cwd,
         timeoutMs,
       },
     );
   } catch (error: unknown) {
     if (error instanceof ProcessTimeoutError) {
-      throw new ExecutorError(
+      throw new ExecutorTimeoutError(
         `Codex CLI timed out after ${timeoutMs}ms`,
+        timeoutMs,
+        error.stdout,
+        error.stderr,
       );
     }
     if (error instanceof ProcessExecutionError) {
@@ -206,17 +210,17 @@ export async function runCodex(
 /**
  * Autonomy レベルから Codex CLI のフラグを解決する。
  *
- * - full: --dangerously-bypass-approvals-and-sandbox (no sandbox, no approvals)
- * - sandboxed: --full-auto (sandboxed autonomous execution)
- * - interactive: no flags (default interactive mode)
+ * - full: --yolo (no sandbox, no approvals)
+ * - auto/sandboxed: --sandbox workspace-write
+ * - interactive: no flags (use Codex configuration defaults)
  */
 export function resolveCodexAutonomyFlags(autonomy: Autonomy): readonly string[] {
   switch (autonomy) {
     case Autonomy.FULL:
-      return ["--dangerously-bypass-approvals-and-sandbox"];
+      return ["--yolo"];
     case Autonomy.AUTO:
     case Autonomy.SANDBOXED:
-      return ["--full-auto"];
+      return ["--sandbox", "workspace-write"];
     case Autonomy.INTERACTIVE:
       return [];
     default: {
@@ -224,6 +228,11 @@ export function resolveCodexAutonomyFlags(autonomy: Autonomy): readonly string[]
       throw new Error(`Unknown autonomy level: ${_exhaustive}`);
     }
   }
+}
+
+/** `codex exec resume` supports --yolo but not --sandbox. */
+function resolveCodexResumeAutonomyFlags(autonomy: Autonomy): readonly string[] {
+  return autonomy === Autonomy.FULL ? ["--yolo"] : [];
 }
 
 /**

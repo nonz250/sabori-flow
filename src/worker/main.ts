@@ -320,7 +320,7 @@ export async function workerMain(
 
   if (appConfig.execution.autonomy === Autonomy.FULL) {
     const agentLabel = appConfig.execution.agent === Agent.CODEX
-      ? "Codex CLI will run with --dangerously-bypass-approvals-and-sandbox"
+      ? "Codex CLI will run with --yolo"
       : "Claude Code CLI will run with --dangerously-skip-permissions";
     logger.warn("autonomy is set to 'full'. %s.", agentLabel);
   } else {

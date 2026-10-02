@@ -4,7 +4,7 @@
 
 <h1>sabori-flow</h1>
 
-<p><strong>Claude Code CLI で GitHub Issue を自動解決するワーカー。</strong><br>
+<p><strong>Claude Code CLI / OpenAI Codex CLI で GitHub Issue を自動解決するワーカー。</strong><br>
 ラベルを付けるだけで、方針策定から実装、Pull Request 作成まで sabori-flow が自動で処理します。</p>
 
 <p>
@@ -53,7 +53,7 @@ AI チャットアプリやデスクトップツールは、ファイル編集�
 
 ### LLM 非依存のアーキテクチャ
 
-AI エージェントはパイプライン内の 1 つの CLI 呼び出しです。現在は Claude Code CLI を使っていますが、OpenAI Codex や GitHub Copilot CLI など、CLI ベースの AI エージェントであれば差し替えられる設計です。*（マルチエンジン対応は計画中です。）*
+AI エージェントはパイプライン内の 1 つの CLI 呼び出しです。現在は Claude Code CLI と OpenAI Codex CLI を `execution.agent` で切り替えられます。
 
 どの LLM を使うかより、ワークフローの設計のほうが大事だと考えています。
 
@@ -97,6 +97,7 @@ Claude には [Scheduled Tasks](https://code.claude.com/docs/en/scheduled-tasks)
 - macOS
 - Node.js v24+
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (`claude`)
+- [OpenAI Codex CLI](https://developers.openai.com/codex/cli/reference) (`codex`、`execution.agent: codex` の場合)
 - [GitHub CLI](https://cli.github.com/) (`gh`) -- 認証済みであること
 
 ## セットアップ
@@ -274,7 +275,8 @@ repositories:
 execution:
   max_parallel: 1
   max_issues_per_repo: 1
-  autonomy: interactive
+  agent: codex
+  autonomy: full # Codexでは --yolo
   interval_minutes: 10
   timeout_minutes: 60
 
@@ -293,9 +295,10 @@ language: ja
 | `repositories[].priority_labels` | 優先度ラベル。リストの上位ほど先に処理される |
 | `execution.max_parallel` | 並列実行数。デフォルトは `1`（逐次実行） |
 | `execution.max_issues_per_repo` | リポジトリあたりの Issue 処理上限。デフォルトは `1` |
-| `execution.autonomy` | CLI の自律実行レベル: `interactive`（各操作にユーザー承認が必要、推奨デフォルト）、`auto`（Claude Code の `--permission-mode auto`。分類器が危険操作のみブロック。launchd 無人実行に推奨。Claude Code v2.1.83 以降および Max / Team / Enterprise プランが必要）、`full`（`--dangerously-skip-permissions`、無制限）、`sandboxed`（将来の非-Claude CLI（OpenAI Codex 等）向け予約値、現状は interactive にフォールバック）。デフォルトは `interactive` |
+| `execution.agent` | 実行エージェント: `claude` / `codex`。デフォルトは `claude` |
+| `execution.autonomy` | CLI の自律実行レベル。Codexでは `full` が `--yolo`、`auto` / `sandboxed` が `--sandbox workspace-write`。Claudeでは従来の権限モードへ対応。デフォルトは `interactive` |
 | `execution.interval_minutes` | スケジュール実行間隔（分、10-1440）。デフォルトは `10` |
-| `execution.timeout_minutes` | Claude CLI の実行タイムアウト（分、1-240）。デフォルトは `60`。impl の再開を含むセッション全体の予算 |
+| `execution.timeout_minutes` | エージェントCLIの実行タイムアウト（分、1-240）。デフォルトは `60`。impl の再開を含むセッション全体の予算 |
 | `language` | CLI メッセージおよびプロンプトテンプレートの言語（`ja` / `en`）。デフォルトは `ja` |
 
 > **Note:** `config.yml` を編集した後は、`npx sabori-flow reinstall` を実行して launchd に変更を反映してください。
@@ -306,6 +309,7 @@ language: ja
 
 - `execution.autonomy: auto` — Claude Code の `--permission-mode auto` を使用。分類器が危険操作 (デプロイ・大規模削除等) のみブロックし、それ以外は自動承認します。Claude Code v2.1.83 以降および Max / Team / Enterprise プランが必要です。
 - `execution.autonomy: full` — `--dangerously-skip-permissions` を付与し、マシン上でほぼ任意の操作を許可します。`auto` が使用できない場合のみ検討してください。
+- Codexでは無人実行の主設定として `full`（`--yolo`）を使用します。承認とサンドボックスを無効化するため、外部で隔離された実行環境に限定してください。サンドボックスを維持する場合は `auto` または `sandboxed` を指定します。
 
 デフォルトの `npx` 方式では、実行時に npm レジストリからパッケージを取得します。万が一 npm パッケージが侵害された場合、悪意あるコードがスケジューラにより自動実行される可能性があります。
 

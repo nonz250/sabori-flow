@@ -25,7 +25,7 @@ npm パッケージとして公開されており、`npx sabori-flow` で利用�
 ### 責務分担
 
 - **TypeScript ワーカー** (`src/worker/`): Issue 取得、ラベル遷移、優先度ソート、プロンプト生成、CLI エージェントの呼び出し、結果判定、コメント投稿、ログ出力
-- **Claude Code CLI / Codex CLI**: Issue の解決（方針策定・実装）。Claude は stdin 経由、Codex は位置引数でプロンプトを渡して非対話実行
+- **Claude Code CLI / Codex CLI**: Issue の解決（方針策定・実装）。どちらも stdin 経由でプロンプトを渡して非対話実行
 - **TypeScript CLI** (`src/commands/`): 対話的セットアップ（config.yml 生成、launchd 登録・解除）
 - **launchd**: `npx sabori-flow worker` を定期実行（デフォルト）。`--local` 時は `node dist/worker.js` を直接実行
 
@@ -179,11 +179,11 @@ spec の review 状態では、ワーカーが毎サイクル評価を行う。�
 - `execution.autonomy`: CLI の自律実行レベル（`interactive` / `auto` / `full` / `sandboxed`、デフォルト: `interactive`）
   - `interactive`: 各操作にユーザー承認が必要。launchd 無人実行には不向き
   - `auto`: Claude Code の `--permission-mode auto`。分類器が危険操作のみブロック (v2.1.83+ / Max・Team・Enterprise プラン必須)
-  - `full`: `--dangerously-skip-permissions`。全許可
-  - `sandboxed`: 将来の非-Claude CLI (OpenAI Codex 等) 向け予約値。現状は interactive にフォールバック
+  - `full`: Claude は `--dangerously-skip-permissions`、Codex は `--yolo`。全許可
+  - `sandboxed`: Codex は `--sandbox workspace-write`、Claude は interactive にフォールバック
 - `repositories[].labels`: 各フェーズのラベル名（省略可、デフォルト: `ai/*`）。フェーズ単位でフォールバック
 - `execution.interval_minutes`: スケジュール実行間隔（整数、10-1440分、デフォルト: 10）
-- `execution.timeout_minutes`: Claude CLI 実行タイムアウト（整数、1-240分、デフォルト: 60）
+- `execution.timeout_minutes`: エージェントCLI実行タイムアウト（整数、1-240分、デフォルト: 60）
 - `language`: CLI メッセージおよびプロンプトテンプレートの言語（`ja` / `en`、デフォルト: `ja`）
 
 ## コーディング規約
