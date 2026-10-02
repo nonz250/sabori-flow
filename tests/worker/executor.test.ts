@@ -666,7 +666,7 @@ describe("runCodex", () => {
       expect(mockedRunCommand).toHaveBeenCalledWith(
         "codex",
         ["exec", prompt],
-        { cwd: undefined, timeoutMs: 1_800_000 },
+        { cwd: undefined, timeoutMs: 3_600_000 },
       );
     });
   });
@@ -682,7 +682,7 @@ describe("runCodex", () => {
       await runCodex("prompt text");
 
       const callOptions = mockedRunCommand.mock.calls[0][2];
-      expect(callOptions?.timeoutMs).toBe(1_800_000);
+      expect(callOptions?.timeoutMs).toBe(3_600_000);
     });
   });
 
@@ -836,7 +836,11 @@ describe("runAgent", () => {
     expect(mockedRunCommand).toHaveBeenCalledWith(
       "claude",
       ["-p"],
-      { input: "test prompt", cwd: undefined, timeoutMs: 1_800_000 },
+      expect.objectContaining({
+        input: "test prompt",
+        cwd: undefined,
+        timeoutMs: 3_600_000,
+      }),
     );
   });
 
@@ -855,7 +859,7 @@ describe("runAgent", () => {
     expect(mockedRunCommand).toHaveBeenCalledWith(
       "codex",
       ["exec", "test prompt"],
-      { cwd: undefined, timeoutMs: 1_800_000 },
+      { cwd: undefined, timeoutMs: 3_600_000 },
     );
   });
 });

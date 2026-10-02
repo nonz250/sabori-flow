@@ -117,7 +117,7 @@ describe("resumeSpecReview", () => {
       makeWorkerComment(1, "proposal"),
       makeHumanComment("fix this"),
     ]);
-    vi.mocked(deps.runClaude).mockResolvedValue({
+    vi.mocked(deps.runAgent).mockResolvedValue({
       success: true,
       stdout: "revised proposal",
       stderr: "",
@@ -268,7 +268,7 @@ describe("resumeSpecReview", () => {
     const result = await resumeSpecReview(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, true, deps);
 
     expect(result).toEqual({ outcome: "failure", claudeExecuted: false });
-    expect(deps.runClaude).not.toHaveBeenCalled();
+    expect(deps.runAgent).not.toHaveBeenCalled();
     expect(deps.withWorktree).not.toHaveBeenCalled();
   });
 
