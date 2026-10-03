@@ -15,12 +15,14 @@ import { setTokenCommand } from "./set-token.js";
 import { setLanguage, t } from "../i18n/index.js";
 import type { Language } from "../i18n/types.js";
 import { Autonomy } from "../worker/models.js";
+import type { Agent } from "../worker/models.js";
 import { TEMPLATE_FILES } from "../worker/prompt.js";
 import { migrateFlatPromptTemplates } from "../worker/prompt-migration.js";
 
 function buildConfigData(
   repos: RepositoryInput[],
   language: string,
+  agent: Agent,
   intervalMinutes: number,
   timeoutMinutes: number,
   autonomy: Autonomy,
@@ -36,6 +38,7 @@ function buildConfigData(
     })),
     execution: {
       ...getDefaultExecution(),
+      agent,
       autonomy,
       interval_minutes: intervalMinutes,
       timeout_minutes: timeoutMinutes,
@@ -111,6 +114,15 @@ export async function initCommand(): Promise<void> {
       })
     );
 
+    // agent 選択
+    const agent = await select<Agent>({
+      message: t("prompt.selectAgent"),
+      choices: [
+        { value: "claude", name: "Claude Code CLI" },
+        { value: "codex", name: "OpenAI Codex CLI" },
+      ],
+    });
+
     // autonomy 選択 (sandboxed は手動編集専用のため UI には載せない)
     const autonomy = await select<Autonomy>({
       message: t("prompt.autonomy"),
@@ -163,15 +175,19 @@ export async function initCommand(): Promise<void> {
     const timeoutMinutes = Number(timeoutMinutesStr);
 
     // YAML 生成・書き込み
-    const config = buildConfigData(repos, language, intervalMinutes, timeoutMinutes, autonomy);
+    const config = buildConfigData(repos, language, agent, intervalMinutes, timeoutMinutes, autonomy);
     const yamlStr = stringify(config);
     fs.writeFileSync(getConfigPath(), yamlStr, { encoding: "utf-8", mode: 0o600 });
 
     console.log(t("init.configCreated", { path: getConfigPath() }));
-    if (await confirm({ message: t("init.setTokenNow"), default: true })) {
-      await setTokenCommand();
+    if (agent === "claude") {
+      if (await confirm({ message: t("init.setTokenNow"), default: true })) {
+        await setTokenCommand();
+      } else {
+        console.log(t("init.tokenSkipped"));
+      }
     } else {
-      console.log(t("init.tokenSkipped"));
+      console.log(t("init.codexAuthHint"));
     }
     console.log(t("init.runInstallNext"));
   } catch {

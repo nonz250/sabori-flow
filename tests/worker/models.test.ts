@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   Phase,
   Priority,
+  Agent,
   Autonomy,
   FailureCategory,
   repoFullName,
@@ -36,6 +37,16 @@ describe("Priority", () => {
 
   it("NONE の値が 2 である", () => {
     expect(Priority.NONE).toBe(2);
+  });
+});
+
+describe("Agent", () => {
+  it("CLAUDE の値が 'claude' である", () => {
+    expect(Agent.CLAUDE).toBe("claude");
+  });
+
+  it("CODEX の値が 'codex' である", () => {
+    expect(Agent.CODEX).toBe("codex");
   });
 });
 
@@ -188,10 +199,14 @@ describe("型の構造テスト", () => {
     const executionConfig: ExecutionConfig = {
       maxParallel: 4,
       maxIssuesPerRepo: 5,
+      agent: Agent.CLAUDE,
       autonomy: Autonomy.FULL,
+      intervalMinutes: 60,
+      language: "ja",
     };
 
     const appConfig: AppConfig = {
+      language: "ja",
       repositories: [repoConfig],
       execution: executionConfig,
     };

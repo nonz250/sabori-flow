@@ -17,7 +17,7 @@ import { loadConfig, ConfigValidationError } from "../worker/config.js";
 import { readAuthToken } from "../utils/auth-token.js";
 
 const STANDARD_PATHS = ["/usr/local/bin", "/usr/bin", "/bin"];
-const REQUIRED_COMMANDS = ["node", "git", "gh", "claude"];
+const REQUIRED_COMMANDS = ["node", "git", "gh", "claude", "codex"];
 
 function buildMinimalPath(): string {
   const dirs = new Set<string>(STANDARD_PATHS);

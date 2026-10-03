@@ -12,6 +12,8 @@ const jaMessages: MessageKeys = {
   "init.setTokenNow": "Claude 認証トークンを今すぐ設定しますか?",
   "init.tokenSkipped":
     "後で `sabori-flow set-token` で設定できます。",
+  "init.codexAuthHint":
+    "Codex CLI の認証を確認してください。未認証の場合は `codex login` を実行してください。",
   "init.templateExists": "{file} は既に存在します。上書きしますか?",
   "init.templateSkipped": "スキップしました: {file}",
   "init.templatesCopied":
@@ -82,19 +84,20 @@ const jaMessages: MessageKeys = {
     "絶対パスを入力してください (~/... も可)",
   "prompt.autoImplConfirm":
     "Plan 完了後に自動で impl ラベルを付与しますか?",
+  "prompt.selectAgent": "実行エージェントを選択してください:",
   "prompt.intervalMinutes": "スケジュール実行間隔（分）を入力してください（10-1440）:",
   "prompt.intervalMinutesValidation": "10 以上 1440 以下の整数を入力してください",
-  "prompt.timeoutMinutes": "Claude CLI の実行タイムアウト（分）を入力してください（1-240）:",
+  "prompt.timeoutMinutes": "エージェントCLIの実行タイムアウト（分）を入力してください（1-240）:",
   "prompt.timeoutMinutesValidation": "1 以上 240 以下の整数を入力してください",
 
   // autonomy selection (init)
-  "prompt.autonomy": "Claude Code CLI の自律実行レベルを選択してください:",
+  "prompt.autonomy": "CLIエージェントの自律実行レベルを選択してください:",
   "prompt.autonomyChoiceInteractive":
     "interactive (推奨) — 各操作でユーザー承認が必要",
   "prompt.autonomyChoiceAuto":
     "auto — Claude Code の分類器が危険操作のみブロック",
   "prompt.autonomyChoiceFull":
-    "full — 全許可 (--dangerously-skip-permissions)",
+    "full — 全許可 (Claude: skip permissions / Codex: --yolo)",
   "prompt.autonomyDescInteractive":
     "最も安全。ただし launchd での自動実行には向きません (承認待ちで停止します)",
   "prompt.autonomyDescAuto":
@@ -141,6 +144,8 @@ const enMessages: MessageKeys = {
   "init.runInstallNext": "Next, run `sabori-flow install`.",
   "init.setTokenNow": "Set the Claude auth token now?",
   "init.tokenSkipped": "You can set it later with `sabori-flow set-token`.",
+  "init.codexAuthHint":
+    "Verify Codex CLI authentication. Run `codex login` if you are not signed in.",
   "init.templateExists": "{file} already exists. Overwrite?",
   "init.templateSkipped": "Skipped: {file}",
   "init.templatesCopied": "\nPrompt templates copied to: {dir}",
@@ -205,19 +210,20 @@ const enMessages: MessageKeys = {
     "Enter an absolute path (~/... also accepted)",
   "prompt.autoImplConfirm":
     "Automatically add impl label after Plan completion?",
+  "prompt.selectAgent": "Select execution agent:",
   "prompt.intervalMinutes": "Enter the scheduled execution interval in minutes (10-1440):",
   "prompt.intervalMinutesValidation": "Must be an integer between 10 and 1440",
-  "prompt.timeoutMinutes": "Enter the Claude CLI execution timeout in minutes (1-240):",
+  "prompt.timeoutMinutes": "Enter the agent CLI execution timeout in minutes (1-240):",
   "prompt.timeoutMinutesValidation": "Must be an integer between 1 and 240",
 
   // autonomy selection (init)
-  "prompt.autonomy": "Select the Claude Code CLI autonomy level:",
+  "prompt.autonomy": "Select the CLI agent autonomy level:",
   "prompt.autonomyChoiceInteractive":
     "interactive (recommended) — requires user approval for each action",
   "prompt.autonomyChoiceAuto":
     "auto — Claude Code's classifier blocks only dangerous actions",
   "prompt.autonomyChoiceFull":
-    "full — unrestricted (--dangerously-skip-permissions)",
+    "full — unrestricted (Claude: skip permissions / Codex: --yolo)",
   "prompt.autonomyDescInteractive":
     "Safest. Not suitable for unattended launchd runs (blocks on approval prompts).",
   "prompt.autonomyDescAuto":

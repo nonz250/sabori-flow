@@ -13,6 +13,7 @@ export interface MessageKeys {
   "init.runInstallNext": string;
   "init.setTokenNow": string;
   "init.tokenSkipped": string;
+  "init.codexAuthHint": string;
   "init.templateExists": string;
   "init.templateSkipped": string;
   "init.templatesCopied": string;
@@ -63,6 +64,7 @@ export interface MessageKeys {
   "prompt.validationAlphanumeric": string;
   "prompt.validationAbsolutePath": string;
   "prompt.autoImplConfirm": string;
+  "prompt.selectAgent": string;
   "prompt.intervalMinutes": string;
   "prompt.intervalMinutesValidation": string;
   "prompt.timeoutMinutes": string;

@@ -24,9 +24,12 @@ vi.mock("../../src/worker/logger.js", () => ({
 
 import {
   runClaude,
+  runCodex,
+  runAgent,
   ExecutorError,
   ExecutorTimeoutError,
   resolveClaudeAutonomyFlags,
+  resolveCodexAutonomyFlags,
   resolveAutonomyLogMessage,
 } from "../../src/worker/executor.js";
 import {
@@ -636,5 +639,240 @@ describe("resolveAutonomyLogMessage", () => {
 
   it("interactive の場合 null を返す", () => {
     expect(resolveAutonomyLogMessage("interactive")).toBeNull();
+  });
+});
+
+// =========================================================================
+// runCodex
+// =========================================================================
+
+describe("runCodex", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe("プロンプトの渡し方", () => {
+    it("プロンプトが stdin から渡される", async () => {
+      mockedRunCommand.mockResolvedValue({
+        success: true,
+        stdout: "Codex output",
+        stderr: "",
+      });
+
+      const prompt = "Implement feature Z";
+      await runCodex(prompt);
+
+      expect(mockedRunCommand).toHaveBeenCalledOnce();
+      expect(mockedRunCommand).toHaveBeenCalledWith(
+        "codex",
+        ["exec", "-"],
+        { input: prompt, cwd: undefined, timeoutMs: 3_600_000 },
+      );
+    });
+  });
+
+  describe("デフォルトタイムアウト", () => {
+    it("タイムアウト未指定時にデフォルト値 1800000ms が渡される", async () => {
+      mockedRunCommand.mockResolvedValue({
+        success: true,
+        stdout: "",
+        stderr: "",
+      });
+
+      await runCodex("prompt text");
+
+      const callOptions = mockedRunCommand.mock.calls[0][2];
+      expect(callOptions?.timeoutMs).toBe(3_600_000);
+    });
+  });
+
+  describe("カスタムオプション", () => {
+    it("指定したタイムアウト値が runCommand に渡される", async () => {
+      mockedRunCommand.mockResolvedValue({
+        success: true,
+        stdout: "",
+        stderr: "",
+      });
+
+      await runCodex("prompt text", { timeoutMs: 600_000 });
+
+      const callOptions = mockedRunCommand.mock.calls[0][2];
+      expect(callOptions?.timeoutMs).toBe(600_000);
+    });
+
+    it("cwd が runCommand に渡される", async () => {
+      mockedRunCommand.mockResolvedValue({
+        success: true,
+        stdout: "",
+        stderr: "",
+      });
+
+      await runCodex("prompt text", { cwd: "/work/dir" });
+
+      const callOptions = mockedRunCommand.mock.calls[0][2];
+      expect(callOptions?.cwd).toBe("/work/dir");
+    });
+  });
+
+  describe("autonomy オプション", () => {
+    it("autonomy が full の場合 --yolo が含まれる", async () => {
+      mockedRunCommand.mockResolvedValue({
+        success: true,
+        stdout: "",
+        stderr: "",
+      });
+
+      await runCodex("prompt text", { autonomy: "full" });
+
+      const args = mockedRunCommand.mock.calls[0][1];
+      expect(args).toContain("--yolo");
+    });
+
+    it("autonomy が sandboxed の場合 workspace-write sandbox が含まれる", async () => {
+      mockedRunCommand.mockResolvedValue({
+        success: true,
+        stdout: "",
+        stderr: "",
+      });
+
+      await runCodex("prompt text", { autonomy: "sandboxed" });
+
+      const args = mockedRunCommand.mock.calls[0][1];
+      expect(args).toEqual(["exec", "--sandbox", "workspace-write", "-"]);
+    });
+
+    it("autonomy が interactive の場合 追加フラグが含まれない", async () => {
+      mockedRunCommand.mockResolvedValue({
+        success: true,
+        stdout: "",
+        stderr: "",
+      });
+
+      await runCodex("prompt text", { autonomy: "interactive" });
+
+      const args = mockedRunCommand.mock.calls[0][1];
+      expect(args).toEqual(["exec", "-"]);
+    });
+
+    it("continueSession の場合は最新の cwd セッションを --yolo で再開する", async () => {
+      mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
+
+      await runCodex("continue", { autonomy: "full", continueSession: true });
+
+      expect(mockedRunCommand).toHaveBeenCalledWith(
+        "codex",
+        ["exec", "resume", "--yolo", "--last", "-"],
+        { input: "continue", cwd: undefined, timeoutMs: 3_600_000 },
+      );
+    });
+  });
+
+  describe("タイムアウト", () => {
+    it("ProcessTimeoutError 発生時に ExecutorError が throw される", async () => {
+      mockedRunCommand.mockRejectedValue(
+        new ProcessTimeoutError(1_800_000),
+      );
+
+      await expect(runCodex("Long running task")).rejects.toThrow(
+        ExecutorError,
+      );
+    });
+
+    it("タイムアウトのエラーメッセージに 'Codex CLI timed out' が含まれる", async () => {
+      mockedRunCommand.mockRejectedValue(
+        new ProcessTimeoutError(1_800_000),
+      );
+
+      await expect(runCodex("Long running task")).rejects.toThrow(
+        "Codex CLI timed out",
+      );
+    });
+  });
+
+  describe("バイナリ未検出", () => {
+    it("ProcessExecutionError 発生時に ExecutorError が throw される", async () => {
+      mockedRunCommand.mockRejectedValue(
+        new ProcessExecutionError("spawn codex ENOENT"),
+      );
+
+      try {
+        await runCodex("Some prompt");
+        expect.fail("should have thrown");
+      } catch (error: unknown) {
+        expect(error).toBeInstanceOf(ExecutorError);
+        expect((error as Error).message).toBe("spawn codex ENOENT");
+      }
+    });
+  });
+});
+
+// =========================================================================
+// resolveCodexAutonomyFlags
+// =========================================================================
+
+describe("resolveCodexAutonomyFlags", () => {
+  it("full の場合 --yolo を返す", () => {
+    expect(resolveCodexAutonomyFlags("full")).toEqual(["--yolo"]);
+  });
+
+  it("auto と sandboxed の場合 workspace-write sandbox を返す", () => {
+    expect(resolveCodexAutonomyFlags("auto")).toEqual(["--sandbox", "workspace-write"]);
+    expect(resolveCodexAutonomyFlags("sandboxed")).toEqual(["--sandbox", "workspace-write"]);
+  });
+
+  it("interactive の場合 空配列を返す", () => {
+    expect(resolveCodexAutonomyFlags("interactive")).toEqual([]);
+  });
+});
+
+// =========================================================================
+// runAgent
+// =========================================================================
+
+describe("runAgent", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("agent が 'claude' の場合 runClaude にディスパッチされる (stdin 経由)", async () => {
+    mockedRunCommand.mockResolvedValue({
+      success: true,
+      stdout: "Claude output",
+      stderr: "",
+    });
+
+    const result = await runAgent("claude", "test prompt");
+
+    expect(result.success).toBe(true);
+    expect(result.stdout).toBe("Claude output");
+    // runClaude は input (stdin) を使う
+    expect(mockedRunCommand).toHaveBeenCalledWith(
+      "claude",
+      ["-p"],
+      expect.objectContaining({
+        input: "test prompt",
+        cwd: undefined,
+        timeoutMs: 3_600_000,
+      }),
+    );
+  });
+
+  it("agent が 'codex' の場合 runCodex にディスパッチされる (stdin 経由)", async () => {
+    mockedRunCommand.mockResolvedValue({
+      success: true,
+      stdout: "Codex output",
+      stderr: "",
+    });
+
+    const result = await runAgent("codex", "test prompt");
+
+    expect(result.success).toBe(true);
+    expect(result.stdout).toBe("Codex output");
+    // runCodex は `-` を指定して stdin を使う
+    expect(mockedRunCommand).toHaveBeenCalledWith(
+      "codex",
+      ["exec", "-"],
+      { input: "test prompt", cwd: undefined, timeoutMs: 3_600_000 },
+    );
   });
 });

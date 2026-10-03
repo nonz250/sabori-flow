@@ -1,9 +1,9 @@
 import type { Language } from "../i18n/types.js";
 import type { Issue, IssueComment, PhaseLabels, RepositoryConfig, ExecutionConfig, FailureDiagnostics, StepResult, SpecPhaseLabels } from "./models.js";
-import { Autonomy, Phase, FailureCategory, repoFullName } from "./models.js";
+import { Autonomy, Agent, Phase, FailureCategory, repoFullName } from "./models.js";
 import type { ProcessResult } from "./process.js";
 import { buildPrompt, IMPL_NO_CHANGE_MARKER, IMPL_RESUME_PROMPTS } from "./prompt.js";
-import { runClaude, ExecutorTimeoutError } from "./executor.js";
+import { runAgent, ExecutorTimeoutError } from "./executor.js";
 import { applyLabelTransition } from "./label.js";
 import type { LabelTransition } from "./label.js";
 import {
@@ -33,13 +33,17 @@ const MIN_IMPL_RESUME_BUDGET_MS = 5 * MS_PER_MINUTE;
 
 const RESUME_OUTPUT_SEPARATOR = "\n\n--- resumed session ---\n\n";
 
+function agentDisplayName(agent: Agent): string {
+  return agent === Agent.CODEX ? "Codex CLI" : "Claude Code CLI";
+}
+
 // ---------- Dependency Injection ----------
 
 export interface PipelineDeps {
   buildPrompt: (issue: Issue, repoConfig: RepositoryConfig, language: Language, specContext?: string | null) => string;
-  runClaude: (
+  runAgent: (
     prompt: string,
-    options: { cwd: string; autonomy?: Autonomy; timeoutMs?: number; authToken?: string; continueSession?: boolean },
+    options: { cwd: string; agent?: Agent; autonomy?: Autonomy; timeoutMs?: number; authToken?: string; continueSession?: boolean },
   ) => Promise<ProcessResult>;
   applyLabelTransition: (
     repo: string,
@@ -80,7 +84,7 @@ export interface PipelineDeps {
 
 export const defaultDeps: PipelineDeps = {
   buildPrompt,
-  runClaude: (prompt, options) => runClaude(prompt, options),
+  runAgent: (prompt, options) => runAgent(options.agent ?? Agent.CLAUDE, prompt, options),
   applyLabelTransition,
   postSuccessComment,
   postFailureComment,
@@ -187,9 +191,11 @@ export async function processIssue(
         const implDeadlineMs = Date.now() + executionConfig.timeoutMinutes * MS_PER_MINUTE;
 
         let result: ProcessResult;
+        const agentName = agentDisplayName(executionConfig.agent);
         try {
-          result = await deps.runClaude(prompt, {
+          result = await deps.runAgent(prompt, {
             cwd: worktreePath,
+            agent: executionConfig.agent,
             autonomy: executionConfig.autonomy,
             timeoutMs: executionConfig.timeoutMinutes * MS_PER_MINUTE,
             authToken: authToken ?? undefined,
@@ -197,15 +203,16 @@ export async function processIssue(
         } catch (error: unknown) {
           const errorMessage = error instanceof Error ? error.message : String(error);
           logger.error(
-            "Issue #%s: Claude CLI の実行に失敗しました [repo=%s]: %s",
+            "Issue #%s: %s の実行に失敗しました [repo=%s]: %s",
             issue.number,
+            agentName,
             repo,
             errorMessage,
           );
           if (error instanceof ExecutorTimeoutError) {
             await handleFailure(deps, repo, issue.number, phaseLabels, {
               category: FailureCategory.CLI_TIMEOUT,
-              summary: "Claude Code CLI timed out",
+              summary: `${agentName} timed out`,
               timeoutMs: error.timeoutMs,
               errorMessage,
               stdout: error.stdout,
@@ -214,7 +221,7 @@ export async function processIssue(
           } else {
             await handleFailure(deps, repo, issue.number, phaseLabels, {
               category: FailureCategory.CLI_EXECUTION_ERROR,
-              summary: "Claude Code CLI execution failed",
+              summary: `${agentName} execution failed`,
               errorMessage,
             });
           }
@@ -223,13 +230,14 @@ export async function processIssue(
 
         if (!result.success) {
           logger.error(
-            "Issue #%s: Claude CLI が失敗ステータスを返しました [repo=%s]",
+            "Issue #%s: %s が失敗ステータスを返しました [repo=%s]",
             issue.number,
+            agentName,
             repo,
           );
           await handleFailure(deps, repo, issue.number, phaseLabels, {
             category: FailureCategory.CLI_NON_ZERO_EXIT,
-            summary: "Claude Code CLI returned a non-zero exit code",
+            summary: `${agentName} returned a non-zero exit code`,
             stderr: result.stderr,
             stdout: result.stdout,
             exitCode: result.exitCode,
@@ -653,6 +661,7 @@ async function resolveImplCompletion(
   initialResult: ProcessResult,
   deadlineMs: number,
 ): Promise<ImplCompletion> {
+  const agentName = agentDisplayName(executionConfig.agent);
   if (await implPullRequestCheckPassed(deps, repo, issue.number)) {
     return { linked: true, stdout: initialResult.stdout };
   }
@@ -669,7 +678,7 @@ async function resolveImplCompletion(
       diagnostics: {
         category: FailureCategory.IMPL_NO_LINKED_PR,
         summary:
-          "Claude Code CLI exited 0 without a linked pull request; not enough of the timeout budget remained to resume the session",
+          `${agentName} exited 0 without a linked pull request; not enough of the timeout budget remained to resume the session`,
         stdout: initialResult.stdout,
         stderr: initialResult.stderr,
       },
@@ -685,11 +694,12 @@ async function resolveImplCompletion(
 
   let resumeResult: ProcessResult;
   try {
-    // --continue resolves the conversation by cwd, and worktreePath is
-    // unique per issue run (issue-<number>-<timestamp>), so concurrent
-    // issues under max_parallel > 1 can never resume each other's session.
-    resumeResult = await deps.runClaude(IMPL_RESUME_PROMPTS[executionConfig.language], {
+    // Both Claude --continue and Codex exec resume --last resolve the
+    // conversation by cwd. worktreePath is unique per issue run, so
+    // concurrent issues cannot resume each other's session.
+    resumeResult = await deps.runAgent(IMPL_RESUME_PROMPTS[executionConfig.language], {
       cwd: worktreePath,
+      agent: executionConfig.agent,
       autonomy: executionConfig.autonomy,
       timeoutMs: remainingMs,
       authToken: authToken ?? undefined,
@@ -708,7 +718,7 @@ async function resolveImplCompletion(
         linked: false,
         diagnostics: {
           category: FailureCategory.CLI_TIMEOUT,
-          summary: "Claude Code CLI timed out while resuming the impl session",
+          summary: `${agentName} timed out while resuming the impl session`,
           timeoutMs: error.timeoutMs,
           errorMessage,
           stdout: initialResult.stdout + RESUME_OUTPUT_SEPARATOR + error.stdout,
@@ -720,7 +730,7 @@ async function resolveImplCompletion(
       linked: false,
       diagnostics: {
         category: FailureCategory.CLI_EXECUTION_ERROR,
-        summary: "Claude Code CLI execution failed while resuming the impl session",
+        summary: `${agentName} execution failed while resuming the impl session`,
         errorMessage,
         stdout: initialResult.stdout,
         stderr: initialResult.stderr,
@@ -746,7 +756,7 @@ async function resolveImplCompletion(
       linked: false,
       diagnostics: {
         category: FailureCategory.IMPL_NO_CHANGE_REQUIRED,
-        summary: "Claude Code reported that no code change is required for this issue",
+        summary: `${agentName} reported that no code change is required for this issue`,
         stdout: initialResult.stdout + RESUME_OUTPUT_SEPARATOR + resumeResult.stdout,
         stderr: initialResult.stderr + RESUME_OUTPUT_SEPARATOR + resumeResult.stderr,
       },
@@ -758,7 +768,7 @@ async function resolveImplCompletion(
     diagnostics: {
       category: FailureCategory.IMPL_NO_LINKED_PR,
       summary:
-        "Claude Code CLI exited 0 without a linked pull request; the resume attempt did not produce one",
+        `${agentName} exited 0 without a linked pull request; the resume attempt did not produce one`,
       stdout: initialResult.stdout + RESUME_OUTPUT_SEPARATOR + resumeResult.stdout,
       stderr: initialResult.stderr + RESUME_OUTPUT_SEPARATOR + resumeResult.stderr,
       exitCode: resumeResult.success ? undefined : resumeResult.exitCode,

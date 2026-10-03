@@ -93,6 +93,7 @@ function makeExecInspection(
   return {
     maxParallel: s(1),
     maxIssuesPerRepo: s(1),
+    agent: s("claude"),
     autonomy: s<Autonomy>("interactive"),
     intervalMinutes: s(60),
     timeoutMinutes: s(60),
@@ -224,6 +225,7 @@ describe("renderConfigInspection - default marker", () => {
       execution: makeExecInspection({
         maxParallel: s(4, "file"),
         maxIssuesPerRepo: s(2, "file"),
+        agent: s("codex", "file"),
         autonomy: s<Autonomy>("full", "file"),
         intervalMinutes: s(30, "file"),
         timeoutMinutes: s(120, "file"),
@@ -324,6 +326,7 @@ describe("renderConfigInspection - hasDefaultValues", () => {
       execution: makeExecInspection({
         maxParallel: s(4, "file"),
         maxIssuesPerRepo: s(2, "file"),
+        agent: s("codex", "file"),
         autonomy: s<Autonomy>("full", "file"),
         intervalMinutes: s(30, "file"),
         timeoutMinutes: s(120, "file"),
@@ -371,6 +374,13 @@ describe("renderConfigInspection - hasDefaultValues", () => {
       (inspection) => ({
         ...inspection,
         execution: { ...inspection.execution, maxIssuesPerRepo: s(1) },
+      }),
+    ],
+    [
+      "execution.agent",
+      (inspection) => ({
+        ...inspection,
+        execution: { ...inspection.execution, agent: s("claude") },
       }),
     ],
     [
@@ -705,7 +715,7 @@ describe("renderConfigInspection - blank lines across repositories", () => {
 // ---------- Tests: execution section ----------
 
 describe("renderConfigInspection - execution section", () => {
-  it("items appear in order: max_parallel, max_issues_per_repo, autonomy, interval_minutes, timeout_minutes", () => {
+  it("items appear in order: max_parallel, max_issues_per_repo, agent, autonomy, interval_minutes, timeout_minutes", () => {
     const inspection = makeInspection();
 
     const { lines } = renderConfigInspection(inspection, { verbose: false });
@@ -713,12 +723,13 @@ describe("renderConfigInspection - execution section", () => {
     const execStart = lines.indexOf("execution");
     expect(execStart).toBeGreaterThan(-1);
 
-    const execLines = lines.slice(execStart + 1, execStart + 6);
+    const execLines = lines.slice(execStart + 1, execStart + 7);
     expect(execLines[0]).toContain("max_parallel");
     expect(execLines[1]).toContain("max_issues_per_repo");
-    expect(execLines[2]).toContain("autonomy");
-    expect(execLines[3]).toContain("interval_minutes");
-    expect(execLines[4]).toContain("timeout_minutes");
+    expect(execLines[2]).toContain("agent");
+    expect(execLines[3]).toContain("autonomy");
+    expect(execLines[4]).toContain("interval_minutes");
+    expect(execLines[5]).toContain("timeout_minutes");
   });
 });
 

@@ -123,6 +123,7 @@ export function makeAppConfig(
   const defaultExecution: ExecutionConfig = {
     maxParallel: 1,
     maxIssuesPerRepo: 10,
+    agent: "claude",
     autonomy: "interactive",
     intervalMinutes: 60,
     timeoutMinutes: 60,

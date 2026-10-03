@@ -57,7 +57,7 @@ describe("processIssue", () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
-      vi.mocked(deps.runClaude).mockResolvedValue(
+      vi.mocked(deps.runAgent).mockResolvedValue(
         makeProcessResult({ stdout: "Claude output" }),
       );
 
@@ -73,7 +73,7 @@ describe("processIssue", () => {
       );
       expect(deps.buildPrompt).toHaveBeenCalledOnce();
       expect(deps.buildPrompt).toHaveBeenCalledWith(issue, repoConfig, "ja", null);
-      expect(deps.runClaude).toHaveBeenCalledOnce();
+      expect(deps.runAgent).toHaveBeenCalledOnce();
       expect(deps.applyLabelTransition).toHaveBeenNthCalledWith(
         2,
         "testowner/testrepo",
@@ -129,7 +129,7 @@ describe("processIssue", () => {
       );
     });
 
-    it("runClaude に executionConfig.autonomy が渡される", async () => {
+    it("runAgent に executionConfig.autonomy が渡される", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       const executionConfig: ExecutionConfig = {
@@ -143,27 +143,27 @@ describe("processIssue", () => {
 
       await processIssue(issue, repoConfig, executionConfig, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(deps.runClaude).toHaveBeenCalledOnce();
-      expect(deps.runClaude).toHaveBeenCalledWith(
+      expect(deps.runAgent).toHaveBeenCalledOnce();
+      expect(deps.runAgent).toHaveBeenCalledWith(
         "generated prompt",
         { cwd: "/tmp/worktrees/issue-mock", autonomy: "full", timeoutMs: 3_600_000 },
       );
     });
 
-    it("autonomy が interactive の場合も runClaude に正しく渡される", async () => {
+    it("autonomy が interactive の場合も runAgent に正しく渡される", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
 
       await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(deps.runClaude).toHaveBeenCalledOnce();
-      expect(deps.runClaude).toHaveBeenCalledWith(
+      expect(deps.runAgent).toHaveBeenCalledOnce();
+      expect(deps.runAgent).toHaveBeenCalledWith(
         "generated prompt",
         { cwd: "/tmp/worktrees/issue-mock", autonomy: "interactive", timeoutMs: 3_600_000 },
       );
     });
 
-    it("runClaude に executionConfig.timeoutMinutes を ms に変換した値が渡される", async () => {
+    it("runAgent に executionConfig.timeoutMinutes を ms に変換した値が渡される", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       const executionConfig: ExecutionConfig = {
@@ -173,14 +173,14 @@ describe("processIssue", () => {
 
       await processIssue(issue, repoConfig, executionConfig, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(deps.runClaude).toHaveBeenCalledOnce();
-      expect(deps.runClaude).toHaveBeenCalledWith(
+      expect(deps.runAgent).toHaveBeenCalledOnce();
+      expect(deps.runAgent).toHaveBeenCalledWith(
         "generated prompt",
         expect.objectContaining({ timeoutMs: 1_800_000 }),
       );
     });
 
-    it("runClaude に executionConfig.timeoutMinutes 最大値 240 を ms に変換した値が渡される", async () => {
+    it("runAgent に executionConfig.timeoutMinutes 最大値 240 を ms に変換した値が渡される", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       const executionConfig: ExecutionConfig = {
@@ -190,14 +190,14 @@ describe("processIssue", () => {
 
       await processIssue(issue, repoConfig, executionConfig, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      expect(deps.runClaude).toHaveBeenCalledOnce();
-      expect(deps.runClaude).toHaveBeenCalledWith(
+      expect(deps.runAgent).toHaveBeenCalledOnce();
+      expect(deps.runAgent).toHaveBeenCalledWith(
         "generated prompt",
         expect.objectContaining({ timeoutMs: 14_400_000 }),
       );
     });
 
-    it("authToken が runClaude の options に渡される", async () => {
+    it("authToken が runAgent の options に渡される", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
 
@@ -210,19 +210,19 @@ describe("processIssue", () => {
         deps,
       );
 
-      expect(deps.runClaude).toHaveBeenCalledWith(
+      expect(deps.runAgent).toHaveBeenCalledWith(
         "generated prompt",
         expect.objectContaining({ authToken: "sk-ant-oat01-example" }),
       );
     });
 
-    it("authToken が null の場合、runClaude の options に authToken が付かない", async () => {
+    it("authToken が null の場合、runAgent の options に authToken が付かない", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
 
       await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-      const options = vi.mocked(deps.runClaude).mock.calls[0][1];
+      const options = vi.mocked(deps.runAgent).mock.calls[0][1];
       expect(options.authToken).toBeUndefined();
     });
 
@@ -281,7 +281,7 @@ describe("processIssue", () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
-      vi.mocked(deps.runClaude).mockResolvedValue(
+      vi.mocked(deps.runAgent).mockResolvedValue(
         makeProcessResult({
           stdout: "Found token: ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijkl in output",
         }),
@@ -316,7 +316,7 @@ describe("processIssue", () => {
       expect(result.outcome).toBe("failure");
       expect(deps.applyLabelTransition).toHaveBeenCalledOnce();
       expect(deps.buildPrompt).not.toHaveBeenCalled();
-      expect(deps.runClaude).not.toHaveBeenCalled();
+      expect(deps.runAgent).not.toHaveBeenCalled();
       expect(deps.postSuccessComment).not.toHaveBeenCalled();
       expect(deps.postFailureComment).not.toHaveBeenCalled();
     });
@@ -337,7 +337,7 @@ describe("processIssue", () => {
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(result.outcome).toBe("failure");
-      expect(deps.runClaude).not.toHaveBeenCalled();
+      expect(deps.runAgent).not.toHaveBeenCalled();
       expect(deps.postSuccessComment).not.toHaveBeenCalled();
       expect(deps.applyLabelTransition).toHaveBeenCalledTimes(2);
       expect(deps.applyLabelTransition).toHaveBeenNthCalledWith(
@@ -353,11 +353,11 @@ describe("processIssue", () => {
       expect(failureMessage).toContain("template not found");
     });
 
-    it("runClaude が例外を投げると failed 遷移 + 失敗コメントが呼ばれ false が返る", async () => {
+    it("runAgent が例外を投げると failed 遷移 + 失敗コメントが呼ばれ false が返る", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
-      vi.mocked(deps.runClaude).mockRejectedValue(
+      vi.mocked(deps.runAgent).mockRejectedValue(
         new Error("execution failed unexpectedly"),
       );
 
@@ -379,12 +379,12 @@ describe("processIssue", () => {
       expect(failureMessage).toContain("execution failed unexpectedly");
     });
 
-    it("runClaude が ExecutorTimeoutError を投げるとタイムアウト診断情報が含まれる", async () => {
+    it("runAgent が ExecutorTimeoutError を投げるとタイムアウト診断情報が含まれる", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       const timeoutMs = 1_800_000;
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
-      vi.mocked(deps.runClaude).mockRejectedValue(
+      vi.mocked(deps.runAgent).mockRejectedValue(
         new ExecutorTimeoutError(`Claude Code CLI timed out after ${timeoutMs}ms`, timeoutMs),
       );
 
@@ -403,7 +403,7 @@ describe("processIssue", () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
-      vi.mocked(deps.runClaude).mockRejectedValue(
+      vi.mocked(deps.runAgent).mockRejectedValue(
         makeExecutorTimeoutError({
           timeoutMs: 600_000,
           stdout: "partial stdout chunk",
@@ -428,7 +428,7 @@ describe("processIssue", () => {
       const repoConfig = makeRepoConfig();
       const token = "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijkl";
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
-      vi.mocked(deps.runClaude).mockRejectedValue(
+      vi.mocked(deps.runAgent).mockRejectedValue(
         makeExecutorTimeoutError({
           timeoutMs: 600_000,
           stdout: `using token ${token}`,
@@ -448,7 +448,7 @@ describe("processIssue", () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
-      vi.mocked(deps.runClaude).mockRejectedValue(
+      vi.mocked(deps.runAgent).mockRejectedValue(
         makeExecutorTimeoutError({ timeoutMs: 600_000 }),
       );
 
@@ -463,11 +463,11 @@ describe("processIssue", () => {
       expect(failureMessage).not.toContain("Output reliability is limited");
     });
 
-    it("runClaude が success=false を返すと failed 遷移 + 失敗コメントが呼ばれ false が返る", async () => {
+    it("runAgent が success=false を返すと failed 遷移 + 失敗コメントが呼ばれ false が返る", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
-      vi.mocked(deps.runClaude).mockResolvedValue(
+      vi.mocked(deps.runAgent).mockResolvedValue(
         makeProcessResult({ success: false, stderr: "CLI error output" }),
       );
 
@@ -490,11 +490,11 @@ describe("processIssue", () => {
       expect(failureMessage).toContain("CLI error output");
     });
 
-    it("runClaude が success=false かつ stderr が空の場合も診断情報が含まれる", async () => {
+    it("runAgent が success=false かつ stderr が空の場合も診断情報が含まれる", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
-      vi.mocked(deps.runClaude).mockResolvedValue(
+      vi.mocked(deps.runAgent).mockResolvedValue(
         makeProcessResult({ success: false, stderr: "", stdout: "stdout error" }),
       );
 
@@ -507,11 +507,11 @@ describe("processIssue", () => {
       expect(failureMessage).toContain("stdout error");
     });
 
-    it("runClaude が success=false かつ stderr/stdout ともに空の場合も診断情報が含まれる", async () => {
+    it("runAgent が success=false かつ stderr/stdout ともに空の場合も診断情報が含まれる", async () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
-      vi.mocked(deps.runClaude).mockResolvedValue(
+      vi.mocked(deps.runAgent).mockResolvedValue(
         makeProcessResult({ success: false, stderr: "", stdout: "" }),
       );
 
@@ -651,7 +651,7 @@ describe("processIssue", () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
-      vi.mocked(deps.runClaude).mockRejectedValue(
+      vi.mocked(deps.runAgent).mockRejectedValue(
         new Error("executor error"),
       );
       vi.mocked(deps.applyLabelTransition).mockImplementation(
@@ -672,7 +672,7 @@ describe("processIssue", () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.buildPrompt).mockReturnValue("generated prompt");
-      vi.mocked(deps.runClaude).mockRejectedValue(
+      vi.mocked(deps.runAgent).mockRejectedValue(
         new Error("executor error"),
       );
       vi.mocked(deps.postFailureComment).mockRejectedValue(
@@ -803,14 +803,14 @@ describe("processIssue", () => {
       expect(deps.postFailureComment).toHaveBeenCalledOnce();
       expect(deps.postSuccessComment).not.toHaveBeenCalled();
       // PR が最後まで見つからないため、初回に加えて再開セッションも起動する。
-      expect(deps.runClaude).toHaveBeenCalledTimes(2);
+      expect(deps.runAgent).toHaveBeenCalledTimes(2);
     });
 
     it("impl で PR が 0 件の場合の失敗コメントに No Linked Pull Request と stdout/stderr が含まれ Exit Code は含まれない", async () => {
       const issue = makeIssue({ phase: Phase.IMPL });
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValue([]);
-      vi.mocked(deps.runClaude).mockResolvedValue(
+      vi.mocked(deps.runAgent).mockResolvedValue(
         makeProcessResult({
           stdout: "Created branch impl-42",
           stderr: "warning: ref not found",
@@ -855,7 +855,7 @@ describe("processIssue", () => {
       const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
       expect(result.outcome).toBe("success");
-      expect(deps.runClaude).toHaveBeenCalledTimes(2);
+      expect(deps.runAgent).toHaveBeenCalledTimes(2);
       expect(deps.applyLabelTransition).toHaveBeenCalledWith(
         "testowner/testrepo",
         42,
@@ -886,37 +886,37 @@ describe("processIssue", () => {
     // -------------------------------------------------------------------
 
     describe("セッション再開: 起動条件と転送", () => {
-      it("PR が 0 件のとき runClaude が 2 回呼ばれる", async () => {
+      it("PR が 0 件のとき runAgent が 2 回呼ばれる", async () => {
         const issue = makeIssue({ phase: Phase.IMPL });
         const repoConfig = makeRepoConfig();
         vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValue([]);
 
         await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-        expect(deps.runClaude).toHaveBeenCalledTimes(2);
+        expect(deps.runAgent).toHaveBeenCalledTimes(2);
       });
 
-      it("2 回目の runClaude は worktree の cwd で continueSession: true を指定する", async () => {
+      it("2 回目の runAgent は worktree の cwd で continueSession: true を指定する", async () => {
         const issue = makeIssue({ phase: Phase.IMPL });
         const repoConfig = makeRepoConfig();
         vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValue([]);
 
         await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-        const calls = vi.mocked(deps.runClaude).mock.calls;
+        const calls = vi.mocked(deps.runAgent).mock.calls;
         expect(calls[1][1]).toEqual(
           expect.objectContaining({ cwd: calls[0][1].cwd, continueSession: true }),
         );
       });
 
-      it("2 回目の runClaude の第 1 引数が言語別の再開プロンプトと一致する", async () => {
+      it("2 回目の runAgent の第 1 引数が言語別の再開プロンプトと一致する", async () => {
         const issue = makeIssue({ phase: Phase.IMPL });
         const repoConfig = makeRepoConfig();
         vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValue([]);
 
         await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-        const resumePrompt = vi.mocked(deps.runClaude).mock.calls[1][0];
+        const resumePrompt = vi.mocked(deps.runAgent).mock.calls[1][0];
         expect(resumePrompt).toBe(IMPL_RESUME_PROMPTS[DEFAULT_EXECUTION_CONFIG.language]);
       });
 
@@ -930,7 +930,7 @@ describe("processIssue", () => {
         expect(deps.buildPrompt).toHaveBeenCalledOnce();
       });
 
-      it("2 回目の runClaude に autonomy と authToken が転送される", async () => {
+      it("2 回目の runAgent に autonomy と authToken が転送される", async () => {
         const issue = makeIssue({ phase: Phase.IMPL });
         const repoConfig = makeRepoConfig();
         const executionConfig: ExecutionConfig = { ...DEFAULT_EXECUTION_CONFIG, autonomy: "full" };
@@ -938,7 +938,7 @@ describe("processIssue", () => {
 
         await processIssue(issue, repoConfig, executionConfig, "sk-ant-oat01-example", repoConfig.labels[issue.phase].trigger, deps);
 
-        const resumeOptions = vi.mocked(deps.runClaude).mock.calls[1][1];
+        const resumeOptions = vi.mocked(deps.runAgent).mock.calls[1][1];
         expect(resumeOptions).toEqual(
           expect.objectContaining({ autonomy: "full", authToken: "sk-ant-oat01-example" }),
         );
@@ -956,7 +956,7 @@ describe("processIssue", () => {
         vi.mocked(deps.fetchLinkedPullRequestNumbers)
           .mockResolvedValueOnce([])
           .mockResolvedValueOnce([123]);
-        vi.mocked(deps.runClaude)
+        vi.mocked(deps.runAgent)
           .mockResolvedValueOnce(makeProcessResult({ stdout: "initial output" }))
           .mockResolvedValueOnce(makeProcessResult({ stdout: "resumed output" }));
 
@@ -976,7 +976,7 @@ describe("processIssue", () => {
         vi.mocked(deps.fetchLinkedPullRequestNumbers)
           .mockResolvedValueOnce([])
           .mockResolvedValueOnce([123]);
-        vi.mocked(deps.runClaude)
+        vi.mocked(deps.runAgent)
           .mockResolvedValueOnce(makeProcessResult({ stdout: "initial output" }))
           .mockResolvedValueOnce(makeProcessResult({ stdout: "resumed output" }));
 
@@ -987,7 +987,7 @@ describe("processIssue", () => {
         expect(comment).toContain("resumed output");
       });
 
-      it("再開しても PR がない場合は IMPL_NO_LINKED_PR で failed になり runClaude はちょうど 2 回呼ばれる", async () => {
+      it("再開しても PR がない場合は IMPL_NO_LINKED_PR で failed になり runAgent はちょうど 2 回呼ばれる", async () => {
         const issue = makeIssue({ phase: Phase.IMPL });
         const repoConfig = makeRepoConfig();
         vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValue([]);
@@ -995,7 +995,7 @@ describe("processIssue", () => {
         const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
         expect(result.outcome).toBe("failure");
-        expect(deps.runClaude).toHaveBeenCalledTimes(2);
+        expect(deps.runAgent).toHaveBeenCalledTimes(2);
         const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
         expect(failureMessage).toContain("**Category:** No Linked Pull Request");
         expect(failureMessage).toContain("the resume attempt did not produce one");
@@ -1005,7 +1005,7 @@ describe("processIssue", () => {
         const issue = makeIssue({ phase: Phase.IMPL });
         const repoConfig = makeRepoConfig();
         vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValue([]);
-        vi.mocked(deps.runClaude)
+        vi.mocked(deps.runAgent)
           .mockResolvedValueOnce(makeProcessResult({ stdout: "initial output" }))
           .mockResolvedValueOnce(
             makeProcessResult({
@@ -1024,7 +1024,7 @@ describe("processIssue", () => {
         const issue = makeIssue({ phase: Phase.IMPL });
         const repoConfig = makeRepoConfig();
         vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValue([]);
-        vi.mocked(deps.runClaude)
+        vi.mocked(deps.runAgent)
           .mockResolvedValueOnce(makeProcessResult({ stdout: "initial output" }))
           .mockResolvedValueOnce(
             makeProcessResult({
@@ -1044,7 +1044,7 @@ describe("processIssue", () => {
         const issue = makeIssue({ phase: Phase.IMPL });
         const repoConfig = makeRepoConfig();
         vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValueOnce([]);
-        vi.mocked(deps.runClaude)
+        vi.mocked(deps.runAgent)
           .mockResolvedValueOnce(makeProcessResult({ stdout: "initial output" }))
           .mockRejectedValueOnce(
             makeExecutorTimeoutError({
@@ -1068,7 +1068,7 @@ describe("processIssue", () => {
         const issue = makeIssue({ phase: Phase.IMPL });
         const repoConfig = makeRepoConfig();
         vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValueOnce([]);
-        vi.mocked(deps.runClaude)
+        vi.mocked(deps.runAgent)
           .mockResolvedValueOnce(makeProcessResult({ stdout: "initial output" }))
           .mockRejectedValueOnce(new Error("resume execution failed"));
 
@@ -1085,7 +1085,7 @@ describe("processIssue", () => {
         const issue = makeIssue({ phase: Phase.IMPL });
         const repoConfig = makeRepoConfig();
         vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValue([]);
-        vi.mocked(deps.runClaude)
+        vi.mocked(deps.runAgent)
           .mockResolvedValueOnce(makeProcessResult({ stdout: "initial output" }))
           .mockResolvedValueOnce(
             makeProcessResult({ success: false, stdout: "resume stdout", stderr: "resume stderr" }),
@@ -1123,35 +1123,35 @@ describe("processIssue", () => {
         const issue = makeIssue({ phase: Phase.IMPL });
         const repoConfig = makeRepoConfig();
         vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValue([]);
-        vi.mocked(deps.runClaude).mockImplementationOnce(async () => {
+        vi.mocked(deps.runAgent).mockImplementationOnce(async () => {
           vi.advanceTimersByTime(TOTAL_TIMEOUT_MS - MIN_IMPL_RESUME_BUDGET_MS);
           return makeProcessResult();
         });
 
         await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-        expect(deps.runClaude).toHaveBeenCalledTimes(2);
+        expect(deps.runAgent).toHaveBeenCalledTimes(2);
       });
 
       it("残予算が MIN_IMPL_RESUME_BUDGET_MS より 1ms 少ないとき再開しない", async () => {
         const issue = makeIssue({ phase: Phase.IMPL });
         const repoConfig = makeRepoConfig();
         vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValue([]);
-        vi.mocked(deps.runClaude).mockImplementationOnce(async () => {
+        vi.mocked(deps.runAgent).mockImplementationOnce(async () => {
           vi.advanceTimersByTime(TOTAL_TIMEOUT_MS - MIN_IMPL_RESUME_BUDGET_MS + 1);
           return makeProcessResult();
         });
 
         await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-        expect(deps.runClaude).toHaveBeenCalledTimes(1);
+        expect(deps.runAgent).toHaveBeenCalledTimes(1);
       });
 
       it("再開しない場合の失敗コメントに予算不足の summary が含まれる", async () => {
         const issue = makeIssue({ phase: Phase.IMPL });
         const repoConfig = makeRepoConfig();
         vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValue([]);
-        vi.mocked(deps.runClaude).mockImplementationOnce(async () => {
+        vi.mocked(deps.runAgent).mockImplementationOnce(async () => {
           vi.advanceTimersByTime(TOTAL_TIMEOUT_MS - MIN_IMPL_RESUME_BUDGET_MS + 1);
           return makeProcessResult();
         });
@@ -1164,19 +1164,19 @@ describe("processIssue", () => {
         );
       });
 
-      it("2 回目の runClaude の timeoutMs に残予算そのものが渡される", async () => {
+      it("2 回目の runAgent の timeoutMs に残予算そのものが渡される", async () => {
         const issue = makeIssue({ phase: Phase.IMPL });
         const repoConfig = makeRepoConfig();
         const elapsedMs = 10 * MS_PER_MINUTE;
         vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValue([]);
-        vi.mocked(deps.runClaude).mockImplementationOnce(async () => {
+        vi.mocked(deps.runAgent).mockImplementationOnce(async () => {
           vi.advanceTimersByTime(elapsedMs);
           return makeProcessResult();
         });
 
         await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-        const resumeOptions = vi.mocked(deps.runClaude).mock.calls[1][1];
+        const resumeOptions = vi.mocked(deps.runAgent).mock.calls[1][1];
         expect(resumeOptions.timeoutMs).toBe(TOTAL_TIMEOUT_MS - elapsedMs);
       });
     });
@@ -1186,41 +1186,41 @@ describe("processIssue", () => {
     // -------------------------------------------------------------------
 
     describe("セッション再開: 再開しない経路のガード", () => {
-      it("初回で PR が見つかる場合、runClaude は 1 回だけ呼ばれる", async () => {
+      it("初回で PR が見つかる場合、runAgent は 1 回だけ呼ばれる", async () => {
         const issue = makeIssue({ phase: Phase.IMPL });
         const repoConfig = makeRepoConfig();
 
         await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-        expect(deps.runClaude).toHaveBeenCalledTimes(1);
+        expect(deps.runAgent).toHaveBeenCalledTimes(1);
       });
 
-      it("PR 照会自体が throw した場合は再開せず runClaude は 1 回だけ呼ばれる", async () => {
+      it("PR 照会自体が throw した場合は再開せず runAgent は 1 回だけ呼ばれる", async () => {
         const issue = makeIssue({ phase: Phase.IMPL });
         const repoConfig = makeRepoConfig();
         vi.mocked(deps.fetchLinkedPullRequestNumbers).mockRejectedValue(new Error("API error"));
 
         await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-        expect(deps.runClaude).toHaveBeenCalledTimes(1);
+        expect(deps.runAgent).toHaveBeenCalledTimes(1);
       });
 
-      it("plan フェーズでは runClaude が 1 回だけ呼ばれる", async () => {
+      it("plan フェーズでは runAgent が 1 回だけ呼ばれる", async () => {
         const issue = makeIssue({ phase: Phase.PLAN });
         const repoConfig = makeRepoConfig();
 
         await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-        expect(deps.runClaude).toHaveBeenCalledTimes(1);
+        expect(deps.runAgent).toHaveBeenCalledTimes(1);
       });
 
-      it("spec フェーズでは runClaude が 1 回だけ呼ばれる", async () => {
+      it("spec フェーズでは runAgent が 1 回だけ呼ばれる", async () => {
         const issue = makeIssue({ phase: Phase.SPEC });
         const repoConfig = makeRepoConfig();
 
         await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, repoConfig.labels[issue.phase].trigger, deps);
 
-        expect(deps.runClaude).toHaveBeenCalledTimes(1);
+        expect(deps.runAgent).toHaveBeenCalledTimes(1);
       });
     });
 
@@ -1237,7 +1237,7 @@ describe("processIssue", () => {
         vi.mocked(deps.fetchLinkedPullRequestNumbers)
           .mockResolvedValueOnce([])
           .mockResolvedValueOnce([123]);
-        vi.mocked(deps.runClaude)
+        vi.mocked(deps.runAgent)
           .mockResolvedValueOnce(makeProcessResult({ stdout: `token: ${initialSecret}` }))
           .mockResolvedValueOnce(makeProcessResult({ stdout: `token: ${resumeSecret}` }));
 
@@ -1348,7 +1348,7 @@ describe("processIssue", () => {
       const issue = makeIssue({ phase: Phase.SPEC });
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.fetchIssueComments).mockResolvedValue([]);
-      vi.mocked(deps.runClaude).mockResolvedValue(
+      vi.mocked(deps.runAgent).mockResolvedValue(
         makeProcessResult({ stdout: "spec proposal" }),
       );
 
@@ -1375,7 +1375,7 @@ describe("processIssue", () => {
         makeHumanComment("fix this"),
         makeWorkerComment(2, "proposal v2"),
       ]);
-      vi.mocked(deps.runClaude).mockResolvedValue(
+      vi.mocked(deps.runAgent).mockResolvedValue(
         makeProcessResult({ stdout: "proposal v3" }),
       );
 
@@ -1394,7 +1394,7 @@ describe("processIssue", () => {
       const issue = makeIssue({ phase: Phase.SPEC });
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.fetchIssueComments).mockResolvedValue([]);
-      vi.mocked(deps.runClaude).mockResolvedValue(
+      vi.mocked(deps.runAgent).mockResolvedValue(
         makeProcessResult({ stdout: "spec output" }),
       );
 
@@ -1421,7 +1421,7 @@ describe("processIssue", () => {
       const issue = makeIssue({ phase: Phase.SPEC });
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.fetchIssueComments).mockResolvedValue([]);
-      vi.mocked(deps.runClaude).mockResolvedValue(
+      vi.mocked(deps.runAgent).mockResolvedValue(
         makeProcessResult({ stdout: "spec output" }),
       );
       vi.mocked(deps.postSpecProposalComment).mockRejectedValue(
@@ -1446,7 +1446,7 @@ describe("processIssue", () => {
       const issue = makeIssue({ phase: Phase.SPEC });
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.fetchIssueComments).mockResolvedValue([]);
-      vi.mocked(deps.runClaude).mockResolvedValue(
+      vi.mocked(deps.runAgent).mockResolvedValue(
         makeProcessResult({ stdout: "spec output" }),
       );
       vi.mocked(deps.applyLabelTransition)
@@ -1464,7 +1464,7 @@ describe("processIssue", () => {
       const issue = makeIssue({ phase: Phase.SPEC });
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.fetchIssueComments).mockResolvedValue([]);
-      vi.mocked(deps.runClaude).mockResolvedValue(
+      vi.mocked(deps.runAgent).mockResolvedValue(
         makeProcessResult({ stdout: "spec output" }),
       );
       vi.mocked(deps.postSpecProposalComment).mockRejectedValue(
