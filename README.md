@@ -53,7 +53,7 @@ If someone has to sit there clicking "Allow" over and over, that defeats the pur
 
 ### LLM-agnostic architecture
 
-The AI agent is a single CLI call in the pipeline. Choose Claude Code CLI or OpenAI Codex CLI with `execution.agent`.
+The AI agent is a single CLI call in the pipeline. Choose Claude Code CLI or OpenAI Codex CLI with `execution.agent`, or list both to fall back to the other when one runs out of usage.
 
 The workflow design matters more than which LLM you plug into it.
 
@@ -295,7 +295,7 @@ Labels default to `ai/*` (e.g. `ai/spec`, `ai/plan/in-progress`). To customize p
 | `repositories[].priority_labels` | Priority labels. Issues with labels higher in the list are processed first |
 | `execution.max_parallel` | Number of parallel executions. Default is `1` (sequential) |
 | `execution.max_issues_per_repo` | Maximum number of issues to process per repository. Default is `1` |
-| `execution.agent` | Execution agent: `claude` / `codex`. Default is `claude` |
+| `execution.agent` | Execution agent: `claude` / `codex`, or a list in priority order (e.g. `[claude, codex]`). When an agent fails because its usage limit or credits ran out, the Issue is retried with the next agent in the list. Default is `claude` |
 | `execution.autonomy` | CLI autonomy level. For Codex, `full` uses `--yolo`, while `auto` / `sandboxed` use `--sandbox workspace-write`. Claude maps these values to its permission modes. Default is `interactive` |
 | `execution.interval_minutes` | Scheduled execution interval in minutes (10-1440). Default is `10` |
 | `execution.timeout_minutes` | Agent CLI execution timeout in minutes (1-240). Default is `60`. Budgets the whole impl session, including a possible resume |

@@ -50,6 +50,8 @@ src/
     prompt.ts        # プロンプトテンプレート読み込み・展開
     prompt-migration.ts # フラットレイアウト→言語別ディレクトリへの移行
     executor.ts      # CLI エージェント実行（Claude / Codex）
+    usage-limit.ts   # 失敗出力から利用上限・クレジット切れを判定
+    agent-pool.ts    # 1 回の実行内で利用上限に達したエージェントを記録
     worktree.ts      # git worktree ライフサイクル管理
     label.ts         # ラベル遷移操作（applyLabelTransition）
     comment.ts       # Issue コメント投稿（成功・失敗・spec 提案）
@@ -90,7 +92,7 @@ spec の review 状態では、ワーカーが毎サイクル評価を行う。�
 ### エラーハンドリング 3 段階
 
 - **レベル 1**: trigger→in-progress 失敗 → 即中断、次回リトライ可能
-- **レベル 2**: プロンプト生成/CLI 実行失敗/再開後も impl の PR が未作成 → failed 遷移 + 構造化された失敗診断コメント（`FailureDiagnostics` → `formatFailureDiagnostics()` でフォーマット）
+- **レベル 2**: プロンプト生成/CLI 実行失敗/再開後も impl の PR が未作成/全エージェントが利用上限 → failed 遷移 + 構造化された失敗診断コメント（`FailureDiagnostics` → `formatFailureDiagnostics()` でフォーマット）
 - **レベル 3**: 後処理（done/failed ラベル遷移、コメント投稿）失敗 → ログ WARNING のみ
 
 `:failed` に遷移した Issue は trigger ラベルが剥がれるため、次回フェッチ対象から外れる (自動リトライされない)。再実行するにはユーザーが手動で trigger ラベル (`ai/spec` 等) を再付与する必要がある。
@@ -102,6 +104,17 @@ spec の review 状態では、ワーカーが毎サイクル評価を行う。�
 `execution.timeout_minutes` は初回実行と再開を合わせた壁時計予算として扱う。初回実行の直前に deadline を確定し、再開には残予算を渡す。残予算が `MIN_IMPL_RESUME_BUDGET_MS` (5 分) を下回る場合は再開しない。
 
 再開後も PR が無い場合、Claude が最終行に no-change マーカーを出力していれば `IMPL_NO_CHANGE_REQUIRED`、そうでなければ `IMPL_NO_LINKED_PR` として failed に遷移する。マーカーはユーザー制御の Issue 本文が混ざったモデル出力なので信頼境界ではない。診断カテゴリを分けるだけで、終端ラベルは `:failed` (人間ゲート) のまま変えない。
+
+### エージェントのフォールバック
+
+`execution.agent` は優先度順のリストを受け付ける（単一の文字列は要素 1 件のリストとして扱う）。利用上限やクレジット切れで失敗したときだけ次のエージェントで実行し直し、それ以外の失敗はフォールバックせず従来どおり `:failed` にする。
+
+- 上限判定は非 0 終了した実行の出力にだけかける。正常終了した stdout は Issue 本文を引用しうるモデル出力なので、照合すると Issue の文面でフォールバックを起こせてしまう
+- 一時的な 429 のレート制限は上限扱いしない。同じエージェントでも少し後なら成功しうる
+- 試行ごとに worktree を作り直す。前回試行のブランチは worktree 削除後も残り、上限による失敗は 1 秒以内に終わりうるので、2 回目以降はブランチ名とパスに試行番号を付けて衝突を避ける
+- impl の再開で上限に達した場合も次のエージェントで最初からやり直す。再開は常にその試行で動いたエージェントで行う
+- 上限到達の記録（`AgentPool`）は 1 回の worker 実行の中だけで全リポジトリが共有し、永続化しない。次のサイクルは全エージェントから試すので、上限のリセットを自然に拾える
+- 使えるエージェントが残っていない場合、trigger ラベルを外す前なら何も触らず deferred にして次サイクルに回す。すでに in-progress にある Issue（spec の revise 経由）は deferred にすると取り残されるので `AGENT_USAGE_LIMIT` で `:failed` にする
 
 ### 並列実行
 
@@ -175,7 +188,7 @@ spec の review 状態では、ワーカーが毎サイクル評価を行う。�
 - `repositories[].default_branch`: デフォルトブランチ名（文字列、デフォルト: `main`）。worktree 作成時に `origin/<default_branch>` を起点として使用
 - `execution.max_parallel`: 並列実行数（整数、1-10、デフォルト: 1）
 - `execution.max_issues_per_repo`: リポジトリあたりの最大処理 Issue 数（整数、1-20、デフォルト: 1）
-- `execution.agent`: 実行エージェント（`claude` / `codex`、デフォルト: `claude`）
+- `execution.agent`: 実行エージェント（`claude` / `codex`、または優先度順のリスト、デフォルト: `claude`）
 - `execution.autonomy`: CLI の自律実行レベル（`interactive` / `auto` / `full` / `sandboxed`、デフォルト: `interactive`）
   - `interactive`: 各操作にユーザー承認が必要。launchd 無人実行には不向き
   - `auto`: Claude Code の `--permission-mode auto`。分類器が危険操作のみブロック (v2.1.83+ / Max・Team・Enterprise プラン必須)
