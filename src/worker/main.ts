@@ -3,7 +3,8 @@ import { Autonomy, Agent, repoFullName } from "./models.js";
 import { Phase as PhaseEnum } from "./models.js";
 import { loadConfig } from "./config.js";
 import { fetchIssues } from "./fetcher.js";
-import { processIssue, resumeSpecReview } from "./pipeline.js";
+import { processIssue, resumeSpecReview, defaultDeps } from "./pipeline.js";
+import { AgentPool } from "./agent-pool.js";
 import { resolveAutonomyLogMessage } from "./executor.js";
 import { migrateFlatPromptTemplates } from "./prompt-migration.js";
 import { configureLogger, createLogger, rotateOldLogs } from "./logger.js";
@@ -35,6 +36,7 @@ export interface WorkerDeps {
     executionConfig: ExecutionConfig,
     authToken: string | null,
     entryLabel: string,
+    agentPool: AgentPool,
   ) => Promise<StepResult>;
   resumeSpecReview: (
     issue: Issue,
@@ -42,6 +44,7 @@ export interface WorkerDeps {
     executionConfig: ExecutionConfig,
     authToken: string | null,
     canRunClaude: boolean,
+    agentPool: AgentPool,
   ) => Promise<StepResult>;
   ensureLabelsExist: (
     repo: string,
@@ -54,8 +57,10 @@ export interface WorkerDeps {
 export const defaultWorkerDeps: WorkerDeps = {
   loadConfig,
   fetchIssues: (repoConfig, phase, label) => fetchIssues(repoConfig, phase, label),
-  processIssue,
-  resumeSpecReview,
+  processIssue: (issue, repoConfig, executionConfig, authToken, entryLabel, agentPool) =>
+    processIssue(issue, repoConfig, executionConfig, authToken, entryLabel, defaultDeps, agentPool),
+  resumeSpecReview: (issue, repoConfig, executionConfig, authToken, canRunClaude, agentPool) =>
+    resumeSpecReview(issue, repoConfig, executionConfig, authToken, canRunClaude, defaultDeps, agentPool),
   ensureLabelsExist,
   readAuthToken,
   migrateFlatPromptTemplates,
@@ -68,6 +73,7 @@ interface StepContext {
   executionConfig: ExecutionConfig;
   deps: WorkerDeps;
   authToken: string | null;
+  agentPool: AgentPool;
 }
 
 interface Step {
@@ -88,21 +94,21 @@ const STEPS: readonly Step[] = [
     phase: PhaseEnum.IMPL,
     label: (l) => l.impl.trigger,
     run: (ctx, issue, _canRunClaude) =>
-      ctx.deps.processIssue(issue, ctx.repoConfig, ctx.executionConfig, ctx.authToken, ctx.repoConfig.labels.impl.trigger),
+      ctx.deps.processIssue(issue, ctx.repoConfig, ctx.executionConfig, ctx.authToken, ctx.repoConfig.labels.impl.trigger, ctx.agentPool),
     requiresQuota: true,
   },
   {
     phase: PhaseEnum.PLAN,
     label: (l) => l.plan.trigger,
     run: (ctx, issue, _canRunClaude) =>
-      ctx.deps.processIssue(issue, ctx.repoConfig, ctx.executionConfig, ctx.authToken, ctx.repoConfig.labels.plan.trigger),
+      ctx.deps.processIssue(issue, ctx.repoConfig, ctx.executionConfig, ctx.authToken, ctx.repoConfig.labels.plan.trigger, ctx.agentPool),
     requiresQuota: true,
   },
   {
     phase: PhaseEnum.SPEC,
     label: (l) => l.spec.review,
     run: (ctx, issue, canRunClaude) =>
-      ctx.deps.resumeSpecReview(issue, ctx.repoConfig, ctx.executionConfig, ctx.authToken, canRunClaude),
+      ctx.deps.resumeSpecReview(issue, ctx.repoConfig, ctx.executionConfig, ctx.authToken, canRunClaude, ctx.agentPool),
     // Evaluating a review costs one gh call and no claude run. Skipping it
     // when quota is spent would sit on a human's approval until a cycle
     // happens to have quota left over.
@@ -112,7 +118,7 @@ const STEPS: readonly Step[] = [
     phase: PhaseEnum.SPEC,
     label: (l) => l.spec.trigger,
     run: (ctx, issue, _canRunClaude) =>
-      ctx.deps.processIssue(issue, ctx.repoConfig, ctx.executionConfig, ctx.authToken, ctx.repoConfig.labels.spec.trigger),
+      ctx.deps.processIssue(issue, ctx.repoConfig, ctx.executionConfig, ctx.authToken, ctx.repoConfig.labels.spec.trigger, ctx.agentPool),
     requiresQuota: true,
   },
 ];
@@ -129,6 +135,7 @@ async function processRepository(
   executionConfig: ExecutionConfig,
   deps: WorkerDeps,
   authToken: string | null,
+  agentPool: AgentPool,
 ): Promise<boolean> {
   const fullName = repoFullName(repoConfig);
   const labels = repoConfig.labels;
@@ -145,7 +152,7 @@ async function processRepository(
   let remaining = executionConfig.maxIssuesPerRepo;
   const processedIssueNumbers = new Set<number>();
 
-  const ctx: StepContext = { repoConfig, executionConfig, deps, authToken };
+  const ctx: StepContext = { repoConfig, executionConfig, deps, authToken, agentPool };
 
   for (const step of STEPS) {
     const stepLabel = step.label(labels);
@@ -186,10 +193,13 @@ async function processRepository(
         continue;
       }
 
-      const canRunClaude = remaining > 0;
+      const hasAvailableAgent = agentPool.next() !== undefined;
+      const canRunClaude = remaining > 0 && hasAvailableAgent;
       if (!canRunClaude && step.requiresQuota) {
         logger.info(
-          "[%s] %s フェーズ: claude 起動上限に達したため残りをスキップ",
+          hasAvailableAgent
+            ? "[%s] %s フェーズ: claude 起動上限に達したため残りをスキップ"
+            : "[%s] %s フェーズ: 全エージェントが利用上限に達したため残りをスキップ",
           fullName,
           step.phase,
         );
@@ -338,12 +348,13 @@ export async function workerMain(
   }
 
   const semaphore = new Semaphore(appConfig.execution.maxParallel);
+  const agentPool = new AgentPool(appConfig.execution.agents);
 
   const results = await Promise.allSettled(
     appConfig.repositories.map(async (repoConfig) => {
       await semaphore.acquire();
       try {
-        return await processRepository(repoConfig, appConfig.execution, deps, authToken);
+        return await processRepository(repoConfig, appConfig.execution, deps, authToken, agentPool);
       } finally {
         semaphore.release();
       }

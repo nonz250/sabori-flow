@@ -10,6 +10,7 @@ import {
 } from "./helpers/factories.js";
 import { createMockWorkerDeps } from "./helpers/mock-deps.js";
 import type { WorkerDeps } from "../../src/worker/main.js";
+import { AgentPool } from "../../src/worker/agent-pool.js";
 
 const { mockLoggerInstance } = vi.hoisted(() => ({
   mockLoggerInstance: {
@@ -582,6 +583,74 @@ describe("workerMain", () => {
     });
   });
 
+  describe("エージェントの利用上限の共有", () => {
+    it("同一サイクルの全リポジトリに同じ AgentPool が渡される", async () => {
+      const repo1 = makeRepoConfig({ owner: "org1", repo: "repo1" });
+      const repo2 = makeRepoConfig({ owner: "org2", repo: "repo2" });
+      vi.mocked(deps.loadConfig).mockReturnValue(
+        makeAppConfig({
+          repositories: [repo1, repo2],
+          execution: { maxParallel: 2, agents: [Agent.CLAUDE, Agent.CODEX] },
+        }),
+      );
+      vi.mocked(deps.fetchIssues).mockImplementation(async (_repo, phase) =>
+        phase === Phase.PLAN ? [makeIssue({ phase: Phase.PLAN })] : [],
+      );
+
+      await workerMain("/path/to/config.yml", deps);
+
+      const pools = vi.mocked(deps.processIssue).mock.calls.map((call) => call[5]);
+      expect(pools).toHaveLength(2);
+      expect(pools[0]).toBeInstanceOf(AgentPool);
+      expect(pools[1]).toBe(pools[0]);
+      expect(pools[0].available()).toEqual([Agent.CLAUDE, Agent.CODEX]);
+    });
+
+    it("全エージェントが利用上限に達した後は、エージェントを起動するステップの残りの Issue を処理しない", async () => {
+      vi.mocked(deps.loadConfig).mockReturnValue(
+        makeAppConfig({ execution: { agents: [Agent.CLAUDE], maxIssuesPerRepo: 10 } }),
+      );
+      vi.mocked(deps.fetchIssues).mockImplementation(async (_repo, phase) =>
+        phase === Phase.PLAN
+          ? [makeIssue({ number: 1, phase: Phase.PLAN }), makeIssue({ number: 2, phase: Phase.PLAN })]
+          : [],
+      );
+      vi.mocked(deps.processIssue).mockImplementation(
+        async (_issue, _repo, _exec, _token, _label, agentPool) => {
+          agentPool.markExhausted(Agent.CLAUDE);
+          return { outcome: "failure", claudeExecuted: true };
+        },
+      );
+
+      await workerMain("/path/to/config.yml", deps);
+
+      expect(deps.processIssue).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(deps.processIssue).mock.calls[0][0].number).toBe(1);
+    });
+
+    it("全エージェントが利用上限に達していても spec review の評価は canRunClaude=false で行う", async () => {
+      vi.mocked(deps.loadConfig).mockReturnValue(
+        makeAppConfig({ execution: { agents: [Agent.CLAUDE], maxIssuesPerRepo: 10 } }),
+      );
+      vi.mocked(deps.fetchIssues).mockImplementation(async (_repo, _phase, label) => {
+        if (label === makeRepoConfig().labels.impl.trigger) return [makeIssue({ number: 1, phase: Phase.IMPL })];
+        if (label === SPEC_LABELS.review) return [makeIssue({ number: 2, phase: Phase.SPEC })];
+        return [];
+      });
+      vi.mocked(deps.processIssue).mockImplementation(
+        async (_issue, _repo, _exec, _token, _label, agentPool) => {
+          agentPool.markExhausted(Agent.CLAUDE);
+          return { outcome: "failure", claudeExecuted: true };
+        },
+      );
+
+      await workerMain("/path/to/config.yml", deps);
+
+      expect(deps.resumeSpecReview).toHaveBeenCalledOnce();
+      expect(vi.mocked(deps.resumeSpecReview).mock.calls[0][4]).toBe(false);
+    });
+  });
+
   // -----------------------------------------------------------------------
   // migrateFlatPromptTemplates
   // -----------------------------------------------------------------------
@@ -709,6 +778,7 @@ describe("workerMain", () => {
         expect.anything(),
         "sk-ant-oat01-example",
         expect.any(String),
+        expect.any(AgentPool),
       );
     });
 
@@ -731,6 +801,7 @@ describe("workerMain", () => {
         expect.anything(),
         null,
         expect.any(String),
+        expect.any(AgentPool),
       );
     });
 
