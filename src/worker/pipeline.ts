@@ -172,6 +172,29 @@ export async function processIssue(
       );
       return { outcome: "failure", claudeExecuted: false };
     }
+
+    // Repositories run in parallel, so another one can exhaust the last
+    // agent while the transition above is in flight. Nothing has run yet,
+    // so handing the trigger label back is the same deferral as above.
+    if (agentPool.next() === undefined) {
+      logger.info(
+        "Issue #%s: ラベル遷移中に利用可能なエージェントがなくなったため trigger ラベルに戻します [repo=%s]",
+        issue.number,
+        repo,
+      );
+      await deps.applyLabelTransition(repo, issue.number, {
+        add: [entryLabel],
+        remove: [phaseLabels.inProgress],
+      }).catch((error: unknown) => {
+        logger.warn(
+          "Issue #%s: trigger ラベルへの戻しに失敗しました [repo=%s]: %s",
+          issue.number,
+          repo,
+          error instanceof Error ? error.message : String(error),
+        );
+      });
+      return { outcome: "deferred", claudeExecuted: false };
+    }
   }
 
   return runWithAgentFallback(

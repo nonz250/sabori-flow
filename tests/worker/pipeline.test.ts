@@ -1732,6 +1732,42 @@ describe("processIssue", () => {
       expect(deps.runAgent).not.toHaveBeenCalled();
     });
 
+    it("ラベル遷移の間に他リポジトリが最後のエージェントを上限到達にした場合は trigger ラベルに戻して deferred を返す", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      const agentPool = new AgentPool(["claude"]);
+      vi.mocked(deps.applyLabelTransition).mockImplementationOnce(async () => {
+        agentPool.markExhausted("claude");
+      });
+
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, PLAN_LABELS.trigger, deps, agentPool);
+
+      expect(result).toEqual({ outcome: "deferred", claudeExecuted: false });
+      expect(deps.runAgent).not.toHaveBeenCalled();
+      expect(deps.applyLabelTransition).toHaveBeenLastCalledWith(
+        "testowner/testrepo",
+        42,
+        { add: [PLAN_LABELS.trigger], remove: [PLAN_LABELS.inProgress] },
+      );
+      expect(deps.postFailureComment).not.toHaveBeenCalled();
+    });
+
+    it("trigger ラベルへの戻しに失敗しても deferred を返す", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      const agentPool = new AgentPool(["claude"]);
+      vi.mocked(deps.applyLabelTransition)
+        .mockImplementationOnce(async () => {
+          agentPool.markExhausted("claude");
+        })
+        .mockRejectedValueOnce(new Error("gh failed"));
+
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, PLAN_LABELS.trigger, deps, agentPool);
+
+      expect(result).toEqual({ outcome: "deferred", claudeExecuted: false });
+      expect(deps.postFailureComment).not.toHaveBeenCalled();
+    });
+
     it("in-progress から入った Issue で利用可能なエージェントがなければ in-progress に放置せず failed にする", async () => {
       const issue = makeIssue({ phase: Phase.SPEC });
       const repoConfig = makeRepoConfig();
