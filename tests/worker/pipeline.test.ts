@@ -24,6 +24,7 @@ import type { PipelineDeps } from "../../src/worker/pipeline.js";
 const DEFAULT_EXECUTION_CONFIG: ExecutionConfig = {
   maxParallel: 1,
   maxIssuesPerRepo: 10,
+  agents: ["claude"],
   autonomy: "interactive",
   intervalMinutes: 60,
   timeoutMinutes: 60,
@@ -133,12 +134,8 @@ describe("processIssue", () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       const executionConfig: ExecutionConfig = {
-        maxParallel: 1,
-        maxIssuesPerRepo: 10,
+        ...DEFAULT_EXECUTION_CONFIG,
         autonomy: "full",
-        intervalMinutes: 60,
-        timeoutMinutes: 60,
-        language: "ja",
       };
 
       await processIssue(issue, repoConfig, executionConfig, null, repoConfig.labels[issue.phase].trigger, deps);
@@ -146,7 +143,7 @@ describe("processIssue", () => {
       expect(deps.runAgent).toHaveBeenCalledOnce();
       expect(deps.runAgent).toHaveBeenCalledWith(
         "generated prompt",
-        { cwd: "/tmp/worktrees/issue-mock", autonomy: "full", timeoutMs: 3_600_000 },
+        { cwd: "/tmp/worktrees/issue-mock", agent: "claude", autonomy: "full", timeoutMs: 3_600_000 },
       );
     });
 
@@ -159,7 +156,7 @@ describe("processIssue", () => {
       expect(deps.runAgent).toHaveBeenCalledOnce();
       expect(deps.runAgent).toHaveBeenCalledWith(
         "generated prompt",
-        { cwd: "/tmp/worktrees/issue-mock", autonomy: "interactive", timeoutMs: 3_600_000 },
+        { cwd: "/tmp/worktrees/issue-mock", agent: "claude", autonomy: "interactive", timeoutMs: 3_600_000 },
       );
     });
 

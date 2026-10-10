@@ -319,10 +319,12 @@ export async function workerMain(
   deps.migrateFlatPromptTemplates(appConfig.language);
 
   if (appConfig.execution.autonomy === Autonomy.FULL) {
-    const agentLabel = appConfig.execution.agent === Agent.CODEX
-      ? "Codex CLI will run with --yolo"
-      : "Claude Code CLI will run with --dangerously-skip-permissions";
-    logger.warn("autonomy is set to 'full'. %s.", agentLabel);
+    for (const agent of appConfig.execution.agents) {
+      const agentLabel = agent === Agent.CODEX
+        ? "Codex CLI will run with --yolo"
+        : "Claude Code CLI will run with --dangerously-skip-permissions";
+      logger.warn("autonomy is set to 'full'. %s.", agentLabel);
+    }
   } else {
     const autonomyLog = resolveAutonomyLogMessage(appConfig.execution.autonomy);
     if (autonomyLog !== null) {

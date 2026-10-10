@@ -745,7 +745,7 @@ describe("workerMain", () => {
 
     it("agent が codex かつ autonomy が full の場合 WARN ログに Codex CLI のフラグが含まれる", async () => {
       vi.mocked(deps.loadConfig).mockReturnValue(
-        makeAppConfig({ execution: { agent: Agent.CODEX, autonomy: Autonomy.FULL } }),
+        makeAppConfig({ execution: { agents: [Agent.CODEX], autonomy: Autonomy.FULL } }),
       );
       vi.mocked(deps.fetchIssues).mockResolvedValue([]);
 
@@ -761,7 +761,7 @@ describe("workerMain", () => {
 
     it("agent が claude かつ autonomy が full の場合 WARN ログに Claude Code CLI のフラグが含まれる", async () => {
       vi.mocked(deps.loadConfig).mockReturnValue(
-        makeAppConfig({ execution: { agent: Agent.CLAUDE, autonomy: Autonomy.FULL } }),
+        makeAppConfig({ execution: { agents: [Agent.CLAUDE], autonomy: Autonomy.FULL } }),
       );
       vi.mocked(deps.fetchIssues).mockResolvedValue([]);
 
@@ -772,6 +772,26 @@ describe("workerMain", () => {
       expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
         "autonomy is set to 'full'. %s.",
         "Claude Code CLI will run with --dangerously-skip-permissions",
+      );
+    });
+
+    it("優先度リストに複数のエージェントがあり autonomy が full の場合、各エージェントのフラグを WARN ログに出す", async () => {
+      vi.mocked(deps.loadConfig).mockReturnValue(
+        makeAppConfig({ execution: { agents: [Agent.CLAUDE, Agent.CODEX], autonomy: Autonomy.FULL } }),
+      );
+      vi.mocked(deps.fetchIssues).mockResolvedValue([]);
+
+      mockLoggerInstance.warn.mockClear();
+
+      await workerMain("/path/to/config.yml", deps);
+
+      expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
+        "autonomy is set to 'full'. %s.",
+        "Claude Code CLI will run with --dangerously-skip-permissions",
+      );
+      expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
+        "autonomy is set to 'full'. %s.",
+        "Codex CLI will run with --yolo",
       );
     });
   });

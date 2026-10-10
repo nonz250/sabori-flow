@@ -191,11 +191,12 @@ export async function processIssue(
         const implDeadlineMs = Date.now() + executionConfig.timeoutMinutes * MS_PER_MINUTE;
 
         let result: ProcessResult;
-        const agentName = agentDisplayName(executionConfig.agent);
+        const agent = executionConfig.agents[0];
+        const agentName = agentDisplayName(agent);
         try {
           result = await deps.runAgent(prompt, {
             cwd: worktreePath,
-            agent: executionConfig.agent,
+            agent,
             autonomy: executionConfig.autonomy,
             timeoutMs: executionConfig.timeoutMinutes * MS_PER_MINUTE,
             authToken: authToken ?? undefined,
@@ -661,7 +662,8 @@ async function resolveImplCompletion(
   initialResult: ProcessResult,
   deadlineMs: number,
 ): Promise<ImplCompletion> {
-  const agentName = agentDisplayName(executionConfig.agent);
+  const agent = executionConfig.agents[0];
+  const agentName = agentDisplayName(agent);
   if (await implPullRequestCheckPassed(deps, repo, issue.number)) {
     return { linked: true, stdout: initialResult.stdout };
   }
@@ -699,7 +701,7 @@ async function resolveImplCompletion(
     // concurrent issues cannot resume each other's session.
     resumeResult = await deps.runAgent(IMPL_RESUME_PROMPTS[executionConfig.language], {
       cwd: worktreePath,
-      agent: executionConfig.agent,
+      agent,
       autonomy: executionConfig.autonomy,
       timeoutMs: remainingMs,
       authToken: authToken ?? undefined,

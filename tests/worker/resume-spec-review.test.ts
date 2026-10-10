@@ -17,6 +17,7 @@ import { formatMarker } from "../../src/worker/spec-thread.js";
 const DEFAULT_EXECUTION_CONFIG: ExecutionConfig = {
   maxParallel: 1,
   maxIssuesPerRepo: 10,
+  agents: ["claude"],
   autonomy: "interactive",
   intervalMinutes: 10,
   timeoutMinutes: 60,

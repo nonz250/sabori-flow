@@ -133,7 +133,8 @@ export interface RepositoryConfig {
 export interface ExecutionConfig {
   readonly maxParallel: number;
   readonly maxIssuesPerRepo: number;
-  readonly agent: Agent;
+  /** Priority order; later entries are fallbacks when earlier ones hit a usage limit */
+  readonly agents: readonly Agent[];
   readonly autonomy: Autonomy;
   readonly intervalMinutes: number;
   readonly timeoutMinutes: number;
