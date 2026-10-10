@@ -18,6 +18,7 @@ export class WorktreeError extends Error {
 }
 
 const GIT_TIMEOUT_MS = 120_000;
+const FIRST_ATTEMPT = 1;
 
 const logger = createLogger("worktree");
 
@@ -37,8 +38,11 @@ export async function withWorktree<T>(
   issueNumber: number,
   callback: (worktreePath: string) => T | Promise<T>,
   timestampFn: () => string = defaultTimestampFn,
+  attempt: number = FIRST_ATTEMPT,
 ): Promise<T> {
-  const ts = timestampFn();
+  // A retry with a fallback agent can start within the same second as the
+  // attempt it replaces, and the previous branch is not deleted on cleanup.
+  const ts = attempt > FIRST_ATTEMPT ? `${timestampFn()}-${attempt}` : timestampFn();
   const branchName = `sabori-flow/${issueNumber}-${ts}`;
   const repoDir = join(getWorktreesDir(), repoConfig.owner, repoConfig.repo);
   const worktreePath = join(repoDir, `issue-${issueNumber}-${ts}`);
