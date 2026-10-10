@@ -298,7 +298,7 @@ language: ja
 | `execution.agent` | 実行エージェント: `claude` / `codex`。優先度順のリスト（例: `[claude, codex]`）も指定でき、利用上限やクレジット切れで失敗したときはリストの次のエージェントで Issue を実行し直す。デフォルトは `claude` |
 | `execution.autonomy` | CLI の自律実行レベル。Codexでは `full` が `--yolo`、`auto` / `sandboxed` が `--sandbox workspace-write`。Claudeでは従来の権限モードへ対応。デフォルトは `interactive` |
 | `execution.interval_minutes` | スケジュール実行間隔（分、10-1440）。デフォルトは `10` |
-| `execution.timeout_minutes` | エージェントCLIの実行タイムアウト（分、1-240）。デフォルトは `60`。impl の再開を含むセッション全体の予算 |
+| `execution.timeout_minutes` | エージェントCLIの実行タイムアウト（分、1-240）。デフォルトは `60`。impl の再開を含むセッション全体の予算。別のエージェントにフォールバックした場合は、エージェントごとに予算を持つ |
 | `language` | CLI メッセージおよびプロンプトテンプレートの言語（`ja` / `en`）。デフォルトは `ja` |
 
 > **Note:** `config.yml` を編集した後は、`npx sabori-flow reinstall` を実行して launchd に変更を反映してください。

@@ -298,7 +298,7 @@ Labels default to `ai/*` (e.g. `ai/spec`, `ai/plan/in-progress`). To customize p
 | `execution.agent` | Execution agent: `claude` / `codex`, or a list in priority order (e.g. `[claude, codex]`). When an agent fails because its usage limit or credits ran out, the Issue is retried with the next agent in the list. Default is `claude` |
 | `execution.autonomy` | CLI autonomy level. For Codex, `full` uses `--yolo`, while `auto` / `sandboxed` use `--sandbox workspace-write`. Claude maps these values to its permission modes. Default is `interactive` |
 | `execution.interval_minutes` | Scheduled execution interval in minutes (10-1440). Default is `10` |
-| `execution.timeout_minutes` | Agent CLI execution timeout in minutes (1-240). Default is `60`. Budgets the whole impl session, including a possible resume |
+| `execution.timeout_minutes` | Agent CLI execution timeout in minutes (1-240). Default is `60`. Budgets the whole impl session, including a possible resume. When falling back to another agent, each agent gets its own budget |
 | `language` | Language for CLI messages and prompt templates (`ja` / `en`). Default is `ja` |
 
 > **Note:** After editing `config.yml`, run `npx sabori-flow reinstall` to apply the changes to launchd.
