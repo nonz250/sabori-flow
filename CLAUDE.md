@@ -50,6 +50,8 @@ src/
     prompt.ts        # プロンプトテンプレート読み込み・展開
     prompt-migration.ts # フラットレイアウト→言語別ディレクトリへの移行
     executor.ts      # CLI エージェント実行（Claude / Codex）
+    usage-limit.ts   # 失敗出力から利用上限・クレジット切れを判定
+    agent-pool.ts    # 1 回の実行内で利用上限に達したエージェントを記録
     worktree.ts      # git worktree ライフサイクル管理
     label.ts         # ラベル遷移操作（applyLabelTransition）
     comment.ts       # Issue コメント投稿（成功・失敗・spec 提案）
@@ -90,7 +92,7 @@ spec の review 状態では、ワーカーが毎サイクル評価を行う。�
 ### エラーハンドリング 3 段階
 
 - **レベル 1**: trigger→in-progress 失敗 → 即中断、次回リトライ可能
-- **レベル 2**: プロンプト生成/CLI 実行失敗/再開後も impl の PR が未作成 → failed 遷移 + 構造化された失敗診断コメント（`FailureDiagnostics` → `formatFailureDiagnostics()` でフォーマット）
+- **レベル 2**: プロンプト生成/CLI 実行失敗/再開後も impl の PR が未作成/全エージェントが利用上限 → failed 遷移 + 構造化された失敗診断コメント（`FailureDiagnostics` → `formatFailureDiagnostics()` でフォーマット）
 - **レベル 3**: 後処理（done/failed ラベル遷移、コメント投稿）失敗 → ログ WARNING のみ
 
 `:failed` に遷移した Issue は trigger ラベルが剥がれるため、次回フェッチ対象から外れる (自動リトライされない)。再実行するにはユーザーが手動で trigger ラベル (`ai/spec` 等) を再付与する必要がある。
@@ -102,6 +104,19 @@ spec の review 状態では、ワーカーが毎サイクル評価を行う。�
 `execution.timeout_minutes` は初回実行と再開を合わせた壁時計予算として扱う。初回実行の直前に deadline を確定し、再開には残予算を渡す。残予算が `MIN_IMPL_RESUME_BUDGET_MS` (5 分) を下回る場合は再開しない。
 
 再開後も PR が無い場合、Claude が最終行に no-change マーカーを出力していれば `IMPL_NO_CHANGE_REQUIRED`、そうでなければ `IMPL_NO_LINKED_PR` として failed に遷移する。マーカーはユーザー制御の Issue 本文が混ざったモデル出力なので信頼境界ではない。診断カテゴリを分けるだけで、終端ラベルは `:failed` (人間ゲート) のまま変えない。
+
+### エージェントのフォールバック
+
+`execution.agent` は優先度順のリストを受け付ける（単一の文字列は要素 1 件のリストとして扱う）。利用上限やクレジット切れで失敗したときだけ次のエージェントで実行し直し、それ以外の失敗はフォールバックせず従来どおり `:failed` にする。
+
+- 上限判定は出力の末尾数行だけにかける。Codex は stderr に会話ログ（取得した Issue 本文を含む）を流すので、全文を照合すると Issue の文面でフォールバックを起こせてしまう。正常終了した実行は stdout 全体が上限メッセージ 1 行のときだけ上限扱いにする
+- 一時的な 429 のレート制限は上限扱いしない。同じエージェントでも少し後なら成功しうる
+- 試行ごとに worktree を作り直す。前回試行のブランチは worktree 削除後も残り、上限による失敗は 1 秒以内に終わりうるので、2 回目以降はブランチ名とパスに試行番号を付けて衝突を避ける
+- impl では上限で止まる前に PR を作っていることがあるので、フォールバックの前に紐づく PR を照会する。PR があれば done、0 件と確認できたときだけ次のエージェントへ回し、照会に失敗したら重複 PR を避けて `:failed` にする。再開時の上限でも同じ扱いで、再開は常にその試行で動いたエージェントで行う
+- `timeout_minutes` の予算は試行ごとにかかる。上限による失敗はふつう起動直後に起きるので、残予算を引き継ぐとフォールバック先がほとんど動けなくなる
+- 上限到達の記録（`AgentPool`）は 1 回の worker 実行の中だけで全リポジトリが共有し、永続化しない。次のサイクルは全エージェントから試すので、上限のリセットを自然に拾える
+- 使えるエージェントが残っていない場合、trigger ラベルを外す前なら何も触らず deferred にして次サイクルに回す。in-progress への遷移中に他リポジトリが最後のエージェントを使い切った場合も、trigger ラベルに戻して deferred にする。すでに in-progress から入った Issue（spec の revise 経由）は戻す先がないので `AGENT_USAGE_LIMIT` で `:failed` にする
+- 実際に全エージェントで上限に達した Issue は `:failed`（人間ゲート）にする。trigger に戻すと、上限の誤判定が続いたときに毎サイクル同じ Issue でクォータを使い続ける
 
 ### 並列実行
 
@@ -175,7 +190,7 @@ spec の review 状態では、ワーカーが毎サイクル評価を行う。�
 - `repositories[].default_branch`: デフォルトブランチ名（文字列、デフォルト: `main`）。worktree 作成時に `origin/<default_branch>` を起点として使用
 - `execution.max_parallel`: 並列実行数（整数、1-10、デフォルト: 1）
 - `execution.max_issues_per_repo`: リポジトリあたりの最大処理 Issue 数（整数、1-20、デフォルト: 1）
-- `execution.agent`: 実行エージェント（`claude` / `codex`、デフォルト: `claude`）
+- `execution.agent`: 実行エージェント（`claude` / `codex`、または優先度順のリスト、デフォルト: `claude`）
 - `execution.autonomy`: CLI の自律実行レベル（`interactive` / `auto` / `full` / `sandboxed`、デフォルト: `interactive`）
   - `interactive`: 各操作にユーザー承認が必要。launchd 無人実行には不向き
   - `auto`: Claude Code の `--permission-mode auto`。分類器が危険操作のみブロック (v2.1.83+ / Max・Team・Enterprise プラン必須)

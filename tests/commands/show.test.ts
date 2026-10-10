@@ -136,7 +136,7 @@ function setupNormalFlow(overrides?: {
     execution: {
       maxParallel: 1,
       maxIssuesPerRepo: 1,
-      agent: "claude",
+      agents: ["claude"],
       autonomy: "interactive",
       intervalMinutes: 60,
       timeoutMinutes: 60,
@@ -149,7 +149,7 @@ function setupNormalFlow(overrides?: {
     execution: {
       maxParallel: { value: 1, source: "default" },
       maxIssuesPerRepo: { value: 1, source: "default" },
-      agent: { value: "claude", source: "default" },
+      agents: { value: ["claude"], source: "default" },
       autonomy: { value: "interactive", source: "default" },
       intervalMinutes: { value: 60, source: "default" },
       timeoutMinutes: { value: 60, source: "default" },

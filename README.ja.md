@@ -53,7 +53,7 @@ AI チャットアプリやデスクトップツールは、ファイル編集�
 
 ### LLM 非依存のアーキテクチャ
 
-AI エージェントはパイプライン内の 1 つの CLI 呼び出しです。現在は Claude Code CLI と OpenAI Codex CLI を `execution.agent` で切り替えられます。
+AI エージェントはパイプライン内の 1 つの CLI 呼び出しです。現在は Claude Code CLI と OpenAI Codex CLI を `execution.agent` で切り替えられます。両方を並べておけば、片方の利用上限に達したときにもう片方へフォールバックします。
 
 どの LLM を使うかより、ワークフローの設計のほうが大事だと考えています。
 
@@ -295,10 +295,10 @@ language: ja
 | `repositories[].priority_labels` | 優先度ラベル。リストの上位ほど先に処理される |
 | `execution.max_parallel` | 並列実行数。デフォルトは `1`（逐次実行） |
 | `execution.max_issues_per_repo` | リポジトリあたりの Issue 処理上限。デフォルトは `1` |
-| `execution.agent` | 実行エージェント: `claude` / `codex`。デフォルトは `claude` |
+| `execution.agent` | 実行エージェント: `claude` / `codex`。優先度順のリスト（例: `[claude, codex]`）も指定でき、利用上限やクレジット切れで失敗したときはリストの次のエージェントで Issue を実行し直す。デフォルトは `claude` |
 | `execution.autonomy` | CLI の自律実行レベル。Codexでは `full` が `--yolo`、`auto` / `sandboxed` が `--sandbox workspace-write`。Claudeでは従来の権限モードへ対応。デフォルトは `interactive` |
 | `execution.interval_minutes` | スケジュール実行間隔（分、10-1440）。デフォルトは `10` |
-| `execution.timeout_minutes` | エージェントCLIの実行タイムアウト（分、1-240）。デフォルトは `60`。impl の再開を含むセッション全体の予算 |
+| `execution.timeout_minutes` | エージェントCLIの実行タイムアウト（分、1-240）。デフォルトは `60`。impl の再開を含むセッション全体の予算。別のエージェントにフォールバックした場合は、エージェントごとに予算を持つ |
 | `language` | CLI メッセージおよびプロンプトテンプレートの言語（`ja` / `en`）。デフォルトは `ja` |
 
 > **Note:** `config.yml` を編集した後は、`npx sabori-flow reinstall` を実行して launchd に変更を反映してください。
