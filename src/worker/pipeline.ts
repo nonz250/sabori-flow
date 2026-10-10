@@ -349,11 +349,12 @@ async function runAttempt(
           return done({ outcome: "failure", claudeExecuted: true });
         }
 
-        if (!result.success && isUsageLimitReached(agent, result)) {
+        const limitReached = isUsageLimitReached(agent, result);
+        if (limitReached && issue.phase !== Phase.IMPL) {
           return { kind: "usage-limit", output: result };
         }
 
-        if (!result.success) {
+        if (!limitReached && !result.success) {
           logger.error(
             "Issue #%s: %s が失敗ステータスを返しました [repo=%s]",
             issue.number,
@@ -381,17 +382,19 @@ async function runAttempt(
         // produced a deliverable.
         let successOutput = result.stdout;
         if (issue.phase === Phase.IMPL) {
-          const completion = await resolveImplCompletion(
-            deps,
-            repo,
-            issue,
-            executionConfig,
-            agent,
-            authToken,
-            worktreePath,
-            result,
-            implDeadlineMs,
-          );
+          const completion = limitReached
+            ? await settleImplUsageLimit(deps, repo, issue.number, agentName, result, result.stdout)
+            : await resolveImplCompletion(
+              deps,
+              repo,
+              issue,
+              executionConfig,
+              agent,
+              authToken,
+              worktreePath,
+              result,
+              implDeadlineMs,
+            );
           if (completion.kind === "usage-limit") {
             return completion;
           }
@@ -893,11 +896,15 @@ async function resolveImplCompletion(
     };
   }
 
-  // The quota can run out between the initial run and the resume. Whatever
-  // the initial run left behind never became a pull request, so the next
-  // agent starts over rather than this Issue being failed.
-  if (!resumeResult.success && isUsageLimitReached(agent, resumeResult)) {
-    return { kind: "usage-limit", output: resumeResult };
+  if (isUsageLimitReached(agent, resumeResult)) {
+    return settleImplUsageLimit(
+      deps,
+      repo,
+      issue.number,
+      agentName,
+      resumeResult,
+      initialResult.stdout + RESUME_OUTPUT_SEPARATOR + resumeResult.stdout,
+    );
   }
 
   if (await implPullRequestCheckPassed(deps, repo, issue.number)) {
@@ -939,6 +946,40 @@ async function resolveImplCompletion(
 }
 
 /**
+ * An impl run can open its pull request and only then run out of quota.
+ * Handing such an Issue to the next agent would open a second pull request,
+ * so the fallback happens only when GitHub confirms there is none. When the
+ * lookup itself fails, the duplicate risk wins and the Issue goes to a human.
+ */
+async function settleImplUsageLimit(
+  deps: PipelineDeps,
+  repo: string,
+  issueNumber: number,
+  agentName: string,
+  limitOutput: ProcessResult,
+  stdoutSoFar: string,
+): Promise<ImplCompletion> {
+  const linked = await findLinkedPullRequests(deps, repo, issueNumber);
+  if (linked === "found") {
+    return { kind: "linked", stdout: stdoutSoFar };
+  }
+  if (linked === "none") {
+    return { kind: "usage-limit", output: limitOutput };
+  }
+  return {
+    kind: "failed",
+    diagnostics: {
+      category: FailureCategory.AGENT_USAGE_LIMIT,
+      summary:
+        `${agentName} hit its usage limit and whether it had already opened a pull request could not be confirmed, so the Issue was not handed to another agent`,
+      stdout: limitOutput.stdout,
+      stderr: limitOutput.stderr,
+      exitCode: limitOutput.exitCode,
+    },
+  };
+}
+
+/**
  * @returns GitHub が「紐づく PR 0 件」と明示した場合のみ false。
  *          問い合わせ自体に失敗した場合は WARNING を残して true を返す。
  *          `:failed` は trigger ラベルを戻さず自動リトライされないため、
@@ -949,21 +990,29 @@ async function implPullRequestCheckPassed(
   repo: string,
   issueNumber: number,
 ): Promise<boolean> {
+  return (await findLinkedPullRequests(deps, repo, issueNumber)) !== "none";
+}
+
+async function findLinkedPullRequests(
+  deps: PipelineDeps,
+  repo: string,
+  issueNumber: number,
+): Promise<"found" | "none" | "unknown"> {
   let prNumbers: readonly number[];
   try {
     prNumbers = await deps.fetchLinkedPullRequestNumbers(repo, issueNumber);
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.warn(
-      "Issue #%s: PR 紐づけの確認に失敗したため検証をスキップします [repo=%s]: %s",
+      "Issue #%s: PR 紐づけの確認に失敗しました [repo=%s]: %s",
       issueNumber,
       repo,
       errorMessage,
     );
-    return true;
+    return "unknown";
   }
   if (prNumbers.length === 0) {
-    return false;
+    return "none";
   }
   logger.info(
     "Issue #%s: 紐づく PR を検出しました [repo=%s, pr=%s]",
@@ -971,5 +1020,5 @@ async function implPullRequestCheckPassed(
     repo,
     prNumbers.join(", "),
   );
-  return true;
+  return "found";
 }

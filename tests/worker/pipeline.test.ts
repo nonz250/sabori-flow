@@ -1630,7 +1630,7 @@ describe("processIssue", () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       vi.mocked(deps.runAgent).mockResolvedValue(
-        makeProcessResult({ stdout: "The issue says: You've hit your session limit" }),
+        makeProcessResult({ stdout: "## Plan\nThe issue says: You've hit your session limit\n1. Fix it" }),
       );
 
       const result = await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, PLAN_LABELS.trigger, deps);
@@ -1764,6 +1764,87 @@ describe("processIssue", () => {
       expect(deps.postSpecProposalComment).toHaveBeenCalledWith("testowner/testrepo", 42, "spec proposal", 1);
     });
 
+    it("正常終了でも stdout が上限メッセージ 1 行だけならフォールバックする", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.runAgent)
+        .mockResolvedValueOnce(makeProcessResult({ stdout: "Claude AI usage limit reached|1760000000\n" }))
+        .mockResolvedValueOnce(makeProcessResult({ stdout: "Codex output" }));
+
+      const result = await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, PLAN_LABELS.trigger, deps);
+
+      expect(result.outcome).toBe("success");
+      expect(agentsCalled()).toEqual(["claude", "codex"]);
+      expect(vi.mocked(deps.postSuccessComment).mock.calls[0][2]).not.toContain("usage limit reached|");
+    });
+
+    describe("impl で上限に達する前に PR が作られていた場合", () => {
+      it("初回実行が上限で終わっても紐づく PR があればフォールバックせず done にする", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        vi.mocked(deps.runAgent).mockResolvedValueOnce(CLAUDE_LIMIT);
+        vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValueOnce([123]);
+
+        const result = await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, IMPL_LABELS.trigger, deps);
+
+        expect(result).toEqual({ outcome: "success", claudeExecuted: true });
+        expect(agentsCalled()).toEqual(["claude"]);
+        expect(deps.applyLabelTransition).toHaveBeenLastCalledWith(
+          "testowner/testrepo",
+          42,
+          { add: [IMPL_LABELS.done], remove: [IMPL_LABELS.inProgress] },
+        );
+      });
+
+      it("初回実行が上限で終わり紐づく PR が 0 件ならフォールバックする", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        vi.mocked(deps.runAgent)
+          .mockResolvedValueOnce(CLAUDE_LIMIT)
+          .mockResolvedValueOnce(makeProcessResult({ stdout: "codex initial" }));
+        vi.mocked(deps.fetchLinkedPullRequestNumbers)
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([123]);
+
+        const result = await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, IMPL_LABELS.trigger, deps);
+
+        expect(result.outcome).toBe("success");
+        expect(agentsCalled()).toEqual(["claude", "codex"]);
+      });
+
+      it("初回実行が上限で終わり PR の有無を確認できなければ、重複 PR を避けるためフォールバックせず failed にする", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        vi.mocked(deps.runAgent).mockResolvedValueOnce(CLAUDE_LIMIT);
+        vi.mocked(deps.fetchLinkedPullRequestNumbers).mockRejectedValueOnce(new Error("gh api failed"));
+
+        const result = await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, IMPL_LABELS.trigger, deps);
+
+        expect(result).toEqual({ outcome: "failure", claudeExecuted: true });
+        expect(agentsCalled()).toEqual(["claude"]);
+        const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
+        expect(failureMessage).toContain("Agent Usage Limit Reached");
+        expect(failureMessage).toContain("could not be confirmed");
+      });
+
+      it("再開が上限で終わっても紐づく PR があればフォールバックせず done にする", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        vi.mocked(deps.runAgent)
+          .mockResolvedValueOnce(makeProcessResult({ stdout: "claude initial" }))
+          .mockResolvedValueOnce(CLAUDE_LIMIT);
+        vi.mocked(deps.fetchLinkedPullRequestNumbers)
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([123]);
+
+        const result = await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, IMPL_LABELS.trigger, deps);
+
+        expect(result.outcome).toBe("success");
+        expect(agentsCalled()).toEqual(["claude", "claude"]);
+        expect(vi.mocked(deps.postSuccessComment).mock.calls[0][2]).toContain("claude initial");
+      });
+    });
+
     describe("impl のセッション再開との組み合わせ", () => {
       it("フォールバック先で PR が無ければ、フォールバック先のエージェントでセッションを再開する", async () => {
         const issue = makeIssue({ phase: Phase.IMPL });
@@ -1772,7 +1853,9 @@ describe("processIssue", () => {
           .mockResolvedValueOnce(CLAUDE_LIMIT)
           .mockResolvedValueOnce(makeProcessResult({ stdout: "codex initial" }))
           .mockResolvedValueOnce(makeProcessResult({ stdout: "codex resumed" }));
+        // claude の上限後の確認、codex の初回後の確認、codex の再開後の確認
         vi.mocked(deps.fetchLinkedPullRequestNumbers)
+          .mockResolvedValueOnce([])
           .mockResolvedValueOnce([])
           .mockResolvedValueOnce([123]);
 
@@ -1790,7 +1873,9 @@ describe("processIssue", () => {
           .mockResolvedValueOnce(makeProcessResult({ stdout: "claude initial" }))
           .mockResolvedValueOnce(CLAUDE_LIMIT)
           .mockResolvedValueOnce(makeProcessResult({ stdout: "codex initial" }));
+        // claude の初回後の確認、再開の上限後の確認、codex の初回後の確認
         vi.mocked(deps.fetchLinkedPullRequestNumbers)
+          .mockResolvedValueOnce([])
           .mockResolvedValueOnce([])
           .mockResolvedValueOnce([123]);
 
@@ -1800,7 +1885,7 @@ describe("processIssue", () => {
         expect(agentsCalled()).toEqual(["claude", "claude", "codex"]);
         expect(vi.mocked(deps.runAgent).mock.calls[2][1].continueSession).toBeUndefined();
         expect(vi.mocked(deps.withWorktree).mock.calls.map((call) => call[3])).toEqual([1, 2]);
-        expect(deps.fetchLinkedPullRequestNumbers).toHaveBeenCalledTimes(2);
+        expect(deps.fetchLinkedPullRequestNumbers).toHaveBeenCalledTimes(3);
       });
     });
   });
