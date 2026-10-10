@@ -1832,6 +1832,30 @@ describe("processIssue", () => {
         );
       });
 
+      it("PR があって done にした場合も、上限に達したエージェントは AgentPool で上限到達として記録される", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        const agentPool = new AgentPool(FALLBACK_CONFIG.agents);
+        vi.mocked(deps.runAgent).mockResolvedValueOnce(CLAUDE_LIMIT);
+        vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValueOnce([123]);
+
+        await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, IMPL_LABELS.trigger, deps, agentPool);
+
+        expect(agentPool.available()).toEqual(["codex"]);
+      });
+
+      it("PR の有無を確認できず failed にした場合も、上限に達したエージェントは AgentPool で上限到達として記録される", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        const agentPool = new AgentPool(FALLBACK_CONFIG.agents);
+        vi.mocked(deps.runAgent).mockResolvedValueOnce(CLAUDE_LIMIT);
+        vi.mocked(deps.fetchLinkedPullRequestNumbers).mockRejectedValueOnce(new Error("gh api failed"));
+
+        await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, IMPL_LABELS.trigger, deps, agentPool);
+
+        expect(agentPool.available()).toEqual(["codex"]);
+      });
+
       it("初回実行が上限で終わり紐づく PR が 0 件ならフォールバックする", async () => {
         const issue = makeIssue({ phase: Phase.IMPL });
         const repoConfig = makeRepoConfig();
@@ -1873,11 +1897,14 @@ describe("processIssue", () => {
           .mockResolvedValueOnce([])
           .mockResolvedValueOnce([123]);
 
-        const result = await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, IMPL_LABELS.trigger, deps);
+        const agentPool = new AgentPool(FALLBACK_CONFIG.agents);
+
+        const result = await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, IMPL_LABELS.trigger, deps, agentPool);
 
         expect(result.outcome).toBe("success");
         expect(agentsCalled()).toEqual(["claude", "claude"]);
         expect(vi.mocked(deps.postSuccessComment).mock.calls[0][2]).toContain("claude initial");
+        expect(agentPool.available()).toEqual(["codex"]);
       });
     });
 

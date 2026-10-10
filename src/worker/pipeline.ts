@@ -210,7 +210,9 @@ export async function processIssue(
 }
 
 type AttemptOutcome =
-  | { readonly kind: "done"; readonly result: StepResult }
+  // limitReached: the attempt is final (e.g. impl had already opened its PR)
+  // but its agent still ran out of quota, so later Issues must skip it.
+  | { readonly kind: "done"; readonly result: StepResult; readonly limitReached?: boolean }
   | { readonly kind: "usage-limit"; readonly output: ProcessResult };
 
 /**
@@ -249,6 +251,9 @@ async function runWithAgentFallback(
       specRound,
     );
     if (outcome.kind === "done") {
+      if (outcome.limitReached) {
+        agentPool.markExhausted(agent);
+      }
       // An earlier attempt that hit the limit still launched a CLI, which
       // counts against max_issues_per_repo even if this attempt never did.
       return attempt > FIRST_ATTEMPT ? { ...outcome.result, claudeExecuted: true } : outcome.result;
@@ -300,7 +305,7 @@ async function runAttempt(
   const repo = repoFullName(repoConfig);
   const phaseLabels = repoConfig.labels[issue.phase];
   const fallbackNote = describeFallback(executionConfig.agents, agent);
-  const done = (result: StepResult): AttemptOutcome => ({ kind: "done", result });
+  const done = (result: StepResult, limitReached = false): AttemptOutcome => ({ kind: "done", result, limitReached });
   const fail = (diagnostics: FailureDiagnostics): Promise<void> =>
     handleFailure(deps, repo, issue.number, phaseLabels, withFallbackNote(diagnostics, fallbackNote));
 
@@ -404,6 +409,7 @@ async function runAttempt(
         // Exit code alone therefore cannot confirm that impl actually
         // produced a deliverable.
         let successOutput = result.stdout;
+        let implLimitReached = false;
         if (issue.phase === Phase.IMPL) {
           const completion = limitReached
             ? await settleImplUsageLimit(deps, repo, issue.number, agentName, result, result.stdout)
@@ -423,9 +429,10 @@ async function runAttempt(
           }
           if (completion.kind === "failed") {
             await fail(completion.diagnostics);
-            return done({ outcome: "failure", claudeExecuted: true });
+            return done({ outcome: "failure", claudeExecuted: true }, completion.limitReached === true);
           }
           successOutput = completion.stdout;
+          implLimitReached = completion.limitReached === true;
         }
 
         // plan/impl success: done + success comment (level 3)
@@ -481,7 +488,7 @@ async function runAttempt(
           issue.number,
           repo,
         );
-        return done({ outcome: "success", claudeExecuted: true });
+        return done({ outcome: "success", claudeExecuted: true }, implLimitReached);
       },
       attempt,
     );
@@ -826,9 +833,11 @@ export async function resumeSpecReview(
   }
 }
 
+// limitReached marks a final outcome reached after the agent ran out of
+// quota, so the caller still records the agent as exhausted.
 type ImplCompletion =
-  | { readonly kind: "linked"; readonly stdout: string }
-  | { readonly kind: "failed"; readonly diagnostics: FailureDiagnostics }
+  | { readonly kind: "linked"; readonly stdout: string; readonly limitReached?: true }
+  | { readonly kind: "failed"; readonly diagnostics: FailureDiagnostics; readonly limitReached?: true }
   | { readonly kind: "usage-limit"; readonly output: ProcessResult };
 
 async function resolveImplCompletion(
@@ -984,13 +993,14 @@ async function settleImplUsageLimit(
 ): Promise<ImplCompletion> {
   const linked = await findLinkedPullRequests(deps, repo, issueNumber);
   if (linked === "found") {
-    return { kind: "linked", stdout: stdoutSoFar };
+    return { kind: "linked", stdout: stdoutSoFar, limitReached: true };
   }
   if (linked === "none") {
     return { kind: "usage-limit", output: limitOutput };
   }
   return {
     kind: "failed",
+    limitReached: true,
     diagnostics: {
       category: FailureCategory.AGENT_USAGE_LIMIT,
       summary:
