@@ -13,6 +13,7 @@ import {
 import { createMockPipelineDeps } from "./helpers/mock-deps.js";
 import type { PipelineDeps } from "../../src/worker/pipeline.js";
 import { formatMarker } from "../../src/worker/spec-thread.js";
+import { AgentPool } from "../../src/worker/agent-pool.js";
 
 const DEFAULT_EXECUTION_CONFIG: ExecutionConfig = {
   maxParallel: 1,
@@ -165,6 +166,56 @@ describe("resumeSpecReview", () => {
     expect(result.outcome).toBe("deferred");
     expect(result.claudeExecuted).toBe(false);
     expect(deps.applyLabelTransition).not.toHaveBeenCalled();
+  });
+
+  it("全エージェントが利用上限で revise → deferred で in-progress に遷移しない", async () => {
+    const issue = makeIssue({
+      phase: Phase.SPEC,
+      labels: [SPEC_LABELS.review],
+    });
+    const repoConfig = makeRepoConfig();
+    vi.mocked(deps.fetchIssueComments).mockResolvedValue([
+      makeWorkerComment(1, "proposal"),
+      makeHumanComment("fix this"),
+    ]);
+    const agentPool = new AgentPool(["claude"]);
+    agentPool.markExhausted("claude");
+
+    const result = await resumeSpecReview(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, true, deps, agentPool);
+
+    expect(result.outcome).toBe("deferred");
+    expect(result.claudeExecuted).toBe(false);
+    expect(deps.applyLabelTransition).not.toHaveBeenCalled();
+    expect(deps.runAgent).not.toHaveBeenCalled();
+  });
+
+  it("revise で委譲した processIssue に同じ AgentPool が渡り、上限到達が共有される", async () => {
+    const issue = makeIssue({
+      phase: Phase.SPEC,
+      labels: [SPEC_LABELS.review],
+    });
+    const repoConfig = makeRepoConfig();
+    vi.mocked(deps.fetchIssueComments).mockResolvedValue([
+      makeWorkerComment(1, "proposal"),
+      makeHumanComment("fix this"),
+    ]);
+    vi.mocked(deps.runAgent)
+      .mockResolvedValueOnce({ success: false, stdout: "You've hit your session limit", stderr: "", exitCode: 1 })
+      .mockResolvedValueOnce({ success: true, stdout: "revised proposal", stderr: "", exitCode: 0 });
+    const agentPool = new AgentPool(["claude", "codex"]);
+
+    const result = await resumeSpecReview(
+      issue,
+      repoConfig,
+      { ...DEFAULT_EXECUTION_CONFIG, agents: ["claude", "codex"] },
+      null,
+      true,
+      deps,
+      agentPool,
+    );
+
+    expect(result.outcome).toBe("success");
+    expect(agentPool.available()).toEqual(["codex"]);
   });
 
   it("structural comment fetch error → needs-human + diagnostic", async () => {

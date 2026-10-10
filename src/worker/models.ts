@@ -169,6 +169,7 @@ export const FailureCategory = {
   WORKTREE_CREATION: "worktree_creation",
   GIT_FETCH: "git_fetch",
   SPEC_PROPOSAL_COMMENT: "spec_proposal_comment",
+  AGENT_USAGE_LIMIT: "agent_usage_limit",
 } as const;
 export type FailureCategory = (typeof FailureCategory)[keyof typeof FailureCategory];
 

@@ -18,6 +18,8 @@ import { deriveSpecThread, buildSpecContext } from "./spec-thread.js";
 import { evaluateSpecResume } from "./spec-review.js";
 import { fetchLinkedPullRequestNumbers } from "./linked-pr.js";
 import { withWorktree, WorktreeError } from "./worktree.js";
+import { AgentPool } from "./agent-pool.js";
+import { isUsageLimitReached } from "./usage-limit.js";
 import { createLogger } from "./logger.js";
 
 const logger = createLogger("pipeline");
@@ -79,6 +81,7 @@ export interface PipelineDeps {
     repoConfig: Pick<RepositoryConfig, "owner" | "repo" | "localPath" | "defaultBranch">,
     issueNumber: number,
     callback: (worktreePath: string) => Promise<T>,
+    attempt: number,
   ) => Promise<T>;
 }
 
@@ -91,7 +94,8 @@ export const defaultDeps: PipelineDeps = {
   postSpecProposalComment,
   fetchIssueComments,
   fetchLinkedPullRequestNumbers,
-  withWorktree,
+  withWorktree: (repoConfig, issueNumber, callback, attempt) =>
+    withWorktree(repoConfig, issueNumber, callback, undefined, attempt),
 };
 
 // ---------- Pipeline ----------
@@ -103,6 +107,7 @@ export async function processIssue(
   authToken: string | null,
   entryLabel: string,
   deps: PipelineDeps = defaultDeps,
+  agentPool: AgentPool = new AgentPool(executionConfig.agents),
 ): Promise<StepResult> {
   const repo = repoFullName(repoConfig);
   const phaseLabels = repoConfig.labels[issue.phase];
@@ -142,6 +147,16 @@ export async function processIssue(
   // resumeSpecReview's revise path moves the Issue to in-progress itself and
   // then delegates here, so for that caller the transition is already done.
   if (entryLabel !== phaseLabels.inProgress) {
+    // Checked before the transition so the Issue keeps its trigger label and
+    // is picked up again next cycle, when the agents' quota may have reset.
+    if (agentPool.next() === undefined) {
+      logger.info(
+        "Issue #%s: 利用可能なエージェントがないため次回に回します [repo=%s]",
+        issue.number,
+        repo,
+      );
+      return { outcome: "deferred", claudeExecuted: false };
+    }
     try {
       await deps.applyLabelTransition(repo, issue.number, {
         add: [phaseLabels.inProgress],
@@ -159,12 +174,118 @@ export async function processIssue(
     }
   }
 
-  // Worktree → prompt → claude
+  return runWithAgentFallback(
+    issue,
+    repoConfig,
+    executionConfig,
+    authToken,
+    deps,
+    agentPool,
+    specContext,
+    specRound,
+  );
+}
+
+type AttemptOutcome =
+  | { readonly kind: "done"; readonly result: StepResult }
+  | { readonly kind: "usage-limit"; readonly output: ProcessResult };
+
+/**
+ * Tries agents in priority order. Only a usage-limit failure moves on to the
+ * next agent; any other outcome, success or failure, is final, because a
+ * different agent is no more likely to fix a broken prompt or a failing
+ * build. Each attempt gets its own worktree so a fallback agent never
+ * inherits a half-finished change.
+ */
+async function runWithAgentFallback(
+  issue: Issue,
+  repoConfig: RepositoryConfig,
+  executionConfig: ExecutionConfig,
+  authToken: string | null,
+  deps: PipelineDeps,
+  agentPool: AgentPool,
+  specContext: string | null,
+  specRound: number,
+): Promise<StepResult> {
+  const repo = repoFullName(repoConfig);
+  const phaseLabels = repoConfig.labels[issue.phase];
+  let attempt = 0;
+  let lastLimitOutput: ProcessResult | null = null;
+
+  for (let agent = agentPool.next(); agent !== undefined; agent = agentPool.next()) {
+    attempt++;
+    const outcome = await runAttempt(
+      issue,
+      repoConfig,
+      executionConfig,
+      authToken,
+      deps,
+      agent,
+      attempt,
+      specContext,
+      specRound,
+    );
+    if (outcome.kind === "done") {
+      // An earlier attempt that hit the limit still launched a CLI, which
+      // counts against max_issues_per_repo even if this attempt never did.
+      return attempt > 1 ? { ...outcome.result, claudeExecuted: true } : outcome.result;
+    }
+
+    agentPool.markExhausted(agent);
+    lastLimitOutput = outcome.output;
+    const nextAgent = agentPool.next();
+    if (nextAgent !== undefined) {
+      logger.warn(
+        "Issue #%s: %s が利用上限に達したため %s にフォールバックします [repo=%s]",
+        issue.number,
+        agentDisplayName(agent),
+        agentDisplayName(nextAgent),
+        repo,
+      );
+    } else {
+      logger.error(
+        "Issue #%s: %s が利用上限に達し、フォールバック先のエージェントも残っていません [repo=%s]",
+        issue.number,
+        agentDisplayName(agent),
+        repo,
+      );
+    }
+  }
+
+  await handleFailure(deps, repo, issue.number, phaseLabels, {
+    category: FailureCategory.AGENT_USAGE_LIMIT,
+    summary:
+      `Every configured agent has hit its usage limit (${executionConfig.agents.map(agentDisplayName).join(", ")})`,
+    stdout: lastLimitOutput?.stdout,
+    stderr: lastLimitOutput?.stderr,
+    exitCode: lastLimitOutput?.exitCode,
+  });
+  return { outcome: "failure", claudeExecuted: attempt > 0 };
+}
+
+async function runAttempt(
+  issue: Issue,
+  repoConfig: RepositoryConfig,
+  executionConfig: ExecutionConfig,
+  authToken: string | null,
+  deps: PipelineDeps,
+  agent: Agent,
+  attempt: number,
+  specContext: string | null,
+  specRound: number,
+): Promise<AttemptOutcome> {
+  const repo = repoFullName(repoConfig);
+  const phaseLabels = repoConfig.labels[issue.phase];
+  const fallbackNote = describeFallback(executionConfig.agents, agent);
+  const done = (result: StepResult): AttemptOutcome => ({ kind: "done", result });
+  const fail = (diagnostics: FailureDiagnostics): Promise<void> =>
+    handleFailure(deps, repo, issue.number, phaseLabels, withFallbackNote(diagnostics, fallbackNote));
+
   try {
     return await deps.withWorktree(
       repoConfig,
       issue.number,
-      async (worktreePath: string) => {
+      async (worktreePath: string): Promise<AttemptOutcome> => {
         let prompt: string;
         try {
           prompt = deps.buildPrompt(issue, repoConfig, executionConfig.language, specContext);
@@ -176,12 +297,12 @@ export async function processIssue(
             repo,
             errorMessage,
           );
-          await handleFailure(deps, repo, issue.number, phaseLabels, {
+          await fail({
             category: FailureCategory.PROMPT_GENERATION,
             summary: "Prompt generation failed",
             errorMessage,
           });
-          return { outcome: "failure", claudeExecuted: false };
+          return done({ outcome: "failure", claudeExecuted: false });
         }
 
         // Anchored before the initial call (not after it returns) so
@@ -191,7 +312,6 @@ export async function processIssue(
         const implDeadlineMs = Date.now() + executionConfig.timeoutMinutes * MS_PER_MINUTE;
 
         let result: ProcessResult;
-        const agent = executionConfig.agents[0];
         const agentName = agentDisplayName(agent);
         try {
           result = await deps.runAgent(prompt, {
@@ -211,7 +331,7 @@ export async function processIssue(
             errorMessage,
           );
           if (error instanceof ExecutorTimeoutError) {
-            await handleFailure(deps, repo, issue.number, phaseLabels, {
+            await fail({
               category: FailureCategory.CLI_TIMEOUT,
               summary: `${agentName} timed out`,
               timeoutMs: error.timeoutMs,
@@ -220,13 +340,17 @@ export async function processIssue(
               stderr: error.stderr,
             });
           } else {
-            await handleFailure(deps, repo, issue.number, phaseLabels, {
+            await fail({
               category: FailureCategory.CLI_EXECUTION_ERROR,
               summary: `${agentName} execution failed`,
               errorMessage,
             });
           }
-          return { outcome: "failure", claudeExecuted: true };
+          return done({ outcome: "failure", claudeExecuted: true });
+        }
+
+        if (!result.success && isUsageLimitReached(agent, result)) {
+          return { kind: "usage-limit", output: result };
         }
 
         if (!result.success) {
@@ -236,19 +360,19 @@ export async function processIssue(
             agentName,
             repo,
           );
-          await handleFailure(deps, repo, issue.number, phaseLabels, {
+          await fail({
             category: FailureCategory.CLI_NON_ZERO_EXIT,
             summary: `${agentName} returned a non-zero exit code`,
             stderr: result.stderr,
             stdout: result.stdout,
             exitCode: result.exitCode,
           });
-          return { outcome: "failure", claudeExecuted: true };
+          return done({ outcome: "failure", claudeExecuted: true });
         }
 
         // Phase-specific success handling
         if (issue.phase === Phase.SPEC) {
-          return handleSpecSuccess(deps, repo, issue, repoConfig.labels.spec, result, specRound);
+          return done(await handleSpecSuccess(deps, repo, issue, repoConfig.labels.spec, result, specRound));
         }
 
         // `claude -p` exits 0 when the model stops calling tools, even if
@@ -262,14 +386,18 @@ export async function processIssue(
             repo,
             issue,
             executionConfig,
+            agent,
             authToken,
             worktreePath,
             result,
             implDeadlineMs,
           );
-          if (!completion.linked) {
-            await handleFailure(deps, repo, issue.number, phaseLabels, completion.diagnostics);
-            return { outcome: "failure", claudeExecuted: true };
+          if (completion.kind === "usage-limit") {
+            return completion;
+          }
+          if (completion.kind === "failed") {
+            await fail(completion.diagnostics);
+            return done({ outcome: "failure", claudeExecuted: true });
           }
           successOutput = completion.stdout;
         }
@@ -310,7 +438,8 @@ export async function processIssue(
         }
 
         try {
-          await deps.postSuccessComment(repo, issue.number, sanitizeOutput(successOutput));
+          const commentBody = fallbackNote === null ? successOutput : `> ${fallbackNote}\n\n${successOutput}`;
+          await deps.postSuccessComment(repo, issue.number, sanitizeOutput(commentBody));
         } catch (error: unknown) {
           const errorMessage = error instanceof Error ? error.message : String(error);
           logger.warn(
@@ -326,8 +455,9 @@ export async function processIssue(
           issue.number,
           repo,
         );
-        return { outcome: "success", claudeExecuted: true };
+        return done({ outcome: "success", claudeExecuted: true });
       },
+      attempt,
     );
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -345,13 +475,32 @@ export async function processIssue(
       category === FailureCategory.GIT_FETCH
         ? "Git fetch failed"
         : "Worktree creation failed";
-    await handleFailure(deps, repo, issue.number, phaseLabels, {
+    await fail({
       category,
       summary,
       errorMessage,
     });
-    return { outcome: "failure", claudeExecuted: false };
+    return done({ outcome: "failure", claudeExecuted: false });
   }
+}
+
+/**
+ * Agents ahead of the one that ran in the priority list are exactly the
+ * ones that were skipped for hitting their usage limit, whether on this
+ * Issue or on an earlier one in the same run.
+ */
+function describeFallback(priority: readonly Agent[], agent: Agent): string | null {
+  const skipped = priority.slice(0, priority.indexOf(agent));
+  if (skipped.length === 0) return null;
+  return `Ran with ${agentDisplayName(agent)} because ${skipped.map(agentDisplayName).join(", ")} hit the usage limit.`;
+}
+
+function withFallbackNote(
+  diagnostics: FailureDiagnostics,
+  fallbackNote: string | null,
+): FailureDiagnostics {
+  if (fallbackNote === null) return diagnostics;
+  return { ...diagnostics, summary: `${diagnostics.summary}. ${fallbackNote}` };
 }
 
 // ---------- Internal helpers ----------
@@ -542,6 +691,7 @@ export async function resumeSpecReview(
   authToken: string | null,
   canRunClaude: boolean,
   deps: PipelineDeps = defaultDeps,
+  agentPool: AgentPool = new AgentPool(executionConfig.agents),
 ): Promise<StepResult> {
   const repo = repoFullName(repoConfig);
   const specLabels = repoConfig.labels.spec;
@@ -623,7 +773,9 @@ export async function resumeSpecReview(
     }
 
     case "revise": {
-      if (!canRunClaude) {
+      // The revise path moves the Issue to in-progress before delegating, so
+      // agent availability has to be settled here rather than in processIssue.
+      if (!canRunClaude || agentPool.next() === undefined) {
         return { outcome: "deferred", claudeExecuted: false };
       }
       const removeLabels = [specLabels.review];
@@ -640,7 +792,7 @@ export async function resumeSpecReview(
         );
         return { outcome: "failure", claudeExecuted: false };
       }
-      return processIssue(issue, repoConfig, executionConfig, authToken, specLabels.inProgress, deps);
+      return processIssue(issue, repoConfig, executionConfig, authToken, specLabels.inProgress, deps, agentPool);
     }
 
     case "wait":
@@ -649,23 +801,24 @@ export async function resumeSpecReview(
 }
 
 type ImplCompletion =
-  | { readonly linked: true; readonly stdout: string }
-  | { readonly linked: false; readonly diagnostics: FailureDiagnostics };
+  | { readonly kind: "linked"; readonly stdout: string }
+  | { readonly kind: "failed"; readonly diagnostics: FailureDiagnostics }
+  | { readonly kind: "usage-limit"; readonly output: ProcessResult };
 
 async function resolveImplCompletion(
   deps: PipelineDeps,
   repo: string,
   issue: Issue,
   executionConfig: ExecutionConfig,
+  agent: Agent,
   authToken: string | null,
   worktreePath: string,
   initialResult: ProcessResult,
   deadlineMs: number,
 ): Promise<ImplCompletion> {
-  const agent = executionConfig.agents[0];
   const agentName = agentDisplayName(agent);
   if (await implPullRequestCheckPassed(deps, repo, issue.number)) {
-    return { linked: true, stdout: initialResult.stdout };
+    return { kind: "linked", stdout: initialResult.stdout };
   }
 
   const remainingMs = deadlineMs - Date.now();
@@ -676,7 +829,7 @@ async function resolveImplCompletion(
       repo,
     );
     return {
-      linked: false,
+      kind: "failed",
       diagnostics: {
         category: FailureCategory.IMPL_NO_LINKED_PR,
         summary:
@@ -717,7 +870,7 @@ async function resolveImplCompletion(
     );
     if (error instanceof ExecutorTimeoutError) {
       return {
-        linked: false,
+        kind: "failed",
         diagnostics: {
           category: FailureCategory.CLI_TIMEOUT,
           summary: `${agentName} timed out while resuming the impl session`,
@@ -729,7 +882,7 @@ async function resolveImplCompletion(
       };
     }
     return {
-      linked: false,
+      kind: "failed",
       diagnostics: {
         category: FailureCategory.CLI_EXECUTION_ERROR,
         summary: `${agentName} execution failed while resuming the impl session`,
@@ -740,9 +893,16 @@ async function resolveImplCompletion(
     };
   }
 
+  // The quota can run out between the initial run and the resume. Whatever
+  // the initial run left behind never became a pull request, so the next
+  // agent starts over rather than this Issue being failed.
+  if (!resumeResult.success && isUsageLimitReached(agent, resumeResult)) {
+    return { kind: "usage-limit", output: resumeResult };
+  }
+
   if (await implPullRequestCheckPassed(deps, repo, issue.number)) {
     return {
-      linked: true,
+      kind: "linked",
       stdout: initialResult.stdout + RESUME_OUTPUT_SEPARATOR + resumeResult.stdout,
     };
   }
@@ -755,7 +915,7 @@ async function resolveImplCompletion(
 
   if (resumeResult.stdout.split("\n").some((line) => line.trim() === IMPL_NO_CHANGE_MARKER)) {
     return {
-      linked: false,
+      kind: "failed",
       diagnostics: {
         category: FailureCategory.IMPL_NO_CHANGE_REQUIRED,
         summary: `${agentName} reported that no code change is required for this issue`,
@@ -766,7 +926,7 @@ async function resolveImplCompletion(
   }
 
   return {
-    linked: false,
+    kind: "failed",
     diagnostics: {
       category: FailureCategory.IMPL_NO_LINKED_PR,
       summary:
