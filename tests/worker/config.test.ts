@@ -576,23 +576,32 @@ describe("loadConfig - execution validation", () => {
     expect(result.execution.maxIssuesPerRepo).toBe(20);
   });
 
-  it("agent のデフォルト値は 'claude'", () => {
+  it("agent 省略時の優先度リストは claude のみ", () => {
     mockYaml(VALID_YAML);
-    expect(loadConfig("/path/to/config.yml").execution.agent).toBe("claude");
+    expect(loadConfig("/path/to/config.yml").execution.agents).toEqual(["claude"]);
   });
 
-  it("execution 省略時も agent のデフォルト値は 'claude'", () => {
+  it("execution 省略時も優先度リストは claude のみ", () => {
     mockYaml(VALID_YAML_NO_EXECUTION);
-    expect(loadConfig("/path/to/config.yml").execution.agent).toBe("claude");
+    expect(loadConfig("/path/to/config.yml").execution.agents).toEqual(["claude"]);
   });
 
-  it("agent: 'codex' が正しくパースされる", () => {
+  it("agent に単一の文字列を指定すると要素 1 件の優先度リストになる", () => {
     const yaml = VALID_YAML.replace(
       "max_parallel: 4",
       'max_parallel: 4\n  agent: "codex"',
     );
     mockYaml(yaml);
-    expect(loadConfig("/path/to/config.yml").execution.agent).toBe("codex");
+    expect(loadConfig("/path/to/config.yml").execution.agents).toEqual(["codex"]);
+  });
+
+  it("agent にリストを指定すると記述順のまま優先度リストになる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  agent:\n    - codex\n    - claude",
+    );
+    mockYaml(yaml);
+    expect(loadConfig("/path/to/config.yml").execution.agents).toEqual(["codex", "claude"]);
   });
 
   it("agent に不正な文字列を指定するとエラーになる", () => {
@@ -606,14 +615,58 @@ describe("loadConfig - execution validation", () => {
     );
   });
 
-  it("agent に文字列以外を指定するとエラーになる", () => {
+  it("agent に文字列とリスト以外を指定するとエラーになる", () => {
     const yaml = VALID_YAML.replace(
       "max_parallel: 4",
       "max_parallel: 4\n  agent: 1",
     );
     mockYaml(yaml);
     expect(() => loadConfig("/path/to/config.yml")).toThrow(
-      /execution\.agent: must be a string, got number/,
+      /execution\.agent: must be a string or a list of strings, got number/,
+    );
+  });
+
+  it("agent に空リストを指定するとエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  agent: []",
+    );
+    mockYaml(yaml);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /execution\.agent: must not be an empty list/,
+    );
+  });
+
+  it("agent のリストに不正な値が含まれるとその位置を示してエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  agent:\n    - claude\n    - gemini",
+    );
+    mockYaml(yaml);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /execution\.agent\[1\]: must be one of: claude, codex; got 'gemini'/,
+    );
+  });
+
+  it("agent のリストに文字列以外が含まれるとエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  agent:\n    - 1",
+    );
+    mockYaml(yaml);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /execution\.agent\[0\]: must be a string, got number/,
+    );
+  });
+
+  it("agent のリストに同じエージェントが重複するとエラーになる", () => {
+    const yaml = VALID_YAML.replace(
+      "max_parallel: 4",
+      "max_parallel: 4\n  agent:\n    - claude\n    - claude",
+    );
+    mockYaml(yaml);
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      /execution\.agent\[1\]: duplicate agent 'claude'/,
     );
   });
 

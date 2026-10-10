@@ -12,6 +12,7 @@ execution:
   max_parallel: 1
   # max_issues_per_repo: 1  # Max issues per repository (default: 1)
   # agent: claude           # claude / codex (default: claude)
+  # agent: [claude, codex]  # priority list; falls back to the next agent when one hits its usage limit
   # autonomy: interactive    # interactive / auto / full / sandboxed (default: interactive)
   #                          # auto: Claude Code --permission-mode auto (v2.1.83+, Max/Team/Enterprise)
   #                          # Codex full: --yolo; auto/sandboxed: --sandbox workspace-write

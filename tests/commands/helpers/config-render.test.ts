@@ -9,7 +9,7 @@ import type {
   Compared,
   ValueSource,
 } from "../../../src/worker/config-inspect.js";
-import type { LabelsConfig, Autonomy } from "../../../src/worker/models.js";
+import type { LabelsConfig, Agent, Autonomy } from "../../../src/worker/models.js";
 import type { Language } from "../../../src/i18n/types.js";
 
 // ---------- Helpers ----------
@@ -93,7 +93,7 @@ function makeExecInspection(
   return {
     maxParallel: s(1),
     maxIssuesPerRepo: s(1),
-    agent: s("claude"),
+    agents: s<readonly Agent[]>(["claude"]),
     autonomy: s<Autonomy>("interactive"),
     intervalMinutes: s(60),
     timeoutMinutes: s(60),
@@ -225,7 +225,7 @@ describe("renderConfigInspection - default marker", () => {
       execution: makeExecInspection({
         maxParallel: s(4, "file"),
         maxIssuesPerRepo: s(2, "file"),
-        agent: s("codex", "file"),
+        agents: s<readonly Agent[]>(["codex"], "file"),
         autonomy: s<Autonomy>("full", "file"),
         intervalMinutes: s(30, "file"),
         timeoutMinutes: s(120, "file"),
@@ -241,6 +241,19 @@ describe("renderConfigInspection - default marker", () => {
     for (const line of lines) {
       expect(line).not.toContain("*");
     }
+  });
+
+  it("agent priority list is rendered comma-separated in priority order", () => {
+    const inspection = makeInspection({
+      execution: makeExecInspection({
+        agents: s<readonly Agent[]>(["codex", "claude"], "file"),
+      }),
+    });
+
+    const { lines } = renderConfigInspection(inspection, { verbose: false });
+
+    const agentLine = lines.find((line) => line.trimStart().startsWith("agent "));
+    expect(agentLine).toMatch(/agent\s+codex, claude$/);
   });
 
   it("labels and priority columns show 'default' or 'custom', not *", () => {
@@ -326,7 +339,7 @@ describe("renderConfigInspection - hasDefaultValues", () => {
       execution: makeExecInspection({
         maxParallel: s(4, "file"),
         maxIssuesPerRepo: s(2, "file"),
-        agent: s("codex", "file"),
+        agents: s<readonly Agent[]>(["codex"], "file"),
         autonomy: s<Autonomy>("full", "file"),
         intervalMinutes: s(30, "file"),
         timeoutMinutes: s(120, "file"),
@@ -380,7 +393,7 @@ describe("renderConfigInspection - hasDefaultValues", () => {
       "execution.agent",
       (inspection) => ({
         ...inspection,
-        execution: { ...inspection.execution, agent: s("claude") },
+        execution: { ...inspection.execution, agents: s<readonly Agent[]>(["claude"]) },
       }),
     ],
     [

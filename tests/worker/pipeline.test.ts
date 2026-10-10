@@ -20,10 +20,12 @@ import {
 } from "./helpers/factories.js";
 import { createMockPipelineDeps } from "./helpers/mock-deps.js";
 import type { PipelineDeps } from "../../src/worker/pipeline.js";
+import { AgentPool } from "../../src/worker/agent-pool.js";
 
 const DEFAULT_EXECUTION_CONFIG: ExecutionConfig = {
   maxParallel: 1,
   maxIssuesPerRepo: 10,
+  agents: ["claude"],
   autonomy: "interactive",
   intervalMinutes: 60,
   timeoutMinutes: 60,
@@ -133,12 +135,8 @@ describe("processIssue", () => {
       const issue = makeIssue();
       const repoConfig = makeRepoConfig();
       const executionConfig: ExecutionConfig = {
-        maxParallel: 1,
-        maxIssuesPerRepo: 10,
+        ...DEFAULT_EXECUTION_CONFIG,
         autonomy: "full",
-        intervalMinutes: 60,
-        timeoutMinutes: 60,
-        language: "ja",
       };
 
       await processIssue(issue, repoConfig, executionConfig, null, repoConfig.labels[issue.phase].trigger, deps);
@@ -146,7 +144,7 @@ describe("processIssue", () => {
       expect(deps.runAgent).toHaveBeenCalledOnce();
       expect(deps.runAgent).toHaveBeenCalledWith(
         "generated prompt",
-        { cwd: "/tmp/worktrees/issue-mock", autonomy: "full", timeoutMs: 3_600_000 },
+        { cwd: "/tmp/worktrees/issue-mock", agent: "claude", autonomy: "full", timeoutMs: 3_600_000 },
       );
     });
 
@@ -159,7 +157,7 @@ describe("processIssue", () => {
       expect(deps.runAgent).toHaveBeenCalledOnce();
       expect(deps.runAgent).toHaveBeenCalledWith(
         "generated prompt",
-        { cwd: "/tmp/worktrees/issue-mock", autonomy: "interactive", timeoutMs: 3_600_000 },
+        { cwd: "/tmp/worktrees/issue-mock", agent: "claude", autonomy: "interactive", timeoutMs: 3_600_000 },
       );
     });
 
@@ -260,6 +258,7 @@ describe("processIssue", () => {
         }),
         issue.number,
         expect.any(Function),
+        1,
       );
     });
 
@@ -274,6 +273,7 @@ describe("processIssue", () => {
         expect.objectContaining({ defaultBranch: "develop" }),
         issue.number,
         expect.any(Function),
+        1,
       );
     });
 
@@ -1519,6 +1519,437 @@ describe("processIssue", () => {
       const specCtx = vi.mocked(deps.buildPrompt).mock.calls[0][3];
       expect(specCtx).toContain("Latest specification proposal");
       expect(specCtx).toContain("agreed specification");
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // エージェントのフォールバック
+  // -----------------------------------------------------------------------
+
+  describe("エージェントのフォールバック", () => {
+    const FALLBACK_CONFIG: ExecutionConfig = {
+      ...DEFAULT_EXECUTION_CONFIG,
+      agents: ["claude", "codex"],
+    };
+    const CLAUDE_LIMIT = makeProcessResult({
+      success: false,
+      stdout: "You've hit your session limit · resets 3pm",
+    });
+    const CODEX_LIMIT = makeProcessResult({
+      success: false,
+      stdout: "",
+      stderr: "You've hit your usage limit. Try again later.",
+    });
+
+    function agentsCalled(): (string | undefined)[] {
+      return vi.mocked(deps.runAgent).mock.calls.map(([, options]) => options.agent);
+    }
+
+    it("優先度 1 位が利用上限で失敗すると 2 位のエージェントで実行し成功する", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.runAgent)
+        .mockResolvedValueOnce(CLAUDE_LIMIT)
+        .mockResolvedValueOnce(makeProcessResult({ stdout: "Codex output" }));
+
+      const result = await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, PLAN_LABELS.trigger, deps);
+
+      expect(result).toEqual({ outcome: "success", claudeExecuted: true });
+      expect(agentsCalled()).toEqual(["claude", "codex"]);
+      expect(deps.applyLabelTransition).toHaveBeenLastCalledWith(
+        "testowner/testrepo",
+        42,
+        { add: [PLAN_LABELS.done], remove: [PLAN_LABELS.inProgress] },
+      );
+      expect(deps.postFailureComment).not.toHaveBeenCalled();
+    });
+
+    it("フォールバックの各試行は試行番号付きの別 worktree で実行される", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.runAgent)
+        .mockResolvedValueOnce(CLAUDE_LIMIT)
+        .mockResolvedValueOnce(makeProcessResult());
+
+      await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, PLAN_LABELS.trigger, deps);
+
+      const attempts = vi.mocked(deps.withWorktree).mock.calls.map((call) => call[3]);
+      expect(attempts).toEqual([1, 2]);
+    });
+
+    it("フォールバック後の成功コメントに、どのエージェントで実行したかが記載される", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.runAgent)
+        .mockResolvedValueOnce(CLAUDE_LIMIT)
+        .mockResolvedValueOnce(makeProcessResult({ stdout: "Codex output" }));
+
+      await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, PLAN_LABELS.trigger, deps);
+
+      const body = vi.mocked(deps.postSuccessComment).mock.calls[0][2];
+      expect(body).toContain("Ran with Codex CLI because Claude Code CLI hit the usage limit.");
+      expect(body).toContain("Codex output");
+    });
+
+    it("フォールバックしなかった場合の成功コメントには実行エージェントの注記が付かない", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.runAgent).mockResolvedValue(makeProcessResult({ stdout: "Claude output" }));
+
+      await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, PLAN_LABELS.trigger, deps);
+
+      expect(vi.mocked(deps.postSuccessComment).mock.calls[0][2]).toBe("Claude output");
+    });
+
+    it("利用上限以外の非 0 終了ではフォールバックせず failed になる", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.runAgent).mockResolvedValue(
+        makeProcessResult({ success: false, stdout: "", stderr: "Error: build failed" }),
+      );
+
+      const result = await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, PLAN_LABELS.trigger, deps);
+
+      expect(result).toEqual({ outcome: "failure", claudeExecuted: true });
+      expect(agentsCalled()).toEqual(["claude"]);
+      expect(vi.mocked(deps.postFailureComment).mock.calls[0][2]).toContain("CLI Non-zero Exit");
+    });
+
+    it("タイムアウトではフォールバックせず failed になる", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.runAgent).mockRejectedValue(makeExecutorTimeoutError());
+
+      await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, PLAN_LABELS.trigger, deps);
+
+      expect(agentsCalled()).toEqual(["claude"]);
+      expect(vi.mocked(deps.postFailureComment).mock.calls[0][2]).toContain("CLI Timeout");
+    });
+
+    it("正常終了した出力に上限の文言が含まれていてもフォールバックしない", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.runAgent).mockResolvedValue(
+        makeProcessResult({ stdout: "## Plan\nThe issue says: You've hit your session limit\n1. Fix it" }),
+      );
+
+      const result = await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, PLAN_LABELS.trigger, deps);
+
+      expect(result.outcome).toBe("success");
+      expect(agentsCalled()).toEqual(["claude"]);
+    });
+
+    it("フォールバック先の失敗コメントの summary に、上限で飛ばしたエージェントが記載される", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.runAgent)
+        .mockResolvedValueOnce(CLAUDE_LIMIT)
+        .mockResolvedValueOnce(makeProcessResult({ success: false, stderr: "Error: build failed" }));
+
+      const result = await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, PLAN_LABELS.trigger, deps);
+
+      expect(result).toEqual({ outcome: "failure", claudeExecuted: true });
+      const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
+      expect(failureMessage).toContain("Codex CLI returned a non-zero exit code");
+      expect(failureMessage).toContain("Ran with Codex CLI because Claude Code CLI hit the usage limit.");
+    });
+
+    it("全エージェントが利用上限に達すると AGENT_USAGE_LIMIT で failed になる", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.runAgent)
+        .mockResolvedValueOnce(CLAUDE_LIMIT)
+        .mockResolvedValueOnce(CODEX_LIMIT);
+
+      const result = await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, PLAN_LABELS.trigger, deps);
+
+      expect(result).toEqual({ outcome: "failure", claudeExecuted: true });
+      expect(agentsCalled()).toEqual(["claude", "codex"]);
+      expect(deps.applyLabelTransition).toHaveBeenLastCalledWith(
+        "testowner/testrepo",
+        42,
+        { add: [PLAN_LABELS.failed], remove: [PLAN_LABELS.inProgress] },
+      );
+      const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
+      expect(failureMessage).toContain("Agent Usage Limit Reached");
+      expect(failureMessage).toContain("Claude Code CLI, Codex CLI");
+      expect(failureMessage).toContain("You've hit your usage limit. Try again later.");
+    });
+
+    it("エージェントが 1 つだけの設定で利用上限に達すると AGENT_USAGE_LIMIT で failed になる", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.runAgent).mockResolvedValue(CLAUDE_LIMIT);
+
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, PLAN_LABELS.trigger, deps);
+
+      expect(result).toEqual({ outcome: "failure", claudeExecuted: true });
+      expect(agentsCalled()).toEqual(["claude"]);
+      expect(vi.mocked(deps.postFailureComment).mock.calls[0][2]).toContain("Agent Usage Limit Reached");
+    });
+
+    it("利用上限に達したエージェントは AgentPool で上限到達として記録される", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      const agentPool = new AgentPool(FALLBACK_CONFIG.agents);
+      vi.mocked(deps.runAgent)
+        .mockResolvedValueOnce(CLAUDE_LIMIT)
+        .mockResolvedValueOnce(makeProcessResult());
+
+      await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, PLAN_LABELS.trigger, deps, agentPool);
+
+      expect(agentPool.available()).toEqual(["codex"]);
+    });
+
+    it("前の Issue で上限到達済みのエージェントは飛ばし、最初から次のエージェントで実行する", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      const agentPool = new AgentPool(FALLBACK_CONFIG.agents);
+      agentPool.markExhausted("claude");
+
+      const result = await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, PLAN_LABELS.trigger, deps, agentPool);
+
+      expect(result.outcome).toBe("success");
+      expect(agentsCalled()).toEqual(["codex"]);
+      expect(vi.mocked(deps.withWorktree).mock.calls[0][3]).toBe(1);
+      expect(vi.mocked(deps.postSuccessComment).mock.calls[0][2]).toContain(
+        "Ran with Codex CLI because Claude Code CLI hit the usage limit.",
+      );
+    });
+
+    it("利用可能なエージェントが残っていなければラベルに触れず deferred を返す", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      const agentPool = new AgentPool(FALLBACK_CONFIG.agents);
+      agentPool.markExhausted("claude");
+      agentPool.markExhausted("codex");
+
+      const result = await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, PLAN_LABELS.trigger, deps, agentPool);
+
+      expect(result).toEqual({ outcome: "deferred", claudeExecuted: false });
+      expect(deps.applyLabelTransition).not.toHaveBeenCalled();
+      expect(deps.withWorktree).not.toHaveBeenCalled();
+      expect(deps.runAgent).not.toHaveBeenCalled();
+    });
+
+    it("ラベル遷移の間に他リポジトリが最後のエージェントを上限到達にした場合は trigger ラベルに戻して deferred を返す", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      const agentPool = new AgentPool(["claude"]);
+      vi.mocked(deps.applyLabelTransition).mockImplementationOnce(async () => {
+        agentPool.markExhausted("claude");
+      });
+
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, PLAN_LABELS.trigger, deps, agentPool);
+
+      expect(result).toEqual({ outcome: "deferred", claudeExecuted: false });
+      expect(deps.runAgent).not.toHaveBeenCalled();
+      expect(deps.applyLabelTransition).toHaveBeenLastCalledWith(
+        "testowner/testrepo",
+        42,
+        { add: [PLAN_LABELS.trigger], remove: [PLAN_LABELS.inProgress] },
+      );
+      expect(deps.postFailureComment).not.toHaveBeenCalled();
+    });
+
+    it("trigger ラベルへの戻しに失敗しても deferred を返す", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      const agentPool = new AgentPool(["claude"]);
+      vi.mocked(deps.applyLabelTransition)
+        .mockImplementationOnce(async () => {
+          agentPool.markExhausted("claude");
+        })
+        .mockRejectedValueOnce(new Error("gh failed"));
+
+      const result = await processIssue(issue, repoConfig, DEFAULT_EXECUTION_CONFIG, null, PLAN_LABELS.trigger, deps, agentPool);
+
+      expect(result).toEqual({ outcome: "deferred", claudeExecuted: false });
+      expect(deps.postFailureComment).not.toHaveBeenCalled();
+    });
+
+    it("in-progress から入った Issue で利用可能なエージェントがなければ in-progress に放置せず failed にする", async () => {
+      const issue = makeIssue({ phase: Phase.SPEC });
+      const repoConfig = makeRepoConfig();
+      const agentPool = new AgentPool(FALLBACK_CONFIG.agents);
+      agentPool.markExhausted("claude");
+      agentPool.markExhausted("codex");
+
+      const result = await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, SPEC_LABELS.inProgress, deps, agentPool);
+
+      expect(result).toEqual({ outcome: "failure", claudeExecuted: false });
+      expect(deps.runAgent).not.toHaveBeenCalled();
+      expect(deps.applyLabelTransition).toHaveBeenCalledWith(
+        "testowner/testrepo",
+        42,
+        { add: [SPEC_LABELS.failed], remove: [SPEC_LABELS.inProgress] },
+      );
+      expect(vi.mocked(deps.postFailureComment).mock.calls[0][2]).toContain("Agent Usage Limit Reached");
+    });
+
+    it("spec のフォールバック成功時は提案コメント本文に注記を混ぜない", async () => {
+      const issue = makeIssue({ phase: Phase.SPEC });
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.runAgent)
+        .mockResolvedValueOnce(CLAUDE_LIMIT)
+        .mockResolvedValueOnce(makeProcessResult({ stdout: "spec proposal" }));
+
+      const result = await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, SPEC_LABELS.trigger, deps);
+
+      expect(result.outcome).toBe("success");
+      expect(deps.postSpecProposalComment).toHaveBeenCalledWith("testowner/testrepo", 42, "spec proposal", 1);
+    });
+
+    it("正常終了でも stdout が上限メッセージ 1 行だけならフォールバックする", async () => {
+      const issue = makeIssue();
+      const repoConfig = makeRepoConfig();
+      vi.mocked(deps.runAgent)
+        .mockResolvedValueOnce(makeProcessResult({ stdout: "Claude AI usage limit reached|1760000000\n" }))
+        .mockResolvedValueOnce(makeProcessResult({ stdout: "Codex output" }));
+
+      const result = await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, PLAN_LABELS.trigger, deps);
+
+      expect(result.outcome).toBe("success");
+      expect(agentsCalled()).toEqual(["claude", "codex"]);
+      expect(vi.mocked(deps.postSuccessComment).mock.calls[0][2]).not.toContain("usage limit reached|");
+    });
+
+    describe("impl で上限に達する前に PR が作られていた場合", () => {
+      it("初回実行が上限で終わっても紐づく PR があればフォールバックせず done にする", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        vi.mocked(deps.runAgent).mockResolvedValueOnce(CLAUDE_LIMIT);
+        vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValueOnce([123]);
+
+        const result = await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, IMPL_LABELS.trigger, deps);
+
+        expect(result).toEqual({ outcome: "success", claudeExecuted: true });
+        expect(agentsCalled()).toEqual(["claude"]);
+        expect(deps.applyLabelTransition).toHaveBeenLastCalledWith(
+          "testowner/testrepo",
+          42,
+          { add: [IMPL_LABELS.done], remove: [IMPL_LABELS.inProgress] },
+        );
+      });
+
+      it("PR があって done にした場合も、上限に達したエージェントは AgentPool で上限到達として記録される", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        const agentPool = new AgentPool(FALLBACK_CONFIG.agents);
+        vi.mocked(deps.runAgent).mockResolvedValueOnce(CLAUDE_LIMIT);
+        vi.mocked(deps.fetchLinkedPullRequestNumbers).mockResolvedValueOnce([123]);
+
+        await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, IMPL_LABELS.trigger, deps, agentPool);
+
+        expect(agentPool.available()).toEqual(["codex"]);
+      });
+
+      it("PR の有無を確認できず failed にした場合も、上限に達したエージェントは AgentPool で上限到達として記録される", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        const agentPool = new AgentPool(FALLBACK_CONFIG.agents);
+        vi.mocked(deps.runAgent).mockResolvedValueOnce(CLAUDE_LIMIT);
+        vi.mocked(deps.fetchLinkedPullRequestNumbers).mockRejectedValueOnce(new Error("gh api failed"));
+
+        await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, IMPL_LABELS.trigger, deps, agentPool);
+
+        expect(agentPool.available()).toEqual(["codex"]);
+      });
+
+      it("初回実行が上限で終わり紐づく PR が 0 件ならフォールバックする", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        vi.mocked(deps.runAgent)
+          .mockResolvedValueOnce(CLAUDE_LIMIT)
+          .mockResolvedValueOnce(makeProcessResult({ stdout: "codex initial" }));
+        vi.mocked(deps.fetchLinkedPullRequestNumbers)
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([123]);
+
+        const result = await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, IMPL_LABELS.trigger, deps);
+
+        expect(result.outcome).toBe("success");
+        expect(agentsCalled()).toEqual(["claude", "codex"]);
+      });
+
+      it("初回実行が上限で終わり PR の有無を確認できなければ、重複 PR を避けるためフォールバックせず failed にする", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        vi.mocked(deps.runAgent).mockResolvedValueOnce(CLAUDE_LIMIT);
+        vi.mocked(deps.fetchLinkedPullRequestNumbers).mockRejectedValueOnce(new Error("gh api failed"));
+
+        const result = await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, IMPL_LABELS.trigger, deps);
+
+        expect(result).toEqual({ outcome: "failure", claudeExecuted: true });
+        expect(agentsCalled()).toEqual(["claude"]);
+        const failureMessage = vi.mocked(deps.postFailureComment).mock.calls[0][2];
+        expect(failureMessage).toContain("Agent Usage Limit Reached");
+        expect(failureMessage).toContain("could not be confirmed");
+      });
+
+      it("再開が上限で終わっても紐づく PR があればフォールバックせず done にする", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        vi.mocked(deps.runAgent)
+          .mockResolvedValueOnce(makeProcessResult({ stdout: "claude initial" }))
+          .mockResolvedValueOnce(CLAUDE_LIMIT);
+        vi.mocked(deps.fetchLinkedPullRequestNumbers)
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([123]);
+
+        const agentPool = new AgentPool(FALLBACK_CONFIG.agents);
+
+        const result = await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, IMPL_LABELS.trigger, deps, agentPool);
+
+        expect(result.outcome).toBe("success");
+        expect(agentsCalled()).toEqual(["claude", "claude"]);
+        expect(vi.mocked(deps.postSuccessComment).mock.calls[0][2]).toContain("claude initial");
+        expect(agentPool.available()).toEqual(["codex"]);
+      });
+    });
+
+    describe("impl のセッション再開との組み合わせ", () => {
+      it("フォールバック先で PR が無ければ、フォールバック先のエージェントでセッションを再開する", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        vi.mocked(deps.runAgent)
+          .mockResolvedValueOnce(CLAUDE_LIMIT)
+          .mockResolvedValueOnce(makeProcessResult({ stdout: "codex initial" }))
+          .mockResolvedValueOnce(makeProcessResult({ stdout: "codex resumed" }));
+        // claude の上限後の確認、codex の初回後の確認、codex の再開後の確認
+        vi.mocked(deps.fetchLinkedPullRequestNumbers)
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([123]);
+
+        const result = await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, IMPL_LABELS.trigger, deps);
+
+        expect(result.outcome).toBe("success");
+        expect(agentsCalled()).toEqual(["claude", "codex", "codex"]);
+        expect(vi.mocked(deps.runAgent).mock.calls[2][1]).toMatchObject({ agent: "codex", continueSession: true });
+      });
+
+      it("再開時に利用上限に達した場合は、次のエージェントで新しい worktree から実行し直す", async () => {
+        const issue = makeIssue({ phase: Phase.IMPL });
+        const repoConfig = makeRepoConfig();
+        vi.mocked(deps.runAgent)
+          .mockResolvedValueOnce(makeProcessResult({ stdout: "claude initial" }))
+          .mockResolvedValueOnce(CLAUDE_LIMIT)
+          .mockResolvedValueOnce(makeProcessResult({ stdout: "codex initial" }));
+        // claude の初回後の確認、再開の上限後の確認、codex の初回後の確認
+        vi.mocked(deps.fetchLinkedPullRequestNumbers)
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([123]);
+
+        const result = await processIssue(issue, repoConfig, FALLBACK_CONFIG, null, IMPL_LABELS.trigger, deps);
+
+        expect(result.outcome).toBe("success");
+        expect(agentsCalled()).toEqual(["claude", "claude", "codex"]);
+        expect(vi.mocked(deps.runAgent).mock.calls[2][1].continueSession).toBeUndefined();
+        expect(vi.mocked(deps.withWorktree).mock.calls.map((call) => call[3])).toEqual([1, 2]);
+        expect(deps.fetchLinkedPullRequestNumbers).toHaveBeenCalledTimes(3);
+      });
     });
   });
 });

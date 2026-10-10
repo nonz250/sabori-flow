@@ -164,6 +164,44 @@ describe("withWorktree", () => {
       expect(args).toContain(expectedBranch);
     });
 
+    it("初回の attempt ではブランチ名とパスに試行番号が付かない", async () => {
+      mockedRunCommandSync.mockReturnValue("");
+
+      let yieldedPath = "";
+      await withWorktree(
+        makeRepoArg(),
+        ISSUE_NUMBER,
+        async (worktreePath) => { yieldedPath = worktreePath; },
+        fixedTimestampFn,
+        1,
+      );
+
+      const args = mockedRunCommandSync.mock.calls[1][1] as string[];
+      expect(args).toContain(`sabori-flow/${ISSUE_NUMBER}-${FIXED_TIMESTAMP}`);
+      expect(yieldedPath).toBe(
+        path.join(REPO_DIR, `issue-${ISSUE_NUMBER}-${FIXED_TIMESTAMP}`),
+      );
+    });
+
+    it("2 回目以降の attempt ではブランチ名とパスに試行番号が付き、同じ秒の前回試行と衝突しない", async () => {
+      mockedRunCommandSync.mockReturnValue("");
+
+      let yieldedPath = "";
+      await withWorktree(
+        makeRepoArg(),
+        ISSUE_NUMBER,
+        async (worktreePath) => { yieldedPath = worktreePath; },
+        fixedTimestampFn,
+        2,
+      );
+
+      const args = mockedRunCommandSync.mock.calls[1][1] as string[];
+      expect(args).toContain(`sabori-flow/${ISSUE_NUMBER}-${FIXED_TIMESTAMP}-2`);
+      expect(yieldedPath).toBe(
+        path.join(REPO_DIR, `issue-${ISSUE_NUMBER}-${FIXED_TIMESTAMP}-2`),
+      );
+    });
+
     it("worktrees ベース配下の <owner>/<repo> ディレクトリが mkdirSync で recursive 作成される", async () => {
       mockedRunCommandSync.mockReturnValue("");
 

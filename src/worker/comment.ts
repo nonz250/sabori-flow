@@ -199,6 +199,7 @@ const FAILURE_CATEGORY_LABELS: Record<FailureCategory, string> = {
   [FailureCategory.WORKTREE_CREATION]: "Worktree Creation Error",
   [FailureCategory.GIT_FETCH]: "Git Fetch Error",
   [FailureCategory.SPEC_PROPOSAL_COMMENT]: "Spec Proposal Comment Error",
+  [FailureCategory.AGENT_USAGE_LIMIT]: "Agent Usage Limit Reached",
 };
 
 // ---------- Output section labels ----------

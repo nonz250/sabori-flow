@@ -199,7 +199,7 @@ describe("型の構造テスト", () => {
     const executionConfig: ExecutionConfig = {
       maxParallel: 4,
       maxIssuesPerRepo: 5,
-      agent: Agent.CLAUDE,
+      agents: [Agent.CLAUDE],
       autonomy: Autonomy.FULL,
       intervalMinutes: 60,
       language: "ja",

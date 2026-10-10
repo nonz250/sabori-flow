@@ -413,7 +413,7 @@ function parseExecution(raw: unknown): Omit<ExecutionConfig, "language"> {
     return {
       maxParallel: 1,
       maxIssuesPerRepo: 1,
-      agent: Agent.CLAUDE,
+      agents: [Agent.CLAUDE],
       autonomy: Autonomy.INTERACTIVE,
       intervalMinutes: 10,
       timeoutMinutes: TIMEOUT_MINUTES_DEFAULT,
@@ -471,21 +471,9 @@ function parseExecution(raw: unknown): Omit<ExecutionConfig, "language"> {
   }
 
   // agent
-  const rawAgent =
-    "agent" in record ? record["agent"] : Agent.CLAUDE;
-
-  if (typeof rawAgent !== "string") {
-    throw new ConfigValidationError(
-      `execution.agent: must be a string, got ${typeof rawAgent}`,
-    );
-  }
-
-  const validAgentValues = Object.values(Agent) as string[];
-  if (!validAgentValues.includes(rawAgent)) {
-    throw new ConfigValidationError(
-      `execution.agent: must be one of: ${validAgentValues.join(", ")}; got '${rawAgent}'`,
-    );
-  }
+  const agents = parseAgents(
+    "agent" in record ? record["agent"] : Agent.CLAUDE,
+  );
 
   // autonomy
   const rawAutonomy =
@@ -551,11 +539,57 @@ function parseExecution(raw: unknown): Omit<ExecutionConfig, "language"> {
   return {
     maxParallel: rawMaxParallel,
     maxIssuesPerRepo: rawMaxIssuesPerRepo,
-    agent: rawAgent as Agent,
+    agents,
     autonomy: rawAutonomy as Autonomy,
     intervalMinutes: rawIntervalMinutes,
     timeoutMinutes: rawTimeoutMinutes,
   };
+}
+
+/**
+ * A single agent name is shorthand for a one-element priority list, so
+ * configs written before fallback existed keep their meaning.
+ */
+function parseAgents(raw: unknown): readonly Agent[] {
+  if (typeof raw === "string") {
+    return [validateAgent(raw, "execution.agent")];
+  }
+
+  if (!Array.isArray(raw)) {
+    throw new ConfigValidationError(
+      `execution.agent: must be a string or a list of strings, got ${typeof raw}`,
+    );
+  }
+
+  if (raw.length === 0) {
+    throw new ConfigValidationError("execution.agent: must not be an empty list");
+  }
+
+  const agents: Agent[] = [];
+  raw.forEach((item: unknown, index: number) => {
+    const prefix = `execution.agent[${index}]`;
+    if (typeof item !== "string") {
+      throw new ConfigValidationError(
+        `${prefix}: must be a string, got ${typeof item}`,
+      );
+    }
+    const agent = validateAgent(item, prefix);
+    if (agents.includes(agent)) {
+      throw new ConfigValidationError(`${prefix}: duplicate agent '${agent}'`);
+    }
+    agents.push(agent);
+  });
+  return agents;
+}
+
+function validateAgent(value: string, prefix: string): Agent {
+  const validAgentValues = Object.values(Agent) as string[];
+  if (!validAgentValues.includes(value)) {
+    throw new ConfigValidationError(
+      `${prefix}: must be one of: ${validAgentValues.join(", ")}; got '${value}'`,
+    );
+  }
+  return value as Agent;
 }
 
 // ---------- Helpers ----------

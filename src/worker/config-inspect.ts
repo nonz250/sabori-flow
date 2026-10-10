@@ -46,7 +46,7 @@ export interface RepositoryInspection {
 export interface ExecutionInspection {
   readonly maxParallel: Sourced<number>;
   readonly maxIssuesPerRepo: Sourced<number>;
-  readonly agent: Sourced<Agent>;
+  readonly agents: Sourced<readonly Agent[]>;
   readonly autonomy: Sourced<Autonomy>;
   readonly intervalMinutes: Sourced<number>;
   readonly timeoutMinutes: Sourced<number>;
@@ -147,7 +147,7 @@ function inspectExecution(
       rawExecution,
       "max_issues_per_repo",
     ),
-    agent: sourced(execution.agent, rawExecution, "agent"),
+    agents: sourced(execution.agents, rawExecution, "agent"),
     autonomy: sourced(execution.autonomy, rawExecution, "autonomy"),
     intervalMinutes: sourced(
       execution.intervalMinutes,
