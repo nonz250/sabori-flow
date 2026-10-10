@@ -17,7 +17,7 @@ import { fetchIssueComments, IssueCommentsError } from "./issue-comments.js";
 import { deriveSpecThread, buildSpecContext } from "./spec-thread.js";
 import { evaluateSpecResume } from "./spec-review.js";
 import { fetchLinkedPullRequestNumbers } from "./linked-pr.js";
-import { withWorktree, WorktreeError } from "./worktree.js";
+import { withWorktree, WorktreeError, FIRST_ATTEMPT } from "./worktree.js";
 import { AgentPool } from "./agent-pool.js";
 import { isUsageLimitReached } from "./usage-limit.js";
 import { createLogger } from "./logger.js";
@@ -251,7 +251,7 @@ async function runWithAgentFallback(
     if (outcome.kind === "done") {
       // An earlier attempt that hit the limit still launched a CLI, which
       // counts against max_issues_per_repo even if this attempt never did.
-      return attempt > 1 ? { ...outcome.result, claudeExecuted: true } : outcome.result;
+      return attempt > FIRST_ATTEMPT ? { ...outcome.result, claudeExecuted: true } : outcome.result;
     }
 
     agentPool.markExhausted(agent);

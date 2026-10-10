@@ -18,7 +18,7 @@ export class WorktreeError extends Error {
 }
 
 const GIT_TIMEOUT_MS = 120_000;
-const FIRST_ATTEMPT = 1;
+export const FIRST_ATTEMPT = 1;
 
 const logger = createLogger("worktree");
 
