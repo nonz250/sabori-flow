@@ -12,7 +12,7 @@ import {
   getDefaultExecution,
   getDefaultPriorityLabels,
 } from "../../utils/config-defaults.js";
-import { Autonomy } from "../../worker/models.js";
+import { Agent, Autonomy } from "../../worker/models.js";
 import { DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES } from "../../i18n/types.js";
 
 export const CURRENT_SCHEMA_VERSION = 1;
@@ -144,6 +144,12 @@ export function collectPendingSteps(doc: Document): CollectResult {
       id: "execution.max_issues_per_repo",
       defaultValue: defaults.max_issues_per_repo,
       prompt: null,
+    },
+    {
+      path: ["execution", "agent"],
+      id: "execution.agent",
+      defaultValue: defaults.agent,
+      prompt: { kind: "select", choices: Object.values(Agent) },
     },
     {
       path: ["execution", "autonomy"],

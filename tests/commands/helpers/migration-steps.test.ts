@@ -41,6 +41,7 @@ repositories:
 execution:
   max_parallel: 2
   max_issues_per_repo: 3
+  agent: codex
   autonomy: auto
   interval_minutes: 30
   timeout_minutes: 120
@@ -66,6 +67,7 @@ describe("collectPendingSteps", () => {
       "language",
       "execution.max_parallel",
       "execution.max_issues_per_repo",
+      "execution.agent",
       "execution.autonomy",
       "execution.interval_minutes",
       "execution.timeout_minutes",
@@ -81,8 +83,8 @@ describe("collectPendingSteps", () => {
     if (!result.ok) return;
 
     expect(result.steps[0].path).toEqual(["language"]);
-    expect(result.steps[4].path).toEqual(["execution", "interval_minutes"]);
-    expect(result.steps[6].path).toEqual(["repositories", 0, "default_branch"]);
+    expect(result.steps[5].path).toEqual(["execution", "interval_minutes"]);
+    expect(result.steps[7].path).toEqual(["repositories", 0, "default_branch"]);
   });
 
   it("returns zero steps when all keys are present", () => {
@@ -109,6 +111,7 @@ execution:
     const ids = result.steps.map((s) => s.id);
     expect(ids).toContain("language");
     expect(ids).toContain("execution.max_issues_per_repo");
+    expect(ids).toContain("execution.agent");
     expect(ids).toContain("execution.autonomy");
     expect(ids).toContain("execution.interval_minutes");
     expect(ids).toContain("execution.timeout_minutes");
@@ -116,6 +119,34 @@ execution:
     expect(ids).toContain("repositories[0].priority_labels");
     expect(ids).not.toContain("execution.max_parallel");
     expect(ids).not.toContain("repositories[0].default_branch");
+  });
+
+  it("offers every agent with claude preselected when execution.agent is missing", () => {
+    const result = collectPendingSteps(doc(MINIMAL_CONFIG));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const step = result.steps.find((s) => s.id === "execution.agent");
+    expect(step?.path).toEqual(["execution", "agent"]);
+    expect(step?.defaultValue).toBe("claude");
+    expect(step?.prompt).toEqual({ kind: "select", choices: ["claude", "codex"] });
+  });
+
+  it("does not flag execution.agent written as a priority list", () => {
+    const yaml = `\
+repositories:
+  - owner: acme
+    repo: app
+    local_path: /tmp/acme/app
+execution:
+  agent: [codex, claude]
+`;
+    const result = collectPendingSteps(doc(yaml));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const ids = result.steps.map((s) => s.id);
+    expect(ids).not.toContain("execution.agent");
   });
 
   it("handles multiple repositories", () => {

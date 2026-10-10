@@ -68,6 +68,7 @@ repositories:
 execution:
   max_parallel: 2
   max_issues_per_repo: 3
+  agent: codex
   autonomy: auto
   interval_minutes: 60
   timeout_minutes: 120
