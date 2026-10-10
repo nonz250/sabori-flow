@@ -7,6 +7,11 @@ import type { ProcessResult } from "./process.js";
 // succeed, so it is not a reason to hand the issue to another agent.
 const APOSTROPHE = "['’]";
 
+// The CLIs print the quota error last, right before exiting. Earlier lines
+// can be transcript (Codex streams tool output, including fetched Issue
+// bodies, to stderr), so only the tail is trusted.
+const TAIL_LINE_COUNT = 3;
+
 const USAGE_LIMIT_PATTERNS: Record<Agent, readonly RegExp[]> = {
   [Agent.CLAUDE]: [
     new RegExp(`You${APOSTROPHE}ve hit your\\b`, "i"),
@@ -27,15 +32,29 @@ const USAGE_LIMIT_PATTERNS: Record<Agent, readonly RegExp[]> = {
 };
 
 /**
- * Callers must only pass the output of a failed run. A successful run's
- * stdout is model output that can quote the Issue body, so matching it would
- * let Issue text trigger a fallback.
+ * A failed run is judged by the last lines of both streams. A successful
+ * run counts only when its whole stdout is a single line matching a
+ * pattern: some CLI versions report the limit with exit code 0, but
+ * anything longer is model output that can quote the Issue body.
  */
 export function isUsageLimitReached(
   agent: Agent,
-  output: Pick<ProcessResult, "stdout" | "stderr">,
+  result: Pick<ProcessResult, "success" | "stdout" | "stderr">,
 ): boolean {
-  return USAGE_LIMIT_PATTERNS[agent].some(
-    (pattern) => pattern.test(output.stdout) || pattern.test(output.stderr),
-  );
+  const patterns = USAGE_LIMIT_PATTERNS[agent];
+  const matches = (text: string): boolean => patterns.some((pattern) => pattern.test(text));
+
+  if (result.success) {
+    const stdout = result.stdout.trim();
+    return !stdout.includes("\n") && matches(stdout);
+  }
+  return matches(tail(result.stdout)) || matches(tail(result.stderr));
+}
+
+function tail(text: string): string {
+  return text
+    .split("\n")
+    .filter((line) => line.trim() !== "")
+    .slice(-TAIL_LINE_COUNT)
+    .join("\n");
 }

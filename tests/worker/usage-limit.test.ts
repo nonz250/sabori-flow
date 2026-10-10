@@ -4,7 +4,7 @@ import { isUsageLimitReached } from "../../src/worker/usage-limit.js";
 import { Agent } from "../../src/worker/models.js";
 
 function output(stdout: string, stderr = "") {
-  return { stdout, stderr };
+  return { success: false, stdout, stderr };
 }
 
 describe("isUsageLimitReached", () => {
@@ -58,6 +58,56 @@ describe("isUsageLimitReached", () => {
       ["空出力", ""],
     ])("%s は上限扱いしない", (_name, message) => {
       expect(isUsageLimitReached(Agent.CODEX, output(message, message))).toBe(false);
+    });
+  });
+
+  describe("出力の末尾だけを照合する", () => {
+    it("Codex の stderr の途中に Issue 本文由来の文言があっても、末尾が別のエラーなら上限扱いしない", () => {
+      const transcript = [
+        "exec gh issue view 42",
+        "Body: our API returns 'quota exceeded' when usage limit reached",
+        "thinking...",
+        "running npm test",
+        "npm test failed",
+        "ERROR: command exited with code 1",
+      ].join("\n");
+
+      expect(isUsageLimitReached(Agent.CODEX, output("", transcript))).toBe(false);
+    });
+
+    it("Codex の stderr の末尾に上限エラーがあれば、前に会話ログがあっても検出する", () => {
+      const transcript = [
+        "exec gh issue view 42",
+        "running npm test",
+        "ERROR: You've hit your usage limit. Try again later.",
+        "",
+      ].join("\n");
+
+      expect(isUsageLimitReached(Agent.CODEX, output("", transcript))).toBe(true);
+    });
+  });
+
+  describe("正常終了した実行", () => {
+    it("stdout 全体が上限メッセージ 1 行だけなら検出する", () => {
+      const result = { success: true, stdout: "Claude AI usage limit reached|1760000000\n", stderr: "" };
+
+      expect(isUsageLimitReached(Agent.CLAUDE, result)).toBe(true);
+    });
+
+    it("上限の文言がモデル出力の一部として含まれるだけなら検出しない", () => {
+      const result = {
+        success: true,
+        stdout: "Plan:\n1. Handle the case where the API says usage limit reached",
+        stderr: "",
+      };
+
+      expect(isUsageLimitReached(Agent.CLAUDE, result)).toBe(false);
+    });
+
+    it("stderr に上限の文言があっても stdout が通常の出力なら検出しない", () => {
+      const result = { success: true, stdout: "done", stderr: "You've hit your usage limit." };
+
+      expect(isUsageLimitReached(Agent.CODEX, result)).toBe(false);
     });
   });
 });
