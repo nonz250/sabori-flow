@@ -124,13 +124,20 @@ This interactively prompts for owner, repo, and local path, then appends the ent
 
 ### Updating an Existing Configuration
 
-When a newer version of sabori-flow adds config keys, run `migrate` to fill in the ones your `config.yml` is missing:
+Run `migrate` to review every setting in `config.yml`, including repository settings and label names. Use it after upgrading sabori-flow to pick up new keys, or whenever you want to change a value:
 
 ```bash
 npx sabori-flow migrate
+npx sabori-flow migrate --repo your-org/example-app  # only this repository's settings
 ```
 
-It only fills in missing keys interactively (each with its default preselected); it does not validate or repair values that already exist in the file. Comments and keys the tool does not recognize are preserved. A backup is written to `~/.sabori-flow/config.yml.bak-<timestamp>` before anything is changed. If `config.yml` is already up to date, `migrate` says so and exits without touching the file. If `execution.interval_minutes` changes, `migrate` tells you to run `npx sabori-flow reinstall` afterward; if it doesn't, no reinstall is needed. If `config.yml` was written by a newer version of sabori-flow than the one currently installed, `migrate` aborts without making changes.
+Each key is asked in turn:
+
+- A key that already has a valid value starts with that value, so pressing Enter keeps it.
+- A key that is not set shows its default; pressing Enter leaves it unset, so the default keeps applying.
+- A value that is invalid, or a required key that is missing, must be corrected before moving on.
+
+Lists such as `priority_labels` and `execution.agent` are entered comma-separated. Setting one label of a phase that is not configured yet writes the rest of that phase with their defaults. Comments and keys the tool does not recognize are preserved. Every change is listed before you confirm, and a backup is written to `~/.sabori-flow/config.yml.bak-<timestamp>` before anything is changed. If nothing changed, `migrate` says so and leaves the file untouched. If `execution.interval_minutes` changes, `migrate` tells you to run `npx sabori-flow reinstall` afterward; if it doesn't, no reinstall is needed. If `config.yml` was written by a newer version of sabori-flow than the one currently installed, `migrate` aborts without making changes.
 
 ### Setting the Claude Auth Token (recommended for unattended runs)
 
@@ -299,7 +306,7 @@ Labels default to `ai/*` (e.g. `ai/spec`, `ai/plan/in-progress`). To customize p
 
 | Key | Description |
 |-----|-------------|
-| `schema_version` | Config schema version. Written by `init` and `migrate`; do not edit manually |
+| `schema_version` | Config schema version. Written by `migrate`; do not edit manually |
 | `repositories[].owner` | Repository owner |
 | `repositories[].repo` | Repository name |
 | `repositories[].local_path` | Local path to the cloned repository |

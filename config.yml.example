@@ -1,4 +1,4 @@
-# schema_version: 1  # Config schema version. Written by `init` and `migrate`; do not edit manually
+# schema_version: 1  # Config schema version. Written by `migrate`; do not edit manually
 
 # Target repositories
 repositories:
