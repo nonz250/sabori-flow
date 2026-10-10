@@ -368,6 +368,50 @@ describe("migrateCommand - normal migration with prompts", () => {
   });
 });
 
+// ---------- Tests: agent selection ----------
+
+describe("migrateCommand - agent selection", () => {
+  const AGENT_MISSING_CONFIG = FULL_CONFIG.replace("  agent: codex\n", "");
+
+  function isAgentPrompt(cfg: unknown): boolean {
+    const config = cfg as { choices?: { value: string }[] };
+    return (config.choices ?? []).some((c) => c.value === "codex");
+  }
+
+  it("asks for the agent with the agent prompt instead of the raw key", async () => {
+    mockedExistsSync.mockReturnValue(true);
+    mockedReadFileSync.mockReturnValue(AGENT_MISSING_CONFIG);
+    setupDefaults();
+
+    await runMigrateCommand();
+
+    const agentCall = mockedSelect.mock.calls.find(([cfg]) => isAgentPrompt(cfg));
+    expect(agentCall).toBeDefined();
+    const config = agentCall![0] as { message: string; default?: string };
+    expect(config.message).toBe("実行エージェントを選択してください:");
+    expect(config.default).toBe("claude");
+  });
+
+  it("writes the selected agent", async () => {
+    mockedExistsSync.mockReturnValue(true);
+    mockedReadFileSync.mockReturnValue(AGENT_MISSING_CONFIG);
+    setupDefaults();
+    mockedSelect.mockImplementation(async (cfg: unknown) => {
+      if (isAgentPrompt(cfg)) {
+        return "codex";
+      }
+      return (cfg as { default?: unknown }).default ?? "";
+    });
+
+    await runMigrateCommand();
+
+    const cw = configWriteCall();
+    expect(cw).toBeDefined();
+    const parsed = YAML.parse(cw!.content) as Record<string, unknown>;
+    expect((parsed.execution as Record<string, unknown>).agent).toBe("codex");
+  });
+});
+
 // ---------- Tests: comment preservation ----------
 
 describe("migrateCommand - comment preservation", () => {

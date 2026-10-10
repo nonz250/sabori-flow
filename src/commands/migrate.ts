@@ -213,6 +213,9 @@ function getPromptMessage(
   if (step.id.endsWith(".auto_impl_after_plan") && repoIndex !== null) {
     return t("prompt.autoImplAfterPlan", { repo: getRepoName(doc, repoIndex) });
   }
+  if (step.id === "execution.agent") {
+    return t("prompt.selectAgent");
+  }
   if (step.id === "execution.autonomy") {
     return t("prompt.autonomy");
   }
