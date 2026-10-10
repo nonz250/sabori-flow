@@ -109,6 +109,34 @@ const LABEL_PHASES = [
   { phase: "impl", keys: PHASE_LABEL_KEYS },
 ] as const;
 
+export const CURRENT_SCHEMA_VERSION = 1;
+
+/**
+ * Reads schema_version from the document.
+ *
+ * Returns 0 for any absent, non-integer, negative, or otherwise
+ * anomalous value. Only values that are integers >= 0 are returned
+ * as-is. The asymmetry is intentional: migrate treats only "strictly
+ * newer than CURRENT" as an abort condition, while all other anomalies
+ * (missing, corrupt, negative) are normalized to 0 so the document
+ * enters the normal migration flow.
+ */
+export function readSchemaVersion(doc: Document): number {
+  const raw = doc.getIn(["schema_version"]);
+  if (typeof raw === "number" && Number.isInteger(raw) && raw >= 0) {
+    return raw;
+  }
+  return 0;
+}
+
+export function readIntervalMinutes(doc: Document): number {
+  const raw = doc.getIn(["execution", "interval_minutes"]);
+  if (typeof raw === "number" && Number.isInteger(raw)) {
+    return raw;
+  }
+  return getDefaultExecution().interval_minutes;
+}
+
 // ---------- Field catalog ----------
 
 /** plan/impl phases lack the spec-only keys, which LABEL_PHASES never asks them for. */
@@ -164,7 +192,11 @@ function rootFields(): ConfigField[] {
     {
       id: "execution.autonomy",
       path: ["execution", "autonomy"],
-      input: { kind: "select", choices: Object.values(Autonomy) },
+      // Same choices as init: sandboxed is for hand-edited configs only.
+      input: {
+        kind: "select",
+        choices: [Autonomy.INTERACTIVE, Autonomy.AUTO, Autonomy.FULL],
+      },
       required: false,
       defaultValue: defaults.autonomy,
       group: null,

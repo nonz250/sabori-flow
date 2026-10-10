@@ -37,7 +37,8 @@ program
 program
   .command("migrate")
   .description(t("cli.descriptionMigrate"))
-  .action(migrateCommand);
+  .option("--repo <owner/repo>", t("cli.optionMigrateRepo"))
+  .action((options) => migrateCommand(options));
 
 program
   .command("install")

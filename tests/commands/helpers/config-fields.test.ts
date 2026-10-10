@@ -8,6 +8,8 @@ import {
   collectFields,
   fromText,
   planChanges,
+  readIntervalMinutes,
+  readSchemaVersion,
   toText,
   validateFieldText,
   type ConfigField,
@@ -511,5 +513,53 @@ describe("applyChanges", () => {
       { id: "execution.max_parallel", path: ["execution", "max_parallel"], before: undefined, after: 2 },
     ]);
     expect(YAML.parse(document.toString()).execution).toEqual({ max_parallel: 2 });
+  });
+});
+
+// ---------- readSchemaVersion ----------
+
+describe("readSchemaVersion", () => {
+  it("returns 0 when key is absent", () => {
+    expect(readSchemaVersion(doc("repositories: []\n"))).toBe(0);
+  });
+
+  it("returns the value when it is a valid integer", () => {
+    expect(readSchemaVersion(doc("schema_version: 1\n"))).toBe(1);
+  });
+
+  it("returns 0 for a string value", () => {
+    expect(readSchemaVersion(doc('schema_version: "one"\n'))).toBe(0);
+  });
+
+  it("returns 0 for a negative value", () => {
+    expect(readSchemaVersion(doc("schema_version: -1\n"))).toBe(0);
+  });
+
+  it("returns 0 for null", () => {
+    expect(readSchemaVersion(doc("schema_version: null\n"))).toBe(0);
+  });
+
+  it("returns 0 for a float", () => {
+    expect(readSchemaVersion(doc("schema_version: 1.5\n"))).toBe(0);
+  });
+});
+
+// ---------- readIntervalMinutes ----------
+
+describe("readIntervalMinutes", () => {
+  it("returns default when key is absent", () => {
+    expect(readIntervalMinutes(doc("repositories: []\n"))).toBe(10);
+  });
+
+  it("returns 60 for value 60", () => {
+    expect(readIntervalMinutes(doc("execution:\n  interval_minutes: 60\n"))).toBe(60);
+  });
+
+  it("returns 90 for value 90", () => {
+    expect(readIntervalMinutes(doc("execution:\n  interval_minutes: 90\n"))).toBe(90);
+  });
+
+  it("returns default for a string value", () => {
+    expect(readIntervalMinutes(doc('execution:\n  interval_minutes: "sixty"\n'))).toBe(10);
   });
 });
