@@ -88,6 +88,34 @@ export interface MessageKeys {
   "show.configValidationError": string;
   "show.unexpectedError": string;
 
+  // migrate command
+  "migrate.configNotFound": string;
+  "migrate.runInitFirst": string;
+  "migrate.configParseFailed": string;
+  "migrate.configFormatInvalid": string;
+  "migrate.repositoriesInvalid": string;
+  "migrate.sectionInvalid": string;
+  "migrate.repoNotFound": string;
+  "migrate.schemaVersionNewer": string;
+  "migrate.hintRange": string;
+  "migrate.hintList": string;
+  "migrate.hintUnset": string;
+  "migrate.hintInvalid": string;
+  "migrate.choiceKeepUnset": string;
+  "migrate.valueRequired": string;
+  "migrate.unsetValue": string;
+  "migrate.noChanges": string;
+  "migrate.changesHeader": string;
+  "migrate.changeLine": string;
+  "migrate.confirmApply": string;
+  "migrate.aborted": string;
+  "migrate.backupFailed": string;
+  "migrate.configWriteFailed": string;
+  "migrate.reinstallRequired": string;
+  "migrate.reinstallNotRequired": string;
+  "migrate.complete": string;
+  "migrate.unexpectedError": string;
+
   // cli descriptions
   "cli.descriptionAdd": string;
   "cli.descriptionInit": string;
@@ -100,4 +128,6 @@ export interface MessageKeys {
   "cli.descriptionSetToken": string;
   "cli.descriptionShow": string;
   "cli.optionShowVerbose": string;
+  "cli.descriptionMigrate": string;
+  "cli.optionMigrateRepo": string;
 }

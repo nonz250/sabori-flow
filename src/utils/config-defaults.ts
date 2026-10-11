@@ -1,5 +1,5 @@
 // Shared by every config.yml reader (worker config loader, show command's
-// raw-document inspector, add command, i18n language loader) so they all
+// raw-document inspector, i18n language loader) so they all
 // apply the same YAML alias limit.
 export const CONFIG_YAML_PARSE_OPTIONS = { maxAliasCount: 100 } as const;
 

@@ -36,10 +36,11 @@ src/
   index.ts          # CLI エントリポイント
   worker.ts         # ワーカーエントリポイント
   commands/          # CLI コマンド
-    init.ts, install.ts, uninstall.ts, add.ts, show.ts
+    init.ts, install.ts, uninstall.ts, add.ts, show.ts, migrate.ts
     helpers/
       repository-prompt.ts  # 対話入力の共通ロジック（init/add で共有）
       config-render.ts      # show コマンドの表示整形（純粋関数）
+      config-fields.ts      # config.yml の全キーの定義・状態判定・変更計画（純粋関数、migrate が使用）
   worker/            # ワーカー本体
     main.ts          # メインロジック、STEPS ループ、並列実行制御
     config.ts        # config.yml 読み込み・バリデーション
@@ -135,6 +136,8 @@ spec の review 状態では、ワーカーが毎サイクル評価を行う。�
 
 詳細はソースコード内の各モジュールを参照のこと。
 
+`~/.sabori-flow/` は `init` / `install` が `mode: 0o700` で作成する。`config.yml` の更新書き込み（`add` / `migrate`）はこの前提に立ち、シンボリックリンク追従防止のための `wx` フラグを使わない単純上書きにしている。`migrate` のバックアップファイル書き込みのみ `wx`（`O_CREAT|O_EXCL`）を使い、既存バックアップの上書きとリンク先への書き込みを防ぐ。
+
 ### テスト
 
 - フレームワーク: vitest
@@ -171,6 +174,7 @@ spec の review 状態では、ワーカーが毎サイクル評価を行う。�
 | ログ | `~/.sabori-flow/logs/` |
 | git worktree | `~/.sabori-flow/worktrees/<owner>/<repo>/issue-<番号>-<タイムスタンプ>/` |
 | plist バックアップ | `~/.sabori-flow/com.github.sabori-flow.plist` |
+| config.yml バックアップ（migrate 実行時） | `~/.sabori-flow/config.yml.bak-<タイムスタンプ>`（世代管理・自動削除なし） |
 
 認証トークンは config.yml には保存せず、`sabori-flow set-token` 経由で `auth-token`（0600）に保存する。worker は起動時に読み込み、`claude` 実行時のみ `CLAUDE_CODE_OAUTH_TOKEN` として渡す（未設定時は claude の credentials.json にフォールバック）。
 
@@ -186,6 +190,7 @@ spec の review 状態では、ワーカーが毎サイクル評価を行う。�
 
 ### config.yml の設定項目
 
+- `schema_version`: 設定スキーマのバージョン（整数）。`migrate` だけが書き込み、`init` / `add` は書かない。worker はこのキーを一切参照しない
 - `repositories`: 対象リポジトリ一覧（必須、1 件以上）
 - `repositories[].default_branch`: デフォルトブランチ名（文字列、デフォルト: `main`）。worktree 作成時に `origin/<default_branch>` を起点として使用
 - `execution.max_parallel`: 並列実行数（整数、1-10、デフォルト: 1）
@@ -200,6 +205,21 @@ spec の review 状態では、ワーカーが毎サイクル評価を行う。�
 - `execution.interval_minutes`: スケジュール実行間隔（整数、10-1440分、デフォルト: 10）
 - `execution.timeout_minutes`: エージェントCLI実行タイムアウト（整数、1-240分、デフォルト: 60）
 - `language`: CLI メッセージおよびプロンプトテンプレートの言語（`ja` / `en`、デフォルト: `ja`）
+
+### config.yml のマイグレーション（`sabori-flow migrate`）
+
+`sabori-flow migrate` は、`config.yml` の全キー（ルート、`execution`、各リポジトリの設定とラベル名）を順に対話で確認・更新するコマンド。`--repo owner/repo` を付けると、そのリポジトリのキーだけを確認する。
+
+- 各キーは `valid` / `unset` / `invalid` に分類する。判定には `src/worker/config.ts` から export した値単位の検証関数を使い、`loadConfig` と同じルール・同じエラーメッセージにそろえる
+- `valid` は現在値を初期値にし、Enter で維持する。`unset` は初期値を入れずにデフォルト値をヒントで示し、Enter なら省略のまま残す。省略を保つことで、将来デフォルト値が変わったときにも追従させる
+- `invalid`（不正な値、必須キーの欠落）は正しい値を入力するまで先に進めない
+- 値は `node.toJS(doc, CONFIG_YAML_PARSE_OPTIONS)` で読む。`toJSON()` は alias を `{ source }` のまま返すため、`loadConfig` が受け付ける値を不正と誤判定する
+- 現在値と同じ値の再入力は変更として扱わない。変更が無く `schema_version` も最新なら書き込まない
+- `loadConfig` はラベルのフェーズが存在すると全キーを必須にする。そのため、省略されたフェーズのキーを 1 つでも入力したら、残りのキーをデフォルト値で書き込む
+- autonomy の選択肢は `init` と同じく `sandboxed` を含めない。手書きの `sandboxed` は選択肢に残し、Enter で値が変わらないようにする
+- `config.yml` は `YAML.parseDocument()` の Document API で部分編集する。コメント・未知キー・整形はそのまま保持される（`YAML.stringify()` によるラウンドトリップは使わない）。`add` コマンドも同方式
+- `execution.interval_minutes` の実効値が変化した場合のみ `reinstall` の実行を促す（plist の `StartInterval` はこのキーにのみ依存するため）
+- インストール済みバージョンより新しい `schema_version` が記録されている場合は、何も変更せず中断する
 
 ## コーディング規約
 

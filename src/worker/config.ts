@@ -35,9 +35,9 @@ const BRANCH_NAME_PATTERN = /^[a-zA-Z0-9._\/-]+$/;
 // local_path is echoed verbatim in the `show` command and log output, so
 // control characters are rejected here for display/log safety.
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/;
-const DEFAULT_BRANCH_DEFAULT = "main";
-const PHASE_LABEL_KEYS = ["trigger", "in_progress", "done", "failed"] as const;
-const SPEC_LABEL_KEYS = [...PHASE_LABEL_KEYS, "review", "approved", "needs_human"] as const;
+export const DEFAULT_BRANCH_DEFAULT = "main";
+export const PHASE_LABEL_KEYS = ["trigger", "in_progress", "done", "failed"] as const;
+export const SPEC_LABEL_KEYS = [...PHASE_LABEL_KEYS, "review", "approved", "needs_human"] as const;
 
 export const DEFAULT_LABELS: LabelsConfig = {
   spec: {
@@ -63,9 +63,17 @@ export const DEFAULT_LABELS: LabelsConfig = {
   },
 };
 
+export const MAX_PARALLEL_MIN = 1;
+export const MAX_PARALLEL_MAX = 10;
+export const MAX_ISSUES_PER_REPO_MIN = 1;
+export const MAX_ISSUES_PER_REPO_MAX = 20;
+
+export const INTERVAL_MINUTES_MIN = 10;
+export const INTERVAL_MINUTES_MAX = 1440;
+
 const TIMEOUT_MINUTES_DEFAULT = 60;
-const TIMEOUT_MINUTES_MIN = 1;
-const TIMEOUT_MINUTES_MAX = 240;
+export const TIMEOUT_MINUTES_MIN = 1;
+export const TIMEOUT_MINUTES_MAX = 240;
 
 // ---------- Public API ----------
 
@@ -126,7 +134,7 @@ export function loadConfig(configPath: string): AppConfig {
 
 // ---------- Internal parsers ----------
 
-function parseLanguage(raw: unknown): Language {
+export function parseLanguage(raw: unknown): Language {
   if (raw === undefined || raw === null) {
     return DEFAULT_LANGUAGE;
   }
@@ -174,35 +182,10 @@ function parseRepositories(raw: unknown): readonly RepositoryConfig[] {
       throw new ConfigValidationError(`${prefix}: 'local_path' is required`);
     }
 
-    const rawLocalPath = record["local_path"];
-    if (typeof rawLocalPath !== "string" || rawLocalPath === "") {
-      throw new ConfigValidationError(
-        `${prefix}.local_path: must be a non-empty string`,
-      );
-    }
-
-    if (CONTROL_CHARACTER_PATTERN.test(rawLocalPath)) {
-      throw new ConfigValidationError(
-        `${prefix}.local_path: must not contain control characters`,
-      );
-    }
-
-    const localPath = expandTilde(rawLocalPath);
-
-    if (!isAbsolutePath(localPath)) {
-      throw new ConfigValidationError(
-        `${prefix}.local_path: must be an absolute path, got '${localPath}'`,
-      );
-    }
-
-    let resolvedLocalPath: string;
-    try {
-      resolvedLocalPath = realpathSync(localPath);
-    } catch {
-      throw new ConfigValidationError(
-        `${prefix}.local_path: path does not exist: '${localPath}'`,
-      );
-    }
+    const resolvedLocalPath = resolveLocalPath(
+      record["local_path"],
+      `${prefix}.local_path`,
+    );
 
     // labels (optional — defaults to ai/* when omitted)
     let labels: LabelsConfig;
@@ -240,51 +223,25 @@ function parseRepositories(raw: unknown): readonly RepositoryConfig[] {
       );
     }
 
-    const priorityRaw = record["priority_labels"];
-    if (!Array.isArray(priorityRaw)) {
-      throw new ConfigValidationError(
-        `${prefix}.priority_labels: must be a list`,
-      );
-    }
-
-    for (let j = 0; j < priorityRaw.length; j++) {
-      const item = priorityRaw[j] as unknown;
-      if (typeof item !== "string") {
-        throw new ConfigValidationError(
-          `${prefix}.priority_labels[${j}]: must be a string`,
-        );
-      }
-      if (!LABEL_PATTERN.test(item)) {
-        throw new ConfigValidationError(
-          `${prefix}.priority_labels[${j}]: invalid characters in '${item}' ` +
-            `(must match ${LABEL_PATTERN.source})`,
-        );
-      }
-    }
+    const priorityLabels = parsePriorityLabels(
+      record["priority_labels"],
+      `${prefix}.priority_labels`,
+    );
 
     // auto_impl_after_plan (optional, default: false)
     let autoImplAfterPlan = false;
     if ("auto_impl_after_plan" in record) {
-      const rawAutoImpl = record["auto_impl_after_plan"];
-      if (typeof rawAutoImpl !== "boolean") {
-        throw new ConfigValidationError(
-          `${prefix}.auto_impl_after_plan: must be a boolean, got ${typeof rawAutoImpl}`,
-        );
-      }
-      autoImplAfterPlan = rawAutoImpl;
+      autoImplAfterPlan = validateAutoImplAfterPlan(
+        record["auto_impl_after_plan"],
+        `${prefix}.auto_impl_after_plan`,
+      );
     }
 
     // default_branch (optional, default: "main")
     let defaultBranch = DEFAULT_BRANCH_DEFAULT;
     if ("default_branch" in record) {
-      const rawDefaultBranch = record["default_branch"];
-      if (typeof rawDefaultBranch !== "string" || rawDefaultBranch === "") {
-        throw new ConfigValidationError(
-          `${prefix}.default_branch: must be a non-empty string`,
-        );
-      }
-      defaultBranch = validateBranchName(
-        rawDefaultBranch,
+      defaultBranch = parseDefaultBranch(
+        record["default_branch"],
         `${prefix}.default_branch`,
       );
     }
@@ -295,7 +252,7 @@ function parseRepositories(raw: unknown): readonly RepositoryConfig[] {
       localPath: resolvedLocalPath,
       defaultBranch,
       labels,
-      priorityLabels: priorityRaw as string[],
+      priorityLabels,
       autoImplAfterPlan,
     });
   }
@@ -312,21 +269,92 @@ function validateOwnerRepo(
     throw new ConfigValidationError(`${prefix}: '${key}' is required`);
   }
 
-  const value = entry[key];
+  return validateOwnerRepoValue(entry[key], `${prefix}.${key}`);
+}
+
+export function validateOwnerRepoValue(value: unknown, path: string): string {
   if (typeof value !== "string" || value === "") {
-    throw new ConfigValidationError(
-      `${prefix}.${key}: must be a non-empty string`,
-    );
+    throw new ConfigValidationError(`${path}: must be a non-empty string`);
   }
 
   if (!OWNER_REPO_PATTERN.test(value)) {
     throw new ConfigValidationError(
-      `${prefix}.${key}: invalid characters in '${value}' ` +
+      `${path}: invalid characters in '${value}' ` +
         `(must match ${OWNER_REPO_PATTERN.source})`,
     );
   }
 
   return value;
+}
+
+/** Returns the resolved real path; the path must exist on this machine. */
+export function resolveLocalPath(value: unknown, path: string): string {
+  if (typeof value !== "string" || value === "") {
+    throw new ConfigValidationError(`${path}: must be a non-empty string`);
+  }
+
+  if (CONTROL_CHARACTER_PATTERN.test(value)) {
+    throw new ConfigValidationError(
+      `${path}: must not contain control characters`,
+    );
+  }
+
+  const localPath = expandTilde(value);
+
+  if (!isAbsolutePath(localPath)) {
+    throw new ConfigValidationError(
+      `${path}: must be an absolute path, got '${localPath}'`,
+    );
+  }
+
+  try {
+    return realpathSync(localPath);
+  } catch {
+    throw new ConfigValidationError(
+      `${path}: path does not exist: '${localPath}'`,
+    );
+  }
+}
+
+export function parsePriorityLabels(value: unknown, path: string): string[] {
+  if (!Array.isArray(value)) {
+    throw new ConfigValidationError(`${path}: must be a list`);
+  }
+
+  return value.map((item: unknown, index: number) =>
+    validateLabelName(item, `${path}[${index}]`),
+  );
+}
+
+export function validateLabelName(value: unknown, path: string): string {
+  if (typeof value !== "string") {
+    throw new ConfigValidationError(`${path}: must be a string`);
+  }
+
+  if (!LABEL_PATTERN.test(value)) {
+    throw new ConfigValidationError(
+      `${path}: invalid characters in '${value}' ` +
+        `(must match ${LABEL_PATTERN.source})`,
+    );
+  }
+
+  return value;
+}
+
+export function validateAutoImplAfterPlan(value: unknown, path: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new ConfigValidationError(
+      `${path}: must be a boolean, got ${typeof value}`,
+    );
+  }
+  return value;
+}
+
+export function parseDefaultBranch(value: unknown, path: string): string {
+  if (typeof value !== "string" || value === "") {
+    throw new ConfigValidationError(`${path}: must be a non-empty string`);
+  }
+  return validateBranchName(value, path);
 }
 
 function parsePhaseLabels(raw: unknown, phaseName: string): PhaseLabels {
@@ -344,19 +372,7 @@ function parsePhaseLabels(raw: unknown, phaseName: string): PhaseLabels {
       );
     }
 
-    const value = record[key];
-    if (typeof value !== "string") {
-      throw new ConfigValidationError(`${phaseName}.${key}: must be a string`);
-    }
-
-    if (!LABEL_PATTERN.test(value)) {
-      throw new ConfigValidationError(
-        `${phaseName}.${key}: invalid characters in '${value}' ` +
-          `(must match ${LABEL_PATTERN.source})`,
-      );
-    }
-
-    values[key] = value;
+    values[key] = validateLabelName(record[key], `${phaseName}.${key}`);
   }
 
   return {
@@ -382,19 +398,7 @@ function parseSpecPhaseLabels(raw: unknown, phaseName: string): SpecPhaseLabels 
       );
     }
 
-    const value = record[key];
-    if (typeof value !== "string") {
-      throw new ConfigValidationError(`${phaseName}.${key}: must be a string`);
-    }
-
-    if (!LABEL_PATTERN.test(value)) {
-      throw new ConfigValidationError(
-        `${phaseName}.${key}: invalid characters in '${value}' ` +
-          `(must match ${LABEL_PATTERN.source})`,
-      );
-    }
-
-    values[key] = value;
+    values[key] = validateLabelName(record[key], `${phaseName}.${key}`);
   }
 
   return {
@@ -430,45 +434,23 @@ function parseExecution(raw: unknown): Omit<ExecutionConfig, "language"> {
   const rawMaxParallel =
     "max_parallel" in record ? record["max_parallel"] : 1;
 
-  if (typeof rawMaxParallel !== "number" || !Number.isInteger(rawMaxParallel)) {
-    throw new ConfigValidationError(
-      `execution.max_parallel: must be an integer, got ${typeof rawMaxParallel}`,
-    );
-  }
-
-  if (rawMaxParallel < 1) {
-    throw new ConfigValidationError(
-      `execution.max_parallel: must be >= 1, got ${rawMaxParallel}`,
-    );
-  }
-
-  if (rawMaxParallel > 10) {
-    throw new ConfigValidationError(
-      `execution.max_parallel: must be <= 10, got ${rawMaxParallel}`,
-    );
-  }
+  const maxParallel = validateIntegerInRange(
+    rawMaxParallel,
+    "execution.max_parallel",
+    MAX_PARALLEL_MIN,
+    MAX_PARALLEL_MAX,
+  );
 
   // max_issues_per_repo
   const rawMaxIssuesPerRepo =
     "max_issues_per_repo" in record ? record["max_issues_per_repo"] : 1;
 
-  if (typeof rawMaxIssuesPerRepo !== "number" || !Number.isInteger(rawMaxIssuesPerRepo)) {
-    throw new ConfigValidationError(
-      `execution.max_issues_per_repo: must be an integer, got ${typeof rawMaxIssuesPerRepo}`,
-    );
-  }
-
-  if (rawMaxIssuesPerRepo < 1) {
-    throw new ConfigValidationError(
-      `execution.max_issues_per_repo: must be >= 1, got ${rawMaxIssuesPerRepo}`,
-    );
-  }
-
-  if (rawMaxIssuesPerRepo > 20) {
-    throw new ConfigValidationError(
-      `execution.max_issues_per_repo: must be <= 20, got ${rawMaxIssuesPerRepo}`,
-    );
-  }
+  const maxIssuesPerRepo = validateIntegerInRange(
+    rawMaxIssuesPerRepo,
+    "execution.max_issues_per_repo",
+    MAX_ISSUES_PER_REPO_MIN,
+    MAX_ISSUES_PER_REPO_MAX,
+  );
 
   // agent
   const agents = parseAgents(
@@ -479,78 +461,84 @@ function parseExecution(raw: unknown): Omit<ExecutionConfig, "language"> {
   const rawAutonomy =
     "autonomy" in record ? record["autonomy"] : Autonomy.INTERACTIVE;
 
-  if (typeof rawAutonomy !== "string") {
-    throw new ConfigValidationError(
-      `execution.autonomy: must be a string, got ${typeof rawAutonomy}`,
-    );
-  }
-
-  const validAutonomyValues = Object.values(Autonomy) as string[];
-  if (!validAutonomyValues.includes(rawAutonomy)) {
-    throw new ConfigValidationError(
-      `execution.autonomy: must be one of: ${validAutonomyValues.join(", ")}; got '${rawAutonomy}'`,
-    );
-  }
+  const autonomy = validateAutonomy(rawAutonomy, "execution.autonomy");
 
   // interval_minutes
   const rawIntervalMinutes =
     "interval_minutes" in record ? record["interval_minutes"] : 10;
 
-  if (typeof rawIntervalMinutes !== "number" || !Number.isInteger(rawIntervalMinutes)) {
-    throw new ConfigValidationError(
-      `execution.interval_minutes: must be an integer, got ${typeof rawIntervalMinutes}`,
-    );
-  }
-
-  if (rawIntervalMinutes < 10) {
-    throw new ConfigValidationError(
-      `execution.interval_minutes: must be >= 10, got ${rawIntervalMinutes}`,
-    );
-  }
-
-  if (rawIntervalMinutes > 1440) {
-    throw new ConfigValidationError(
-      `execution.interval_minutes: must be <= 1440, got ${rawIntervalMinutes}`,
-    );
-  }
+  const intervalMinutes = validateIntegerInRange(
+    rawIntervalMinutes,
+    "execution.interval_minutes",
+    INTERVAL_MINUTES_MIN,
+    INTERVAL_MINUTES_MAX,
+  );
 
   // timeout_minutes
   const rawTimeoutMinutes =
     "timeout_minutes" in record ? record["timeout_minutes"] : TIMEOUT_MINUTES_DEFAULT;
 
-  if (typeof rawTimeoutMinutes !== "number" || !Number.isInteger(rawTimeoutMinutes)) {
-    throw new ConfigValidationError(
-      `execution.timeout_minutes: must be an integer, got ${typeof rawTimeoutMinutes}`,
-    );
-  }
-
-  if (rawTimeoutMinutes < TIMEOUT_MINUTES_MIN) {
-    throw new ConfigValidationError(
-      `execution.timeout_minutes: must be >= ${TIMEOUT_MINUTES_MIN}, got ${rawTimeoutMinutes}`,
-    );
-  }
-
-  if (rawTimeoutMinutes > TIMEOUT_MINUTES_MAX) {
-    throw new ConfigValidationError(
-      `execution.timeout_minutes: must be <= ${TIMEOUT_MINUTES_MAX}, got ${rawTimeoutMinutes}`,
-    );
-  }
+  const timeoutMinutes = validateIntegerInRange(
+    rawTimeoutMinutes,
+    "execution.timeout_minutes",
+    TIMEOUT_MINUTES_MIN,
+    TIMEOUT_MINUTES_MAX,
+  );
 
   return {
-    maxParallel: rawMaxParallel,
-    maxIssuesPerRepo: rawMaxIssuesPerRepo,
+    maxParallel,
+    maxIssuesPerRepo,
     agents,
-    autonomy: rawAutonomy as Autonomy,
-    intervalMinutes: rawIntervalMinutes,
-    timeoutMinutes: rawTimeoutMinutes,
+    autonomy,
+    intervalMinutes,
+    timeoutMinutes,
   };
+}
+
+export function validateIntegerInRange(
+  value: unknown,
+  path: string,
+  min: number,
+  max: number,
+): number {
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    throw new ConfigValidationError(
+      `${path}: must be an integer, got ${typeof value}`,
+    );
+  }
+
+  if (value < min) {
+    throw new ConfigValidationError(`${path}: must be >= ${min}, got ${value}`);
+  }
+
+  if (value > max) {
+    throw new ConfigValidationError(`${path}: must be <= ${max}, got ${value}`);
+  }
+
+  return value;
+}
+
+export function validateAutonomy(value: unknown, path: string): Autonomy {
+  if (typeof value !== "string") {
+    throw new ConfigValidationError(
+      `${path}: must be a string, got ${typeof value}`,
+    );
+  }
+
+  const validAutonomyValues = Object.values(Autonomy) as string[];
+  if (!validAutonomyValues.includes(value)) {
+    throw new ConfigValidationError(
+      `${path}: must be one of: ${validAutonomyValues.join(", ")}; got '${value}'`,
+    );
+  }
+  return value as Autonomy;
 }
 
 /**
  * A single agent name is shorthand for a one-element priority list, so
  * configs written before fallback existed keep their meaning.
  */
-function parseAgents(raw: unknown): readonly Agent[] {
+export function parseAgents(raw: unknown): readonly Agent[] {
   if (typeof raw === "string") {
     return [validateAgent(raw, "execution.agent")];
   }
@@ -594,7 +582,7 @@ function validateAgent(value: string, prefix: string): Agent {
 
 // ---------- Helpers ----------
 
-function validateBranchName(value: string, prefix: string): string {
+export function validateBranchName(value: string, prefix: string): string {
   if (!BRANCH_NAME_PATTERN.test(value)) {
     throw new ConfigValidationError(
       `${prefix}: invalid characters in '${value}'`,

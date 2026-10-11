@@ -118,6 +118,44 @@ const jaMessages: MessageKeys = {
     "Error: config.yml のバリデーションに失敗しました: {message}",
   "show.unexpectedError": "予期しないエラーが発生しました:",
 
+  // migrate command
+  "migrate.configNotFound": "Error: config.yml が見つかりません。",
+  "migrate.runInitFirst":
+    "先に `sabori-flow init` を実行してください。",
+  "migrate.configParseFailed":
+    "Error: config.yml の解析に失敗しました。YAML の構文を確認してください。",
+  "migrate.configFormatInvalid": "Error: config.yml の形式が不正です。トップレベルはマッピングである必要があります。",
+  "migrate.repositoriesInvalid":
+    "Error: config.yml に repositories が定義されていないか、形式が不正です。",
+  "migrate.sectionInvalid":
+    "Error: config.yml の {path} はマッピングである必要があります。手動で修正してから再実行してください。",
+  "migrate.repoNotFound":
+    "Error: config.yml に {repo} のリポジトリが見つかりません。owner/repo の形式で指定してください。",
+  "migrate.schemaVersionNewer":
+    "Error: config.yml の schema_version ({recorded}) はこのバージョンがサポートする上限 ({supported}) より新しいです。sabori-flow を更新してください。",
+  "migrate.hintRange": "{min}-{max}",
+  "migrate.hintList": "カンマ区切り",
+  "migrate.hintUnset": "未設定。Enter でデフォルト ({default}) のまま",
+  "migrate.hintInvalid": "現在の値が不正です: {reason}",
+  "migrate.choiceKeepUnset": "未設定のまま (デフォルト: {default})",
+  "migrate.valueRequired": "値を入力してください。",
+  "migrate.unsetValue": "(未設定)",
+  "migrate.noChanges": "変更はありません。config.yml は更新しません。",
+  "migrate.changesHeader": "以下の変更を config.yml に適用します:",
+  "migrate.changeLine": "  - {key}: {before} → {after}",
+  "migrate.confirmApply": "上記の変更を config.yml に適用しますか?",
+  "migrate.aborted": "中断しました。config.yml は変更されていません。",
+  "migrate.backupFailed":
+    "Error: バックアップの作成に失敗しました。config.yml は変更されていません。",
+  "migrate.configWriteFailed":
+    "Error: config.yml の書き込みに失敗しました。バックアップ: {backupPath}",
+  "migrate.reinstallRequired":
+    "interval_minutes が変更されました。反映するには `sabori-flow reinstall` を実行してください。",
+  "migrate.reinstallNotRequired":
+    "interval_minutes は変更されていません。reinstall は不要です。",
+  "migrate.complete": "config.yml を更新しました。",
+  "migrate.unexpectedError": "予期しないエラーが発生しました:",
+
   // cli descriptions
   "cli.descriptionAdd": "既存の config.yml にリポジトリを追加します",
   "cli.descriptionInit": "対話的に config.yml を作成します",
@@ -133,6 +171,8 @@ const jaMessages: MessageKeys = {
   "cli.descriptionShow": "config.yml の実効設定を表示します",
   "cli.optionShowVerbose":
     "ラベル定義を含むすべての項目を展開して表示します",
+  "cli.descriptionMigrate": "config.yml の全設定を対話的に確認・更新し、最新スキーマに揃えます",
+  "cli.optionMigrateRepo": "指定したリポジトリ (owner/repo) の設定だけを確認します",
 };
 
 const enMessages: MessageKeys = {
@@ -243,6 +283,43 @@ const enMessages: MessageKeys = {
     "Error: config.yml validation failed: {message}",
   "show.unexpectedError": "Unexpected error:",
 
+  // migrate command
+  "migrate.configNotFound": "Error: config.yml not found.",
+  "migrate.runInitFirst": "Run `sabori-flow init` first.",
+  "migrate.configParseFailed":
+    "Error: Failed to parse config.yml. Please check the YAML syntax.",
+  "migrate.configFormatInvalid": "Error: config.yml format is invalid. The top level must be a mapping.",
+  "migrate.repositoriesInvalid":
+    "Error: repositories is not defined or has an invalid format in config.yml.",
+  "migrate.sectionInvalid":
+    "Error: {path} in config.yml must be a mapping. Fix it by hand and run again.",
+  "migrate.repoNotFound":
+    "Error: Repository {repo} was not found in config.yml. Specify it as owner/repo.",
+  "migrate.schemaVersionNewer":
+    "Error: config.yml schema_version ({recorded}) is newer than the supported maximum ({supported}). Please update sabori-flow.",
+  "migrate.hintRange": "{min}-{max}",
+  "migrate.hintList": "comma-separated",
+  "migrate.hintUnset": "not set; press Enter to keep the default ({default})",
+  "migrate.hintInvalid": "current value is invalid: {reason}",
+  "migrate.choiceKeepUnset": "Leave unset (default: {default})",
+  "migrate.valueRequired": "A value is required.",
+  "migrate.unsetValue": "(unset)",
+  "migrate.noChanges": "No changes. config.yml was not modified.",
+  "migrate.changesHeader": "The following changes will be applied to config.yml:",
+  "migrate.changeLine": "  - {key}: {before} → {after}",
+  "migrate.confirmApply": "Apply the above changes to config.yml?",
+  "migrate.aborted": "Aborted. config.yml was not modified.",
+  "migrate.backupFailed":
+    "Error: Failed to create backup. config.yml was not modified.",
+  "migrate.configWriteFailed":
+    "Error: Failed to write config.yml. Backup: {backupPath}",
+  "migrate.reinstallRequired":
+    "interval_minutes was changed. Run `sabori-flow reinstall` to apply.",
+  "migrate.reinstallNotRequired":
+    "interval_minutes was not changed. No reinstall needed.",
+  "migrate.complete": "config.yml was updated.",
+  "migrate.unexpectedError": "Unexpected error:",
+
   // cli descriptions
   "cli.descriptionAdd": "Add a repository to existing config.yml",
   "cli.descriptionInit": "Create config.yml interactively",
@@ -258,6 +335,8 @@ const enMessages: MessageKeys = {
   "cli.descriptionShow": "Display the effective configuration",
   "cli.optionShowVerbose":
     "Expand all fields including label definitions",
+  "cli.descriptionMigrate": "Interactively review and update every setting in config.yml and bring it to the latest schema",
+  "cli.optionMigrateRepo": "Review only the given repository (owner/repo)",
 };
 
 export const messages: Record<Language, MessageKeys> = {

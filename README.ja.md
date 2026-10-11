@@ -122,6 +122,23 @@ npx sabori-flow add
 
 owner、repo、ローカルパスを対話的に入力し、`config.yml` にエントリを追加します。同じ owner/repo が既に存在する場合は上書き確認が表示されます。
 
+### 既存設定の更新
+
+`migrate` を実行すると、リポジトリ設定やラベル名も含めて `config.yml` の全設定を順に確認・変更できます。sabori-flow を更新して設定キーが増えたときや、既存の値を変えたいときに使います。
+
+```bash
+npx sabori-flow migrate
+npx sabori-flow migrate --repo your-org/example-app  # このリポジトリの設定だけを確認
+```
+
+各キーは次のように扱われます。
+
+- 正しい値が設定済みのキーは、その値が初期値になります。Enter でそのまま維持されます。
+- 未設定のキーはデフォルト値を表示します。Enter なら未設定のまま残り、デフォルト値が引き続き適用されます。
+- 値が不正なキーや、必須なのに欠けているキーは、正しい値を入力するまで先に進めません。
+
+`priority_labels` や `execution.agent` のようなリストはカンマ区切りで入力します。未設定のフェーズのラベルを 1 つでも入力すると、そのフェーズの残りのラベルはデフォルト値で書き込まれます。コメントやツールが認識しないキーはそのまま保持されます。適用前に変更内容の一覧を表示し、変更前に `~/.sabori-flow/config.yml.bak-<タイムスタンプ>` へバックアップを作成します。変更がなければその旨を表示し、ファイルには触れません。`execution.interval_minutes` が変わった場合は実行後に `npx sabori-flow reinstall` を促されます。変わらなければ reinstall は不要です。インストール済みのバージョンより新しいバージョンの sabori-flow が書いた `config.yml` の場合、`migrate` は変更を行わず中断します。
+
 ### Claude 認証トークンの設定（無人実行では推奨）
 
 worker が Claude Max の OAuth 認証情報（`~/.claude/.credentials.json`）を対話利用の Claude Code と共有すると、リフレッシュトークンのローテーション競合で worker 側のトークンが無効化され、無人実行時に `401` エラーが発生することがあります。これを避けるには、専用の long-lived トークンを発行して保存します。
@@ -264,6 +281,8 @@ launchctl start com.github.sabori-flow
 設定ファイルは `~/.sabori-flow/config.yml` に保存されます。`config.yml.example` を参考に作成するか、`npx sabori-flow init` で対話的に生成できます。
 
 ```yaml
+schema_version: 1
+
 repositories:
   - owner: nonz250
     repo: example-app
@@ -287,6 +306,7 @@ language: ja
 
 | キー | 説明 |
 |------|------|
+| `schema_version` | 設定スキーマのバージョン。`migrate` が書き込む。手動で編集しないこと |
 | `repositories[].owner` | リポジトリオーナー |
 | `repositories[].repo` | リポジトリ名 |
 | `repositories[].local_path` | ローカルのクローン先パス |

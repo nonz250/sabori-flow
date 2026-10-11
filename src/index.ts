@@ -4,6 +4,7 @@ import { Command } from "commander";
 import { addCommand } from "./commands/add.js";
 import { initCommand } from "./commands/init.js";
 import { installCommand } from "./commands/install.js";
+import { migrateCommand } from "./commands/migrate.js";
 import { reinstallCommand } from "./commands/reinstall.js";
 import { setTokenCommand } from "./commands/set-token.js";
 import { showCommand } from "./commands/show.js";
@@ -32,6 +33,12 @@ program
   .command("init")
   .description(t("cli.descriptionInit"))
   .action(initCommand);
+
+program
+  .command("migrate")
+  .description(t("cli.descriptionMigrate"))
+  .option("--repo <owner/repo>", t("cli.optionMigrateRepo"))
+  .action((options) => migrateCommand(options));
 
 program
   .command("install")
