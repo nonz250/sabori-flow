@@ -97,6 +97,10 @@ describe("collectFields - which keys are reviewed", () => {
       "repositories[0].labels.impl.in_progress",
       "repositories[0].labels.impl.done",
       "repositories[0].labels.impl.failed",
+      "repositories[0].labels.review.trigger",
+      "repositories[0].labels.review.in_progress",
+      "repositories[0].labels.review.done",
+      "repositories[0].labels.review.failed",
     ]);
   });
 
@@ -234,6 +238,12 @@ repositories:
     expect(find(fields, "repositories[0].labels.impl.done").state).toEqual({ kind: "unset" });
   });
 
+  it("offers the ai/review defaults for omitted review labels", () => {
+    const field = find(collect(minimalConfig()), "repositories[0].labels.review.in_progress");
+    expect(field.state).toEqual({ kind: "unset" });
+    expect(field.field.defaultValue).toBe("ai/review/in-progress");
+  });
+
   it("treats execution: null as an omitted section", () => {
     const yaml = `${minimalConfig()}execution:\n`;
     expect(find(collect(yaml), "execution.timeout_minutes").state).toEqual({ kind: "unset" });
@@ -277,7 +287,7 @@ repositories:
 
   it("has a default for every label key", () => {
     const labelFields = collect(minimalConfig()).filter((f) => f.field.group !== null);
-    expect(labelFields).toHaveLength(15);
+    expect(labelFields).toHaveLength(19);
     expect(labelFields.every((f) => typeof f.field.defaultValue === "string")).toBe(true);
     expect(fieldOf(labelFields, "repositories[0].labels.spec.needs_human").defaultValue).toBe(
       "ai/spec/needs-human",
