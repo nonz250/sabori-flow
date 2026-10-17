@@ -186,6 +186,8 @@ const ATTACHMENT_URL_RESERVE = 200;
 const REVIEW_COMMENT_TIMEOUT_MS = 300_000;
 
 const COMMENT_URL_PATTERN = /https?:\/\/\S+#issuecomment-\d+/;
+
+const UNATTACHED_IMAGE_PATTERN = /!\[([^\]]*)\]\((?![a-z][a-z0-9+.-]*:)([^)\s]+\.png)\)/gi;
 const FAILURE_TRUNCATED_SUFFIX = "\n\n---\n⚠️ 出力が長すぎるため省略されました。";
 
 export {
@@ -454,6 +456,15 @@ export async function postReviewComment(
   for (const name of options.screenshots) {
     output = output.replaceAll(`](${name})`, `](./${name})`);
   }
+  // Anything still pointing at a local PNG was dropped by the screenshot
+  // checks and would render as a broken image on GitHub.
+  output = output.replace(
+    UNATTACHED_IMAGE_PATTERN,
+    (match: string, alt: string, path: string) =>
+      options.screenshots.some((name) => path === `./${name}`)
+        ? match
+        : `_(screenshot not attached: ${alt}, ${path})_`,
+  );
 
   const notePart = options.note === null ? "" : `> ${options.note}\n\n`;
   const prefix = `${REVIEW_HEADER}${notePart}レビュー対象のコミット: \`${options.reviewedSha}\`\n\n`;

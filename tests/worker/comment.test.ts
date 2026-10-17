@@ -1578,7 +1578,22 @@ describe("postReviewComment", () => {
     );
 
     expect(postedBody()).toContain(
-      "![before](./01-before.png) ![after](./02-after.png) ![other](03-other.png)",
+      "![before](./01-before.png) ![after](./02-after.png) _(screenshot not attached: other, 03-other.png)_",
+    );
+  });
+
+  it("replaces references to screenshots that were not attached with a note", async () => {
+    mockPosted();
+
+    await postReviewComment(
+      "nonz250/example-app",
+      7,
+      "![kept](01-kept.png) ![dropped](11-dropped.png) ![remote](https://example.com/a.png)",
+      { ...BASE_OPTIONS, screenshots: ["01-kept.png"] },
+    );
+
+    expect(postedBody()).toContain(
+      "![kept](./01-kept.png) _(screenshot not attached: dropped, 11-dropped.png)_ ![remote](https://example.com/a.png)",
     );
   });
 
