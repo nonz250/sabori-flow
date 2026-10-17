@@ -106,6 +106,22 @@ export async function withPullRequestWorktree<T>(
   return useWorktree(repoConfig.localPath, worktreePath, callback);
 }
 
+/**
+ * @throws {WorktreeError} git rev-parse に失敗した場合
+ */
+export function resolveHeadSha(worktreePath: string): string {
+  try {
+    return runCommandSync("git", ["-C", worktreePath, "rev-parse", "HEAD"], {
+      timeoutMs: GIT_TIMEOUT_MS,
+    }).trim();
+  } catch (error: unknown) {
+    if (error instanceof ProcessExecutionError) {
+      throw new WorktreeError(`HEAD の解決に失敗しました: ${error.message}`, "create");
+    }
+    throw error;
+  }
+}
+
 function attemptTimestamp(timestampFn: () => string, attempt: number): string {
   // A retry with a fallback agent can start within the same second as the
   // attempt it replaces, and the previous branch is not deleted on cleanup.

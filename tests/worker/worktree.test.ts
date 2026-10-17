@@ -31,7 +31,7 @@ vi.mock("../../src/worker/logger.js", () => ({
   createLogger: vi.fn(() => mockLogger),
 }));
 
-import { withWorktree, withPullRequestWorktree, WorktreeError } from "../../src/worker/worktree.js";
+import { withWorktree, withPullRequestWorktree, resolveHeadSha, WorktreeError } from "../../src/worker/worktree.js";
 import { runCommandSync, ProcessExecutionError } from "../../src/worker/process.js";
 import { mkdirSync } from "node:fs";
 import { makeRepoConfig } from "./helpers/factories.js";
@@ -518,5 +518,30 @@ describe("withPullRequestWorktree", () => {
 
     const lastCall = mockedRunCommandSync.mock.calls.at(-1)![1];
     expect(lastCall).toContain("remove");
+  });
+});
+
+describe("resolveHeadSha", () => {
+  beforeEach(() => {
+    mockedRunCommandSync.mockReset();
+  });
+
+  it("returns the trimmed commit hash of HEAD", () => {
+    mockedRunCommandSync.mockReturnValue("0123456789abcdef0123456789abcdef01234567\n");
+
+    expect(resolveHeadSha("/wt/pr-7")).toBe("0123456789abcdef0123456789abcdef01234567");
+    expect(mockedRunCommandSync).toHaveBeenCalledWith(
+      "git",
+      ["-C", "/wt/pr-7", "rev-parse", "HEAD"],
+      { timeoutMs: 120_000 },
+    );
+  });
+
+  it("throws a WorktreeError when git fails", () => {
+    mockedRunCommandSync.mockImplementation(() => {
+      throw new ProcessExecutionError("not a git repository");
+    });
+
+    expect(() => resolveHeadSha("/wt/pr-7")).toThrow(WorktreeError);
   });
 });
