@@ -1582,6 +1582,20 @@ describe("postReviewComment", () => {
     );
   });
 
+  it("rewrites references written with the absolute screenshot path", async () => {
+    mockPosted();
+
+    await postReviewComment(
+      "nonz250/example-app",
+      7,
+      "![abs](/wt/.sabori-flow-review/screenshots/01-before.png)",
+      { ...BASE_OPTIONS, screenshots: ["01-before.png"] },
+    );
+
+    expect(postedBody()).toContain("![abs](./01-before.png)");
+    expect(postedBody()).not.toContain("not attached");
+  });
+
   it("replaces references to screenshots that were not attached with a note", async () => {
     mockPosted();
 

@@ -1,4 +1,5 @@
 import { homedir } from "node:os";
+import { join } from "node:path";
 
 import {
   runCommand,
@@ -457,7 +458,9 @@ export async function postReviewComment(
 ): Promise<string> {
   let output = escapeWorkerMarkers(sanitizeOutput(rawOutput));
   for (const name of options.screenshots) {
-    output = output.replaceAll(`](${name})`, `](./${name})`);
+    output = output
+      .replaceAll(`](${name})`, `](./${name})`)
+      .replaceAll(`](${join(options.screenshotDir, name)})`, `](./${name})`);
   }
   // Anything still pointing at a local PNG was dropped by the screenshot
   // checks and would render as a broken image on GitHub.
