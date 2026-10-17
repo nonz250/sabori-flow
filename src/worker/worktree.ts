@@ -40,9 +40,7 @@ export async function withWorktree<T>(
   timestampFn: () => string = defaultTimestampFn,
   attempt: number = FIRST_ATTEMPT,
 ): Promise<T> {
-  // A retry with a fallback agent can start within the same second as the
-  // attempt it replaces, and the previous branch is not deleted on cleanup.
-  const ts = attempt > FIRST_ATTEMPT ? `${timestampFn()}-${attempt}` : timestampFn();
+  const ts = attemptTimestamp(timestampFn, attempt);
   const branchName = `sabori-flow/${issueNumber}-${ts}`;
   const repoDir = join(getWorktreesDir(), repoConfig.owner, repoConfig.repo);
   const worktreePath = join(repoDir, `issue-${issueNumber}-${ts}`);
@@ -54,6 +52,25 @@ export async function withWorktree<T>(
     "fetch",
   );
 
+  ensureRepoDir(repoDir);
+
+  runGit(
+    repoConfig.localPath,
+    ["worktree", "add", worktreePath, "-b", branchName, `origin/${repoConfig.defaultBranch}`],
+    `worktree の作成に失敗しました: ${worktreePath}`,
+    "create",
+  );
+
+  return useWorktree(repoConfig.localPath, worktreePath, callback);
+}
+
+function attemptTimestamp(timestampFn: () => string, attempt: number): string {
+  // A retry with a fallback agent can start within the same second as the
+  // attempt it replaces, and the previous branch is not deleted on cleanup.
+  return attempt > FIRST_ATTEMPT ? `${timestampFn()}-${attempt}` : timestampFn();
+}
+
+function ensureRepoDir(repoDir: string): void {
   try {
     mkdirSync(repoDir, { recursive: true });
   } catch (error) {
@@ -63,20 +80,19 @@ export async function withWorktree<T>(
       "mkdir",
     );
   }
+}
 
-  runGit(
-    repoConfig.localPath,
-    ["worktree", "add", worktreePath, "-b", branchName, `origin/${repoConfig.defaultBranch}`],
-    `worktree の作成に失敗しました: ${worktreePath}`,
-    "create",
-  );
-
+async function useWorktree<T>(
+  localPath: string,
+  worktreePath: string,
+  callback: (worktreePath: string) => T | Promise<T>,
+): Promise<T> {
   try {
     return await callback(worktreePath);
   } finally {
     try {
       runGit(
-        repoConfig.localPath,
+        localPath,
         ["worktree", "remove", worktreePath, "--force"],
         `worktree の削除に失敗しました: ${worktreePath}`,
         "create",
