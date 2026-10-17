@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, readdirSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 import { createLogger } from "./logger.js";
@@ -11,6 +11,16 @@ export const MAX_REVIEW_SCREENSHOTS = 10;
 export const MAX_SCREENSHOT_BYTES = 10 * 1024 * 1024;
 
 const SCREENSHOT_NAME_PATTERN = /^[A-Za-z0-9-]+\.png$/;
+
+// Inside the worktree because Codex's workspace-write sandbox cannot write
+// outside its working directory. The worktree is removed after the review.
+const SCREENSHOT_SUBDIR = [".sabori-flow-review", "screenshots"] as const;
+
+export function prepareScreenshotDir(worktreePath: string): string {
+  const dir = join(worktreePath, ...SCREENSHOT_SUBDIR);
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  return dir;
+}
 
 /**
  * レビューで撮影されたスクリーンショットのうち、添付してよいファイル名を返す。

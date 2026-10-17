@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -16,6 +16,7 @@ vi.mock("../../src/worker/logger.js", () => ({
 
 import {
   collectScreenshots,
+  prepareScreenshotDir,
   MAX_REVIEW_SCREENSHOTS,
   MAX_SCREENSHOT_BYTES,
 } from "../../src/worker/review-screenshots.js";
@@ -94,5 +95,28 @@ describe("collectScreenshots", () => {
 
     expect(collectScreenshots(dir)).toEqual(names.slice(0, MAX_REVIEW_SCREENSHOTS));
     expect(mockLogger.warn).toHaveBeenCalledOnce();
+  });
+});
+
+describe("prepareScreenshotDir", () => {
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "sabori-flow-worktree-"));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("creates the screenshot directory inside the worktree and returns its path", () => {
+    const result = prepareScreenshotDir(dir);
+
+    expect(result).toBe(join(dir, ".sabori-flow-review", "screenshots"));
+    expect(statSync(result).isDirectory()).toBe(true);
+  });
+
+  it("succeeds when the directory already exists", () => {
+    prepareScreenshotDir(dir);
+
+    expect(() => prepareScreenshotDir(dir)).not.toThrow();
   });
 });
