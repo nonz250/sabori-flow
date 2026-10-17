@@ -87,9 +87,12 @@ export async function withPullRequestWorktree<T>(
     "git fetch origin に失敗しました",
     "fetch",
   );
+  // FETCH_HEAD is shared with any other fetch in the user's repository
+  // (an IDE's auto-fetch, for example), so the head goes to a dedicated ref.
+  const headRef = `refs/sabori-flow/review/pr-${prNumber}`;
   runGit(
     repoConfig.localPath,
-    ["fetch", "origin", `pull/${prNumber}/head`],
+    ["fetch", "origin", `+refs/pull/${prNumber}/head:${headRef}`],
     `PR #${prNumber} の head の取得に失敗しました`,
     "fetch",
   );
@@ -98,10 +101,16 @@ export async function withPullRequestWorktree<T>(
 
   runGit(
     repoConfig.localPath,
-    ["worktree", "add", "--detach", worktreePath, "FETCH_HEAD"],
+    ["worktree", "add", "--detach", worktreePath, headRef],
     `worktree の作成に失敗しました: ${worktreePath}`,
     "create",
   );
+
+  try {
+    runGit(repoConfig.localPath, ["update-ref", "-d", headRef], `ref の削除に失敗しました: ${headRef}`, "create");
+  } catch {
+    logger.warn("一時 ref の削除に失敗しました: %s", headRef);
+  }
 
   return useWorktree(repoConfig.localPath, worktreePath, callback);
 }

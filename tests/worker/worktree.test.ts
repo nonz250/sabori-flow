@@ -446,10 +446,12 @@ describe("withPullRequestWorktree", () => {
 
     const expectedPath = path.join(REPO_DIR, `pr-${PR_NUMBER}-${FIXED_TIMESTAMP}`);
     expect(yieldedPath).toBe(expectedPath);
+    const ref = `refs/sabori-flow/review/pr-${PR_NUMBER}`;
     expect(mockedRunCommandSync.mock.calls.map((call) => call[1])).toEqual([
       ["-C", REPO_LOCAL_PATH, "fetch", "origin"],
-      ["-C", REPO_LOCAL_PATH, "fetch", "origin", `pull/${PR_NUMBER}/head`],
-      ["-C", REPO_LOCAL_PATH, "worktree", "add", "--detach", expectedPath, "FETCH_HEAD"],
+      ["-C", REPO_LOCAL_PATH, "fetch", "origin", `+refs/pull/${PR_NUMBER}/head:${ref}`],
+      ["-C", REPO_LOCAL_PATH, "worktree", "add", "--detach", expectedPath, ref],
+      ["-C", REPO_LOCAL_PATH, "update-ref", "-d", ref],
       ["-C", REPO_LOCAL_PATH, "worktree", "remove", expectedPath, "--force"],
     ]);
     expect(mockedMkdirSync).toHaveBeenCalledWith(REPO_DIR, { recursive: true });
@@ -470,6 +472,21 @@ describe("withPullRequestWorktree", () => {
     expect(yieldedPath).toBe(path.join(REPO_DIR, `pr-${PR_NUMBER}-${FIXED_TIMESTAMP}-2`));
   });
 
+  it("still runs the review when the temporary ref cannot be deleted", async () => {
+    mockedRunCommandSync.mockImplementation((_cmd, args) => {
+      if (args.includes("update-ref")) {
+        throw new ProcessExecutionError("cannot lock ref");
+      }
+      return "";
+    });
+    const callback = vi.fn().mockResolvedValue("done");
+
+    await expect(
+      withPullRequestWorktree(makeRepoArg(), PR_NUMBER, callback, fixedTimestampFn),
+    ).resolves.toBe("done");
+    expect(mockLogger.warn).toHaveBeenCalled();
+  });
+
   it("returns the callback result", async () => {
     mockedRunCommandSync.mockReturnValue("");
 
@@ -480,7 +497,7 @@ describe("withPullRequestWorktree", () => {
 
   it("throws a fetch-phase WorktreeError when the pull request head cannot be fetched", async () => {
     mockedRunCommandSync.mockImplementation((_cmd, args) => {
-      if (args.includes(`pull/${PR_NUMBER}/head`)) {
+      if (args.some((arg) => arg.startsWith(`+refs/pull/${PR_NUMBER}/head:`))) {
         throw new ProcessExecutionError("couldn't find remote ref");
       }
       return "";
