@@ -38,10 +38,18 @@ export const IMPL_LABELS: PhaseLabels = {
   failed: "test/impl/failed",
 };
 
+export const REVIEW_LABELS: PhaseLabels = {
+  trigger: "test/review",
+  inProgress: "test/review/in-progress",
+  done: "test/review/done",
+  failed: "test/review/failed",
+};
+
 export const DEFAULT_LABELS_CONFIG: LabelsConfig = {
   spec: SPEC_LABELS,
   plan: PLAN_LABELS,
   impl: IMPL_LABELS,
+  review: REVIEW_LABELS,
 };
 
 // ---------- Factory functions ----------

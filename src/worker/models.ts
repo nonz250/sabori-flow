@@ -84,6 +84,7 @@ export interface LabelsConfig {
   readonly spec: SpecPhaseLabels;
   readonly plan: PhaseLabels;
   readonly impl: PhaseLabels;
+  readonly review: PhaseLabels;
 }
 
 /** 処理を許可する authorAssociation の一覧 */
