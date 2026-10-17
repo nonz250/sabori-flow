@@ -74,6 +74,12 @@ export interface PullRequest {
   readonly authorAssociation: string;
 }
 
+/** レビュー前に追加で取得する Pull Request の属性 */
+export interface PullRequestDetails {
+  readonly baseRefName: string;
+  readonly isCrossRepository: boolean;
+}
+
 /** 1 フェーズ分のラベル定義 */
 export interface PhaseLabels {
   readonly trigger: string;

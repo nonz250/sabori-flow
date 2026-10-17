@@ -4,6 +4,8 @@ vi.mock("../../src/worker/process.js");
 
 import {
   fetchIssues,
+  fetchReviewPullRequests,
+  fetchPullRequestDetails,
   GitHubCLIError,
   IssueParseError,
 } from "../../src/worker/fetcher.js";
@@ -673,5 +675,193 @@ describe("fetchIssues - authorAssociation フィルタリング", () => {
     const issues = await fetchIssues(makeRepoConfig(), Phase.PLAN, "test/plan");
 
     expect(issues).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fetchReviewPullRequests
+// ---------------------------------------------------------------------------
+
+function makePullRequestItem(overrides: Record<string, unknown> = {}): object {
+  return {
+    number: 7,
+    title: "Add login form",
+    body: "Adds the login form.",
+    labels: [{ name: "ai/review" }],
+    html_url: "https://github.com/nonz250/example-app/pull/7",
+    author_association: "MEMBER",
+    pull_request: { url: "https://api.github.com/repos/nonz250/example-app/pulls/7" },
+    ...overrides,
+  };
+}
+
+describe("fetchReviewPullRequests", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("queries open issues carrying the review label", async () => {
+    mockGhSuccess("[]");
+
+    await fetchReviewPullRequests(makeRepoConfig(), "ai/review");
+
+    expect(mockedRunCommand).toHaveBeenCalledWith(
+      "gh",
+      [
+        "api",
+        "repos/nonz250/example-app/issues",
+        "--method",
+        "GET",
+        "--field",
+        "labels=ai/review",
+        "--field",
+        "state=open",
+        "--field",
+        "per_page=100",
+      ],
+      { timeoutMs: 120_000 },
+    );
+  });
+
+  it("maps a pull request item", async () => {
+    mockGhSuccess(makeGhJson([makePullRequestItem()]));
+
+    const result = await fetchReviewPullRequests(makeRepoConfig(), "ai/review");
+
+    expect(result).toEqual([
+      {
+        number: 7,
+        title: "Add login form",
+        body: "Adds the login form.",
+        labels: ["ai/review"],
+        url: "https://github.com/nonz250/example-app/pull/7",
+        authorAssociation: "MEMBER",
+      },
+    ]);
+  });
+
+  it("drops plain issues that carry the review label", async () => {
+    const issue = makePullRequestItem({ number: 3 }) as Record<string, unknown>;
+    delete issue["pull_request"];
+    mockGhSuccess(makeGhJson([issue, makePullRequestItem({ number: 8 })]));
+
+    const result = await fetchReviewPullRequests(makeRepoConfig(), "ai/review");
+
+    expect(result.map((pr) => pr.number)).toEqual([8]);
+  });
+
+  it("drops pull requests from authors without write access", async () => {
+    mockGhSuccess(makeGhJson([
+      makePullRequestItem({ number: 1, author_association: "CONTRIBUTOR" }),
+      makePullRequestItem({ number: 2, author_association: "NONE" }),
+      makePullRequestItem({ number: 3, author_association: "OWNER" }),
+      makePullRequestItem({ number: 4, author_association: "COLLABORATOR" }),
+    ]));
+
+    const result = await fetchReviewPullRequests(makeRepoConfig(), "ai/review");
+
+    expect(result.map((pr) => pr.number)).toEqual([3, 4]);
+  });
+
+  it("sorts by pull request number ascending", async () => {
+    mockGhSuccess(makeGhJson([
+      makePullRequestItem({ number: 12 }),
+      makePullRequestItem({ number: 5 }),
+    ]));
+
+    const result = await fetchReviewPullRequests(makeRepoConfig(), "ai/review");
+
+    expect(result.map((pr) => pr.number)).toEqual([5, 12]);
+  });
+
+  it("converts a missing body to null", async () => {
+    const item = makePullRequestItem() as Record<string, unknown>;
+    delete item["body"];
+    mockGhSuccess(makeGhJson([item]));
+
+    const result = await fetchReviewPullRequests(makeRepoConfig(), "ai/review");
+
+    expect(result[0].body).toBeNull();
+  });
+
+  it("throws IssueParseError when a required field is missing", async () => {
+    const item = makePullRequestItem() as Record<string, unknown>;
+    delete item["html_url"];
+    mockGhSuccess(makeGhJson([item]));
+
+    await expect(fetchReviewPullRequests(makeRepoConfig(), "ai/review")).rejects.toThrow(
+      IssueParseError,
+    );
+  });
+
+  it("throws IssueParseError on invalid JSON", async () => {
+    mockGhSuccess("not json");
+
+    await expect(fetchReviewPullRequests(makeRepoConfig(), "ai/review")).rejects.toThrow(
+      IssueParseError,
+    );
+  });
+
+  it("throws GitHubCLIError when gh fails", async () => {
+    mockGhFailure("HTTP 502");
+
+    await expect(fetchReviewPullRequests(makeRepoConfig(), "ai/review")).rejects.toThrow(
+      GitHubCLIError,
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fetchPullRequestDetails
+// ---------------------------------------------------------------------------
+
+describe("fetchPullRequestDetails", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("reads the base branch and whether the head is in another repository", async () => {
+    mockGhSuccess(JSON.stringify({ baseRefName: "develop", isCrossRepository: false }));
+
+    const result = await fetchPullRequestDetails("nonz250/example-app", 7);
+
+    expect(result).toEqual({ baseRefName: "develop", isCrossRepository: false });
+    expect(mockedRunCommand).toHaveBeenCalledWith(
+      "gh",
+      ["pr", "view", "7", "--repo", "nonz250/example-app", "--json", "baseRefName,isCrossRepository"],
+      { timeoutMs: 120_000 },
+    );
+  });
+
+  it("throws IssueParseError when baseRefName is not a non-empty string", async () => {
+    mockGhSuccess(JSON.stringify({ baseRefName: "", isCrossRepository: false }));
+
+    await expect(fetchPullRequestDetails("nonz250/example-app", 7)).rejects.toThrow(
+      IssueParseError,
+    );
+  });
+
+  it("throws IssueParseError when isCrossRepository is not a boolean", async () => {
+    mockGhSuccess(JSON.stringify({ baseRefName: "main" }));
+
+    await expect(fetchPullRequestDetails("nonz250/example-app", 7)).rejects.toThrow(
+      IssueParseError,
+    );
+  });
+
+  it("throws IssueParseError on invalid JSON", async () => {
+    mockGhSuccess("{");
+
+    await expect(fetchPullRequestDetails("nonz250/example-app", 7)).rejects.toThrow(
+      IssueParseError,
+    );
+  });
+
+  it("throws GitHubCLIError when gh fails", async () => {
+    mockGhFailure("not found");
+
+    await expect(fetchPullRequestDetails("nonz250/example-app", 7)).rejects.toThrow(
+      GitHubCLIError,
+    );
   });
 });
