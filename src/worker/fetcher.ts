@@ -25,6 +25,9 @@ export class IssueParseError extends Error {
 
 const GH_TIMEOUT_MS = 120_000;
 
+/** パースに失敗した JSON をエラーメッセージに含める長さ */
+const JSON_ERROR_PREVIEW_LENGTH = 200;
+
 const logger = createLogger("fetcher");
 
 
@@ -55,22 +58,9 @@ export async function fetchIssues(
   phase: Phase,
   label: string,
 ): Promise<readonly Issue[]> {
-  const args = [
-    "api",
-    `repos/${repoFullName(repoConfig)}/issues`,
-    "--method",
-    "GET",
-    "--field",
-    `labels=${label}`,
-    "--field",
-    "state=open",
-    "--field",
-    "per_page=100",
-  ];
-
-  const rawJson = await runGhCommand(args);
+  const rawJson = await runGhCommand(buildOpenIssuesArgs(repoConfig, label));
   const issues = parseIssues(rawJson, phase, repoConfig);
-  const permitted = filterByAuthorAssociation(issues);
+  const permitted = filterByAuthorAssociation(issues, "Issue");
   return sortByPriority(permitted);
 }
 
@@ -87,30 +77,8 @@ export async function fetchReviewPullRequests(
   repoConfig: RepositoryConfig,
   label: string,
 ): Promise<readonly PullRequest[]> {
-  const rawJson = await runGhCommand([
-    "api",
-    `repos/${repoFullName(repoConfig)}/issues`,
-    "--method",
-    "GET",
-    "--field",
-    `labels=${label}`,
-    "--field",
-    "state=open",
-    "--field",
-    "per_page=100",
-  ]);
-
-  const permitted = parsePullRequests(rawJson).filter((pr) => {
-    if (PERMITTED_ASSOCIATIONS.has(pr.authorAssociation)) {
-      return true;
-    }
-    logger.warn(
-      "PR #%s skipped: author association '%s' is not permitted",
-      pr.number,
-      pr.authorAssociation,
-    );
-    return false;
-  });
+  const rawJson = await runGhCommand(buildOpenIssuesArgs(repoConfig, label));
+  const permitted = filterByAuthorAssociation(parsePullRequests(rawJson), "PR");
   return [...permitted].sort((a, b) => a.number - b.number);
 }
 
@@ -138,7 +106,7 @@ export async function fetchPullRequestDetails(
   try {
     data = JSON.parse(rawJson) as typeof data;
   } catch {
-    throw new IssueParseError(`Failed to parse JSON: ${rawJson.slice(0, 200)}`);
+    throw new IssueParseError(`Failed to parse JSON: ${rawJson.slice(0, JSON_ERROR_PREVIEW_LENGTH)}`);
   }
   if (typeof data.baseRefName !== "string" || data.baseRefName === "") {
     throw new IssueParseError("Missing required field in pull request data: baseRefName");
@@ -147,6 +115,22 @@ export async function fetchPullRequestDetails(
     throw new IssueParseError("Missing required field in pull request data: isCrossRepository");
   }
   return { baseRefName: data.baseRefName, isCrossRepository: data.isCrossRepository };
+}
+
+/** Issue API は Pull Request も返すため、Issue と PR の両方の取得に使う */
+function buildOpenIssuesArgs(repoConfig: RepositoryConfig, label: string): string[] {
+  return [
+    "api",
+    `repos/${repoFullName(repoConfig)}/issues`,
+    "--method",
+    "GET",
+    "--field",
+    `labels=${label}`,
+    "--field",
+    "state=open",
+    "--field",
+    "per_page=100",
+  ];
 }
 
 /**
@@ -193,7 +177,7 @@ function parseIssues(
   try {
     data = JSON.parse(rawJson) as GhIssueItem[];
   } catch {
-    throw new IssueParseError(`Failed to parse JSON: ${rawJson.slice(0, 200)}`);
+    throw new IssueParseError(`Failed to parse JSON: ${rawJson.slice(0, JSON_ERROR_PREVIEW_LENGTH)}`);
   }
 
   return data.map((item) => {
@@ -233,7 +217,7 @@ function parsePullRequests(rawJson: string): PullRequest[] {
   try {
     data = JSON.parse(rawJson) as GhIssueItem[];
   } catch {
-    throw new IssueParseError(`Failed to parse JSON: ${rawJson.slice(0, 200)}`);
+    throw new IssueParseError(`Failed to parse JSON: ${rawJson.slice(0, JSON_ERROR_PREVIEW_LENGTH)}`);
   }
 
   return data
@@ -289,18 +273,22 @@ function determinePriority(
 }
 
 /**
- * authorAssociation が許可リストに含まれない Issue を除外する。
- * 除外された Issue は WARNING ログに記録する。
+ * authorAssociation が許可リストに含まれないものを除外する。
+ * 除外したものは WARNING ログに記録する。
  */
-function filterByAuthorAssociation(issues: Issue[]): Issue[] {
-  return issues.filter((issue) => {
-    if (PERMITTED_ASSOCIATIONS.has(issue.authorAssociation)) {
+function filterByAuthorAssociation<T extends { readonly number: number; readonly authorAssociation: string }>(
+  items: readonly T[],
+  kind: "Issue" | "PR",
+): T[] {
+  return items.filter((item) => {
+    if (PERMITTED_ASSOCIATIONS.has(item.authorAssociation)) {
       return true;
     }
     logger.warn(
-      "Issue #%s skipped: author association '%s' is not permitted",
-      issue.number,
-      issue.authorAssociation,
+      "%s #%s skipped: author association '%s' is not permitted",
+      kind,
+      item.number,
+      item.authorAssociation,
     );
     return false;
   });

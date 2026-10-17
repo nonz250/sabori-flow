@@ -185,6 +185,9 @@ const ATTACHMENT_URL_RESERVE = 200;
 /** 添付のアップロードを含むため、通常のコメント投稿より長く待つ */
 const REVIEW_COMMENT_TIMEOUT_MS = 300_000;
 
+/** コメント URL が見つからなかったときにエラーへ含める gh 出力の長さ */
+const UNEXPECTED_OUTPUT_PREVIEW_LENGTH = 200;
+
 const COMMENT_URL_PATTERN = /https?:\/\/\S+#issuecomment-\d+/;
 
 const UNATTACHED_IMAGE_PATTERN = /!\[([^\]]*)\]\((?![a-z][a-z0-9+.-]*:)([^)\s]+\.png)\)/gi;
@@ -509,7 +512,7 @@ export async function postReviewComment(
   const url = stdout.match(COMMENT_URL_PATTERN);
   if (url === null) {
     throw new CommentError(
-      `gh pr comment exited successfully but did not print a comment URL: ${stdout.slice(0, 200)}`,
+      `gh pr comment exited successfully but did not print a comment URL: ${stdout.slice(0, UNEXPECTED_OUTPUT_PREVIEW_LENGTH)}`,
     );
   }
   return url[0];
