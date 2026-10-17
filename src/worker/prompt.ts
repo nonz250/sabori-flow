@@ -53,9 +53,11 @@ export function buildPrompt(
   language: Language,
   specContext: string | null = null,
 ): string {
-  const userDir = getUserPromptsLanguageDir(language);
-  const defaultDir = join(getDefaultPromptsDir(), language);
-  const template = loadTemplate(issue.phase, userDir, defaultDir);
+  const filename = TEMPLATE_FILES[issue.phase];
+  if (filename === undefined) {
+    throw new PromptTemplateError(`Unknown phase: ${issue.phase}`);
+  }
+  const template = loadTemplate(filename, language);
   const variables = buildVariables(issue, repoConfig, specContext);
 
   if (specContext !== null && !template.includes("{spec}")) {
@@ -74,18 +76,11 @@ export function buildPrompt(
  *   1. ユーザーディレクトリ (`~/.sabori-flow/prompts/<language>/`)
  *   2. パッケージ同梱のデフォルトディレクトリ (`prompts/<language>/`)
  *
- * @throws {PromptTemplateError} フェーズが未定義、テンプレートが存在しない、
- *   またはファイルサイズ超過の場合
+ * @throws {PromptTemplateError} テンプレートが存在しない、またはファイルサイズ超過の場合
  */
-function loadTemplate(
-  phase: Phase,
-  userDir: string,
-  defaultDir: string,
-): string {
-  const filename = TEMPLATE_FILES[phase];
-  if (filename === undefined) {
-    throw new PromptTemplateError(`Unknown phase: ${phase}`);
-  }
+function loadTemplate(filename: string, language: Language): string {
+  const userDir = getUserPromptsLanguageDir(language);
+  const defaultDir = join(getDefaultPromptsDir(), language);
 
   // 1. ユーザーディレクトリ (~/.sabori-flow/prompts/<language>/)
   const userPath = resolve(userDir, filename);
