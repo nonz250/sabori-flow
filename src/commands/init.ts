@@ -16,7 +16,7 @@ import { setLanguage, t } from "../i18n/index.js";
 import type { Language } from "../i18n/types.js";
 import { Autonomy } from "../worker/models.js";
 import type { Agent } from "../worker/models.js";
-import { TEMPLATE_FILES } from "../worker/prompt.js";
+import { ALL_TEMPLATE_FILES } from "../worker/prompt.js";
 import { migrateFlatPromptTemplates } from "../worker/prompt-migration.js";
 import {
   INTERVAL_MINUTES_MIN,
@@ -60,7 +60,7 @@ async function copyPromptTemplates(language: Language): Promise<void> {
   const destDir = getUserPromptsLanguageDir(language);
   fs.mkdirSync(destDir, { recursive: true, mode: 0o700 });
 
-  for (const filename of Object.values(TEMPLATE_FILES)) {
+  for (const filename of ALL_TEMPLATE_FILES) {
     const src = resolve(srcDir, filename);
     const dest = resolve(destDir, filename);
 

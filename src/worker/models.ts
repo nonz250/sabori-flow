@@ -64,6 +64,16 @@ export interface Issue {
   readonly priority: Priority;
 }
 
+/** レビュー対象の GitHub Pull Request */
+export interface PullRequest {
+  readonly number: number;
+  readonly title: string;
+  readonly body: string | null;
+  readonly labels: readonly string[];
+  readonly url: string;
+  readonly authorAssociation: string;
+}
+
 /** 1 フェーズ分のラベル定義 */
 export interface PhaseLabels {
   readonly trigger: string;

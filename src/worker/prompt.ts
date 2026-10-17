@@ -3,7 +3,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 
 import type { Language } from "../i18n/types.js";
-import type { Issue, RepositoryConfig } from "./models.js";
+import type { Issue, PullRequest, RepositoryConfig } from "./models.js";
 import { Phase, repoFullName } from "./models.js";
 import { getUserPromptsLanguageDir, getDefaultPromptsDir } from "../utils/paths.js";
 import { createLogger } from "./logger.js";
@@ -24,6 +24,14 @@ export const TEMPLATE_FILES: Record<Phase, string> = {
   [Phase.IMPL]: "impl.md",
 };
 
+export const REVIEW_TEMPLATE_FILE = "review.md";
+
+/** init がユーザーディレクトリへコピーするテンプレート */
+export const ALL_TEMPLATE_FILES: readonly string[] = [
+  ...Object.values(TEMPLATE_FILES),
+  REVIEW_TEMPLATE_FILE,
+];
+
 /** テンプレートファイルの最大サイズ (100KB) */
 const MAX_TEMPLATE_SIZE = 100 * 1024;
 
@@ -35,6 +43,8 @@ const USER_INPUT_KEYS: ReadonlySet<string> = new Set([
   "issue_body",
   "issue_title",
   "spec",
+  "pr_body",
+  "pr_title",
 ]);
 
 /**
@@ -66,6 +76,46 @@ export function buildPrompt(
       issue.phase,
     );
   }
+
+  return render(template, variables);
+}
+
+export interface ReviewPromptOptions {
+  readonly baseBranch: string;
+  readonly screenshotDir: string;
+  readonly maxScreenshots: number;
+}
+
+/**
+ * Pull Request とリポジトリ設定からレビュー用プロンプトを組み立てる。
+ *
+ * テンプレートの解決順は buildPrompt と同じ。
+ *
+ * @throws {PromptTemplateError} テンプレートの読み込みに失敗した場合
+ */
+export function buildReviewPrompt(
+  pullRequest: PullRequest,
+  repoConfig: RepositoryConfig,
+  language: Language,
+  options: ReviewPromptOptions,
+): string {
+  const template = loadTemplate(REVIEW_TEMPLATE_FILE, language);
+  const boundary = createBoundary();
+
+  const variables = new Map<string, string>([
+    ["repo_full_name", repoFullName(repoConfig)],
+    ["repo_owner", repoConfig.owner],
+    ["repo_name", repoConfig.repo],
+    ["pr_number", String(pullRequest.number)],
+    ["pr_url", pullRequest.url],
+    ["base_branch", options.baseBranch],
+    ["screenshot_dir", options.screenshotDir],
+    ["max_screenshots", String(options.maxScreenshots)],
+    ["boundary_open", boundary.open],
+    ["boundary_close", boundary.close],
+    ["pr_title", pullRequest.title],
+    ["pr_body", sanitizeBoundaryInBody(pullRequest.body ?? "", boundary.token)],
+  ]);
 
   return render(template, variables);
 }
@@ -144,6 +194,15 @@ function generateBoundaryToken(): string {
   return randomUUID();
 }
 
+function createBoundary(): { token: string; open: string; close: string } {
+  const token = generateBoundaryToken();
+  return {
+    token,
+    open: `<!-- BOUNDARY-${token} DATA START -->`,
+    close: `<!-- BOUNDARY-${token} DATA END -->`,
+  };
+}
+
 /**
  * Issue ボディからバウンダリ終了パターンを除去する。
  *
@@ -163,12 +222,12 @@ function buildVariables(
   repoConfig: RepositoryConfig,
   specContext: string | null,
 ): Map<string, string> {
-  const token = generateBoundaryToken();
+  const boundary = createBoundary();
   const rawBody = issue.body ?? "";
-  const sanitizedBody = sanitizeBoundaryInBody(rawBody, token);
+  const sanitizedBody = sanitizeBoundaryInBody(rawBody, boundary.token);
 
   const specValue = specContext !== null
-    ? sanitizeBoundaryInBody(specContext, token)
+    ? sanitizeBoundaryInBody(specContext, boundary.token)
     : "(no specification has been agreed for this issue)";
 
   return new Map<string, string>([
@@ -178,8 +237,8 @@ function buildVariables(
     ["issue_number", String(issue.number)],
     ["issue_title", issue.title],
     ["issue_url", issue.url],
-    ["boundary_open", `<!-- BOUNDARY-${token} DATA START -->`],
-    ["boundary_close", `<!-- BOUNDARY-${token} DATA END -->`],
+    ["boundary_open", boundary.open],
+    ["boundary_close", boundary.close],
     ["issue_body", sanitizedBody],
     ["spec", specValue],
   ]);
