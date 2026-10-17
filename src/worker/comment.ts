@@ -172,9 +172,26 @@ const SUCCESS_HEADER = "## ✅ Claude Code 実行結果: 成功\n\n";
 const SUCCESS_TRUNCATED_SUFFIX = "\n\n---\n⚠️ 出力が長すぎるため省略されました。";
 
 const FAILURE_HEADER = "## ❌ Claude Code 実行結果: 失敗\n\n";
+
+const REVIEW_HEADER = "## 🔍 AI レビュー結果\n\n";
+
+/**
+ * gh の --attach は本文中の `./<file>` をアップロード先 URL に書き換え、
+ * 参照されていない添付は末尾に追記する。どちらでも本文は伸びるため、
+ * 切り詰めの上限から 1 枚あたりこの文字数を差し引いておく。
+ */
+const ATTACHMENT_URL_RESERVE = 200;
+
+/** 添付のアップロードを含むため、通常のコメント投稿より長く待つ */
+const REVIEW_COMMENT_TIMEOUT_MS = 300_000;
+
+const COMMENT_URL_PATTERN = /https?:\/\/\S+#issuecomment-\d+/;
 const FAILURE_TRUNCATED_SUFFIX = "\n\n---\n⚠️ 出力が長すぎるため省略されました。";
 
 export {
+  REVIEW_HEADER,
+  ATTACHMENT_URL_RESERVE,
+  REVIEW_COMMENT_TIMEOUT_MS,
   MAX_COMMENT_LENGTH,
   PARTIAL_STDOUT_TAIL_LENGTH,
   PARTIAL_STDERR_TAIL_LENGTH,
@@ -361,6 +378,7 @@ export async function postFailureComment(
   repoFullName: string,
   issueNumber: number,
   errorMessage: string,
+  target: CommentTarget = "issue",
 ): Promise<void> {
   const markerSuffix = "\n\n" + WORKER_COMMENT_MARKER;
   const maxOutputLength =
@@ -373,7 +391,7 @@ export async function postFailureComment(
   }
 
   const body = FAILURE_HEADER + message + markerSuffix;
-  await postComment(repoFullName, issueNumber, body);
+  await postComment(repoFullName, issueNumber, body, target);
 }
 
 /**
@@ -407,6 +425,82 @@ export async function postSpecProposalComment(
   await postComment(repoFullName, issueNumber, body);
 }
 
+export interface ReviewCommentOptions {
+  readonly reviewedSha: string;
+  readonly screenshotDir: string;
+  /** screenshotDir 直下のファイル名 */
+  readonly screenshots: readonly string[];
+  readonly note: string | null;
+}
+
+/**
+ * レビュー結果を Pull Request に投稿し、投稿したコメントの URL を返す。
+ *
+ * レビューではコメントそのものが成果物なので、gh が成功を返しても
+ * コメント URL を出力しなかった場合は投稿を確認できなかったとして失敗にする。
+ *
+ * @throws {CommentError} 投稿に失敗した、または投稿を確認できなかった場合
+ */
+export async function postReviewComment(
+  repoFullName: string,
+  prNumber: number,
+  rawOutput: string,
+  options: ReviewCommentOptions,
+): Promise<string> {
+  let output = escapeWorkerMarkers(sanitizeOutput(rawOutput));
+  for (const name of options.screenshots) {
+    output = output.replaceAll(`](${name})`, `](./${name})`);
+  }
+
+  const notePart = options.note === null ? "" : `> ${options.note}\n\n`;
+  const prefix = `${REVIEW_HEADER}${notePart}レビュー対象のコミット: \`${options.reviewedSha}\`\n\n`;
+  const markerSuffix = "\n\n" + WORKER_COMMENT_MARKER;
+  const maxOutputLength =
+    MAX_COMMENT_LENGTH -
+    options.screenshots.length * ATTACHMENT_URL_RESERVE -
+    prefix.length -
+    markerSuffix.length;
+  if (output.length > maxOutputLength) {
+    const truncatedLength = maxOutputLength - SUCCESS_TRUNCATED_SUFFIX.length;
+    output = output.slice(0, truncatedLength) + SUCCESS_TRUNCATED_SUFFIX;
+  }
+
+  const args = [
+    "pr",
+    "comment",
+    String(prNumber),
+    "--repo",
+    repoFullName,
+    "--body-file",
+    "-",
+    ...options.screenshots.flatMap((name) => ["--attach", `./${name}`]),
+  ];
+
+  let stdout: string;
+  try {
+    const result = await runCommand("gh", args, {
+      input: prefix + output + markerSuffix,
+      timeoutMs: REVIEW_COMMENT_TIMEOUT_MS,
+      // Without screenshots the directory may not exist, and spawn fails on a missing cwd.
+      cwd: options.screenshots.length > 0 ? options.screenshotDir : undefined,
+    });
+    if (!result.success) {
+      throw new CommentError(result.stderr);
+    }
+    stdout = result.stdout;
+  } catch (error: unknown) {
+    throw toCommentError(error, "gh pr comment", REVIEW_COMMENT_TIMEOUT_MS);
+  }
+
+  const url = stdout.match(COMMENT_URL_PATTERN);
+  if (url === null) {
+    throw new CommentError(
+      `gh pr comment exited successfully but did not print a comment URL: ${stdout.slice(0, 200)}`,
+    );
+  }
+  return url[0];
+}
+
 /**
  * Neutralize worker marker sequences in text to prevent marker spoofing.
  * Inserts a zero-width space after "<!--" in any sabori-flow marker prefix.
@@ -415,8 +509,10 @@ function escapeWorkerMarkers(text: string): string {
   return text.replaceAll(WORKER_COMMENT_MARKER_PREFIX, "<!--​ sabori-flow");
 }
 
+export type CommentTarget = "issue" | "pr";
+
 /**
- * gh issue comment で Issue にコメントを投稿する。
+ * gh issue comment / gh pr comment でコメントを投稿する。
  *
  * @throws {CommentError} コマンドがタイムアウトまたは非0終了した場合
  */
@@ -424,12 +520,13 @@ async function postComment(
   repoFullName: string,
   issueNumber: number,
   body: string,
+  target: CommentTarget = "issue",
 ): Promise<void> {
   try {
     const result = await runCommand(
       "gh",
       [
-        "issue",
+        target,
         "comment",
         String(issueNumber),
         "--repo",
@@ -444,17 +541,16 @@ async function postComment(
       throw new CommentError(result.stderr);
     }
   } catch (error: unknown) {
-    if (error instanceof CommentError) {
-      throw error;
-    }
-    if (error instanceof ProcessTimeoutError) {
-      throw new CommentError(
-        `gh issue comment timed out after ${GH_TIMEOUT_MS / 1_000} seconds`,
-      );
-    }
-    if (error instanceof ProcessExecutionError) {
-      throw new CommentError(error.message);
-    }
-    throw error;
+    throw toCommentError(error, `gh ${target} comment`, GH_TIMEOUT_MS);
   }
+}
+
+function toCommentError(error: unknown, command: string, timeoutMs: number): unknown {
+  if (error instanceof ProcessTimeoutError) {
+    return new CommentError(`${command} timed out after ${timeoutMs / 1_000} seconds`);
+  }
+  if (error instanceof ProcessExecutionError) {
+    return new CommentError(error.message);
+  }
+  return error;
 }
