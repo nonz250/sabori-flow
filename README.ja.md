@@ -98,7 +98,8 @@ Claude には [Scheduled Tasks](https://code.claude.com/docs/en/scheduled-tasks)
 - Node.js v24+
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (`claude`)
 - [OpenAI Codex CLI](https://developers.openai.com/codex/cli/reference) (`codex`、`execution.agent: codex` の場合)
-- [GitHub CLI](https://cli.github.com/) (`gh`) -- 認証済みであること
+- [GitHub CLI](https://cli.github.com/) (`gh`) -- 認証済みであること。PR レビューはスクリーンショットを `gh pr comment --attach` で添付します。gh 2.102.0 で動作を確認しており、このフラグを持たない古い gh ではスクリーンショットを撮ったレビューだけが失敗します
+- PR レビューで画面の動作確認をさせる場合は、利用するエージェントに Playwright の MCP サーバーを設定しておくこと。Playwright が使えない環境では Chrome DevTools の MCP を代わりに使う
 
 ## セットアップ
 
@@ -201,6 +202,10 @@ flowchart LR
     K["ai/impl"] --> L["ai/impl/in-progress"]
     L --> M["ai/impl/done"]
     L --> N["ai/impl/failed"]
+
+    O["ai/review（PR に付ける）"] --> P["ai/review/in-progress"]
+    P --> Q["ai/review/done"]
+    P --> R["ai/review/failed"]
 ```
 
 ### Spec フェーズ
@@ -216,6 +221,18 @@ spec フェーズでは、計画と実装の前に AI が生成した仕様を�
 
 spec フェーズはオプションです。`ai/plan` や `ai/impl` を直接付けてスキップすることもできます。
 
+### Pull Request のレビュー
+
+PR に `ai/review` を付けると、エージェントがその PR をレビューします。
+
+1. ワーカーが PR の head を一時的な worktree にチェックアウトし、`prompts/{lang}/review.md` のプロンプトでエージェントを実行する
+2. エージェントがセキュリティ、設計、PR の説明との対応を確認し、ローカルで動作確認する。画面を伴う変更では Playwright でスクリーンショットを撮り、Playwright が使えなければ Chrome DevTools を使う
+3. ワーカーがレビュー結果を PR コメントとして投稿してスクリーンショットを添付し、`ai/review/done` を付ける
+
+レビューは Issue のフェーズと `execution.max_issues_per_repo` の枠を共有し、各サイクルでそれらより先に処理されます。修正を push したあとに再レビューしたい場合は、もう一度 `ai/review` を付けてください。
+
+レビューの対象は、head ブランチが同じリポジトリにあり、作成者がオーナー・メンバー・コラボレーターの PR だけです。レビューでは PR のコードを手元のマシンで実行するため、fork からの PR はエージェントを実行せずに `ai/review/failed` にします。
+
 ### 失敗した場合
 
 処理が失敗すると `failed` ラベルが付き、Issue に失敗コメントが投稿されます。
@@ -226,7 +243,7 @@ impl フェーズは、Issue に紐づく PR が作られないまま終了し�
 
 1. `~/.sabori-flow/logs/worker.log` で詳細を確認
 2. 必要に応じて Issue の内容を修正
-3. `failed` ラベルを外して、trigger ラベル（`ai/spec`、`ai/plan`、`ai/impl`）を再度付ける
+3. `failed` ラベルを外して、trigger ラベル（`ai/spec`、`ai/plan`、`ai/impl`、`ai/review`）を再度付ける
 
 ### 現在の設定を確認する
 

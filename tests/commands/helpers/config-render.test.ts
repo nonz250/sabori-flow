@@ -44,6 +44,12 @@ const DEFAULT_LABELS: LabelsConfig = {
     done: "ai/impl/done",
     failed: "ai/impl/failed",
   },
+  review: {
+    trigger: "ai/review",
+    inProgress: "ai/review/in-progress",
+    done: "ai/review/done",
+    failed: "ai/review/failed",
+  },
 };
 
 const CUSTOM_LABELS: LabelsConfig = {
@@ -67,6 +73,12 @@ const CUSTOM_LABELS: LabelsConfig = {
     inProgress: "my/impl:wip",
     done: "my/impl:ok",
     failed: "my/impl:ng",
+  },
+  review: {
+    trigger: "my/review",
+    inProgress: "my/review:wip",
+    done: "my/review:ok",
+    failed: "my/review:ng",
   },
 };
 
@@ -456,7 +468,7 @@ describe("renderConfigInspection - label detail sections", () => {
     expect(joined).toContain("my/plan");
   });
 
-  it("label detail block lists every spec, plan and impl key in config.yml order", () => {
+  it("label detail block lists every spec, plan, impl and review key in config.yml order", () => {
     const inspection = makeInspection({
       repositories: [
         makeRepoInspection({ labels: c(CUSTOM_LABELS, false) }),
@@ -466,7 +478,7 @@ describe("renderConfigInspection - label detail sections", () => {
     const { lines } = renderConfigInspection(inspection, { verbose: false });
 
     const start = lines.indexOf("acme/app labels");
-    const block = lines.slice(start + 1, start + 16);
+    const block = lines.slice(start + 1, start + 20);
     expect(block.map((line) => line.trim().split(/\s+/)[0])).toEqual([
       "spec.trigger",
       "spec.in_progress",
@@ -483,6 +495,10 @@ describe("renderConfigInspection - label detail sections", () => {
       "impl.in_progress",
       "impl.done",
       "impl.failed",
+      "review.trigger",
+      "review.in_progress",
+      "review.done",
+      "review.failed",
     ]);
     expect(block[6]).toContain("my/spec:human");
   });
@@ -672,9 +688,9 @@ describe("renderConfigInspection - blank lines across repositories", () => {
 
     const labelsStart = lines.indexOf("repoa/app labels");
     expect(labelsStart).toBeGreaterThan(-1);
-    // header + 15 label entries (7 spec + 4 plan + 4 impl)
-    const priorityHeaderIndex = labelsStart + 1 + 15 + 1;
-    expect(lines[labelsStart + 1 + 15]).toBe("");
+    // header + 19 label entries (7 spec + 4 plan + 4 impl + 4 review)
+    const priorityHeaderIndex = labelsStart + 1 + 19 + 1;
+    expect(lines[labelsStart + 1 + 19]).toBe("");
     expect(lines[priorityHeaderIndex]).toBe("repob/app priority_labels");
   });
 
@@ -718,10 +734,10 @@ describe("renderConfigInspection - blank lines across repositories", () => {
 
     const labelsStart = lines.indexOf("acme/app labels");
     expect(labelsStart).toBeGreaterThan(-1);
-    // The 15th label entry is immediately followed by the priority_labels
+    // The 19th label entry is immediately followed by the priority_labels
     // header, with no blank line in between (unlike the repo-boundary case
     // above).
-    expect(lines[labelsStart + 1 + 15]).toBe("acme/app priority_labels");
+    expect(lines[labelsStart + 1 + 19]).toBe("acme/app priority_labels");
   });
 });
 

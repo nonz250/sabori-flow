@@ -40,9 +40,7 @@ export async function withWorktree<T>(
   timestampFn: () => string = defaultTimestampFn,
   attempt: number = FIRST_ATTEMPT,
 ): Promise<T> {
-  // A retry with a fallback agent can start within the same second as the
-  // attempt it replaces, and the previous branch is not deleted on cleanup.
-  const ts = attempt > FIRST_ATTEMPT ? `${timestampFn()}-${attempt}` : timestampFn();
+  const ts = attemptTimestamp(timestampFn, attempt);
   const branchName = `sabori-flow/${issueNumber}-${ts}`;
   const repoDir = join(getWorktreesDir(), repoConfig.owner, repoConfig.repo);
   const worktreePath = join(repoDir, `issue-${issueNumber}-${ts}`);
@@ -54,6 +52,92 @@ export async function withWorktree<T>(
     "fetch",
   );
 
+  ensureRepoDir(repoDir);
+
+  runGit(
+    repoConfig.localPath,
+    ["worktree", "add", worktreePath, "-b", branchName, `origin/${repoConfig.defaultBranch}`],
+    `worktree の作成に失敗しました: ${worktreePath}`,
+    "create",
+  );
+
+  return useWorktree(repoConfig.localPath, worktreePath, callback);
+}
+
+/**
+ * Pull Request の head を detached HEAD でチェックアウトした worktree でコールバックを実行する。
+ *
+ * レビューはコミットしないため、ブランチは作らない。
+ */
+export async function withPullRequestWorktree<T>(
+  repoConfig: Pick<RepositoryConfig, "owner" | "repo" | "localPath">,
+  prNumber: number,
+  callback: (worktreePath: string) => T | Promise<T>,
+  timestampFn: () => string = defaultTimestampFn,
+  attempt: number = FIRST_ATTEMPT,
+): Promise<T> {
+  const ts = attemptTimestamp(timestampFn, attempt);
+  const repoDir = join(getWorktreesDir(), repoConfig.owner, repoConfig.repo);
+  const worktreePath = join(repoDir, `pr-${prNumber}-${ts}`);
+
+  // The base branch is fetched too so the agent can diff against origin/<base>.
+  runGit(
+    repoConfig.localPath,
+    ["fetch", "origin"],
+    "git fetch origin に失敗しました",
+    "fetch",
+  );
+  // FETCH_HEAD is shared with any other fetch in the user's repository
+  // (an IDE's auto-fetch, for example), so the head goes to a dedicated ref.
+  const headRef = `refs/sabori-flow/review/pr-${prNumber}`;
+  runGit(
+    repoConfig.localPath,
+    ["fetch", "origin", `+refs/pull/${prNumber}/head:${headRef}`],
+    `PR #${prNumber} の head の取得に失敗しました`,
+    "fetch",
+  );
+
+  ensureRepoDir(repoDir);
+
+  runGit(
+    repoConfig.localPath,
+    ["worktree", "add", "--detach", worktreePath, headRef],
+    `worktree の作成に失敗しました: ${worktreePath}`,
+    "create",
+  );
+
+  try {
+    runGit(repoConfig.localPath, ["update-ref", "-d", headRef], `ref の削除に失敗しました: ${headRef}`, "create");
+  } catch {
+    logger.warn("一時 ref の削除に失敗しました: %s", headRef);
+  }
+
+  return useWorktree(repoConfig.localPath, worktreePath, callback);
+}
+
+/**
+ * @throws {WorktreeError} git rev-parse に失敗した場合
+ */
+export function resolveHeadSha(worktreePath: string): string {
+  try {
+    return runCommandSync("git", ["-C", worktreePath, "rev-parse", "HEAD"], {
+      timeoutMs: GIT_TIMEOUT_MS,
+    }).trim();
+  } catch (error: unknown) {
+    if (error instanceof ProcessExecutionError) {
+      throw new WorktreeError(`HEAD の解決に失敗しました: ${error.message}`, "create");
+    }
+    throw error;
+  }
+}
+
+function attemptTimestamp(timestampFn: () => string, attempt: number): string {
+  // A retry with a fallback agent can start within the same second as the
+  // attempt it replaces, and the previous branch is not deleted on cleanup.
+  return attempt > FIRST_ATTEMPT ? `${timestampFn()}-${attempt}` : timestampFn();
+}
+
+function ensureRepoDir(repoDir: string): void {
   try {
     mkdirSync(repoDir, { recursive: true });
   } catch (error) {
@@ -63,20 +147,19 @@ export async function withWorktree<T>(
       "mkdir",
     );
   }
+}
 
-  runGit(
-    repoConfig.localPath,
-    ["worktree", "add", worktreePath, "-b", branchName, `origin/${repoConfig.defaultBranch}`],
-    `worktree の作成に失敗しました: ${worktreePath}`,
-    "create",
-  );
-
+async function useWorktree<T>(
+  localPath: string,
+  worktreePath: string,
+  callback: (worktreePath: string) => T | Promise<T>,
+): Promise<T> {
   try {
     return await callback(worktreePath);
   } finally {
     try {
       runGit(
-        repoConfig.localPath,
+        localPath,
         ["worktree", "remove", worktreePath, "--force"],
         `worktree の削除に失敗しました: ${worktreePath}`,
         "create",

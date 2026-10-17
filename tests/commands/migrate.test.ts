@@ -301,13 +301,14 @@ describe("migrateCommand - reviews every key", () => {
     answer();
     await run(MINIMAL_CONFIG);
     const keys = promptConfigs().map(keyOf);
-    expect(keys).toHaveLength(28);
+    expect(keys).toHaveLength(32);
     expect(keys).toContain("language");
     expect(keys).toContain("execution.agent");
     expect(keys).toContain("[acme/app] owner");
     expect(keys).toContain("[acme/app] local_path");
     expect(keys).toContain("[acme/app] labels.spec.needs_human");
     expect(keys).toContain("[acme/app] labels.impl.failed");
+    expect(keys).toContain("[acme/app] labels.review.failed");
   });
 
   it("asks about existing keys too, offering the current value", async () => {
@@ -517,7 +518,7 @@ describe("migrateCommand - --repo", () => {
     answer();
     await run(TWO_REPOS_CONFIG, { repo: "acme/web" });
     const keys = promptConfigs().map(keyOf);
-    expect(keys).toHaveLength(21);
+    expect(keys).toHaveLength(25);
     expect(keys.every((k) => k.startsWith("[acme/web] "))).toBe(true);
   });
 

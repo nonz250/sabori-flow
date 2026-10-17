@@ -166,7 +166,7 @@ function renderLabelSections(
   return lines;
 }
 
-// Key order follows config.yml's schema: spec, then plan, then impl.
+// Key order follows config.yml's schema: spec, plan, impl, then review.
 function buildLabelEntries(labels: LabelsConfig): [string, string][] {
   return [
     ...phaseLabelEntries("spec", labels.spec),
@@ -175,6 +175,7 @@ function buildLabelEntries(labels: LabelsConfig): [string, string][] {
     ["spec.needs_human", labels.spec.needsHuman],
     ...phaseLabelEntries("plan", labels.plan),
     ...phaseLabelEntries("impl", labels.impl),
+    ...phaseLabelEntries("review", labels.review),
   ];
 }
 

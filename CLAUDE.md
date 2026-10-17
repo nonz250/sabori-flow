@@ -48,6 +48,8 @@ src/
     models.ts        # データモデル（interface, enum）
     fetcher.ts       # gh api で Issue 取得・優先度ソート
     pipeline.ts      # 1 Issue の処理パイプライン + resumeSpecReview（DI パターン）
+    review-pipeline.ts # 1 PR のレビューパイプライン（DI パターン）
+    review-screenshots.ts # レビューのスクリーンショット保存先の作成と添付対象の選別
     prompt.ts        # プロンプトテンプレート読み込み・展開
     prompt-migration.ts # フラットレイアウト→言語別ディレクトリへの移行
     executor.ts      # CLI エージェント実行（Claude / Codex）
@@ -71,7 +73,7 @@ src/
 
 1. `config.yml` から対象リポジトリ一覧を読み込む
 2. リポジトリ単位で `Promise.all` により並列実行
-3. 各リポジトリで plan → impl の順にフェーズを処理
+3. 各リポジトリで review（PR）→ impl → plan → spec の順に処理する。後段のフェーズを先に処理しないと、quota が少ないときに新規の取り込みが仕掛かりを追い越す
 4. 各 Issue に対して以下のパイプラインを実行:
    - ラベル遷移: trigger → in-progress
    - `git fetch origin` でリモートの最新を取得
@@ -87,6 +89,7 @@ src/
 - spec: `ai/spec` → `ai/spec/in-progress` → `ai/spec/review` → `ai/spec/done` / `ai/spec/needs-human` / `ai/spec/failed`
 - plan: `ai/plan` → `ai/plan/in-progress` → `ai/plan/done` / `ai/plan/failed`
 - impl: `ai/impl` → `ai/impl/in-progress` → `ai/impl/done` / `ai/impl/failed`
+- review（PR に付ける）: `ai/review` → `ai/review/in-progress` → `ai/review/done` / `ai/review/failed`
 
 spec の review 状態では、ワーカーが毎サイクル評価を行う。承認（`ai/spec/approved` ラベル）→ `ai/spec/done` + `ai/plan` 自動付与、差し戻しコメント → 再提案（最大 2 回）、上限到達 → `ai/spec/needs-human`。
 
@@ -118,6 +121,19 @@ spec の review 状態では、ワーカーが毎サイクル評価を行う。�
 - 上限到達の記録（`AgentPool`）は 1 回の worker 実行の中だけで全リポジトリが共有し、永続化しない。次のサイクルは全エージェントから試すので、上限のリセットを自然に拾える
 - 使えるエージェントが残っていない場合、trigger ラベルを外す前なら何も触らず deferred にして次サイクルに回す。in-progress への遷移中に他リポジトリが最後のエージェントを使い切った場合も、trigger ラベルに戻して deferred にする。すでに in-progress から入った Issue（spec の revise 経由）は戻す先がないので `AGENT_USAGE_LIMIT` で `:failed` にする
 - 実際に全エージェントで上限に達した Issue は `:failed`（人間ゲート）にする。trigger に戻すと、上限の誤判定が続いたときに毎サイクル同じ Issue でクォータを使い続ける
+
+### PR レビュー
+
+`ai/review` が付いた PR を `review-pipeline.ts` が処理する。Issue の `Phase` には属さないため、`pipeline.ts` とは別モジュールにしている。
+
+- エージェントは stdout にレビュー結果を書くだけで、PR へのコメント投稿とラベル操作はワーカーが行う。done にするのは `gh pr comment` がコメント URL を返したときだけで、投稿の失敗は他フローと違いレベル 2（`REVIEW_COMMENT` で `:failed`）として扱う。コメントそのものが成果物のため
+- レビューは PR のコードを手元で実行するので、fork からの PR（`isCrossRepository`）はエージェントを起動せず `:failed` にする。作成者の権限チェックは Issue と同じ `PERMITTED_ASSOCIATIONS`
+- worktree は `pr-<番号>-<タイムスタンプ>` に detached HEAD で作る。コミットしないのでブランチを残さない。PR の head は `FETCH_HEAD` ではなく専用 ref に fetch する。`FETCH_HEAD` はユーザーのリポジトリでの他の fetch（IDE の自動 fetch など）で書き換わる
+- レビュー対象の SHA はエージェント実行前に取る。エージェントは動作確認中に別のコミットへ checkout しうる
+- スクリーンショットの保存先は worktree 内の `.sabori-flow-review/screenshots/`。Codex の `workspace-write` sandbox は cwd の外に書けないため、worktree の外へ移さないこと。チェックアウト直後に保存先が既にあれば PR が持ち込んだものなので、レビューを失敗させる。中の画像をエージェントが撮った証跡として添付しないため
+- 添付するのは symlink でない regular file で、名前が `^[A-Za-z0-9-]+\.png$` に合うものだけ。保存先までのディレクトリも各段を lstat で確かめる。PR のチェックアウトやエージェントが symlink を置けるので、辿ると worktree 外のファイルを PR に上げられてしまう
+- 再レビュー時の in-progress 遷移では、PR に実際に付いている done / failed だけを外す。リポジトリにまだ存在しないラベルを `--remove-label` に渡すと gh が失敗する
+- 利用上限でのフォールバックは Issue と同じだが、エージェントは何も投稿しないので、impl のような事前の PR 照会は不要
 
 ### 並列実行
 

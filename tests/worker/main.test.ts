@@ -5,8 +5,10 @@ import { Phase, Priority, Autonomy, Agent } from "../../src/worker/models.js";
 import {
   makeRepoConfig,
   makeIssue,
+  makePullRequest,
   makeAppConfig,
   SPEC_LABELS,
+  REVIEW_LABELS,
 } from "./helpers/factories.js";
 import { createMockWorkerDeps } from "./helpers/mock-deps.js";
 import type { WorkerDeps } from "../../src/worker/main.js";
@@ -86,6 +88,7 @@ describe("workerMain", () => {
     it("全ステップで processIssue が失敗し空ステップもなければ 1 が返る", async () => {
       vi.mocked(deps.loadConfig).mockReturnValue(makeAppConfig());
       vi.mocked(deps.fetchIssues).mockRejectedValue(new Error("gh failed"));
+      vi.mocked(deps.fetchReviewPullRequests).mockRejectedValue(new Error("gh failed"));
       vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "failure", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
@@ -136,6 +139,7 @@ describe("workerMain", () => {
     it("全フェーズで Issue 取得に失敗すると 1 が返る", async () => {
       vi.mocked(deps.loadConfig).mockReturnValue(makeAppConfig());
       vi.mocked(deps.fetchIssues).mockRejectedValue(new Error("gh failed"));
+      vi.mocked(deps.fetchReviewPullRequests).mockRejectedValue(new Error("gh failed"));
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -150,6 +154,7 @@ describe("workerMain", () => {
         makeAppConfig({ repositories: [repo1, repo2] }),
       );
       vi.mocked(deps.fetchIssues).mockRejectedValue(new Error("gh failed"));
+      vi.mocked(deps.fetchReviewPullRequests).mockRejectedValue(new Error("gh failed"));
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -179,6 +184,7 @@ describe("workerMain", () => {
     it("全ステップで fetchIssues が失敗すると 1 が返る", async () => {
       vi.mocked(deps.loadConfig).mockReturnValue(makeAppConfig());
       vi.mocked(deps.fetchIssues).mockRejectedValue(new Error("gh failed"));
+      vi.mocked(deps.fetchReviewPullRequests).mockRejectedValue(new Error("gh failed"));
       vi.mocked(deps.processIssue).mockResolvedValue({ outcome: "failure", claudeExecuted: true });
 
       const result = await workerMain("/path/to/config.yml", deps);
@@ -199,6 +205,7 @@ describe("workerMain", () => {
     it("fetchIssues が例外を投げると false 扱いになる", async () => {
       vi.mocked(deps.loadConfig).mockReturnValue(makeAppConfig());
       vi.mocked(deps.fetchIssues).mockRejectedValue(new Error("gh failed"));
+      vi.mocked(deps.fetchReviewPullRequests).mockRejectedValue(new Error("gh failed"));
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -279,6 +286,7 @@ describe("workerMain", () => {
     it("両フェーズが失敗すると 1 が返る", async () => {
       vi.mocked(deps.loadConfig).mockReturnValue(makeAppConfig());
       vi.mocked(deps.fetchIssues).mockRejectedValue(new Error("fetch failed"));
+      vi.mocked(deps.fetchReviewPullRequests).mockRejectedValue(new Error("fetch failed"));
 
       const result = await workerMain("/path/to/config.yml", deps);
 
@@ -865,5 +873,152 @@ describe("workerMain", () => {
         "Codex CLI will run with --yolo",
       );
     });
+  });
+});
+
+describe("workerMain - pull request review", () => {
+  let deps: WorkerDeps;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    deps = createMockWorkerDeps();
+  });
+
+  it("creates the review trigger label alongside the issue triggers", async () => {
+    vi.mocked(deps.loadConfig).mockReturnValue(makeAppConfig());
+
+    await workerMain("/path/to/config.yml", deps);
+
+    expect(vi.mocked(deps.ensureLabelsExist).mock.calls[0][1]).toContain(REVIEW_LABELS.trigger);
+  });
+
+  it("fetches pull requests with the review trigger label and reviews them", async () => {
+    vi.mocked(deps.loadConfig).mockReturnValue(makeAppConfig());
+    vi.mocked(deps.fetchReviewPullRequests).mockResolvedValue([makePullRequest({ number: 7 })]);
+
+    const result = await workerMain("/path/to/config.yml", deps);
+
+    expect(result).toBe(0);
+    expect(vi.mocked(deps.fetchReviewPullRequests).mock.calls[0][1]).toBe(REVIEW_LABELS.trigger);
+    expect(deps.processReviewRequest).toHaveBeenCalledOnce();
+    expect(vi.mocked(deps.processReviewRequest).mock.calls[0][0].number).toBe(7);
+  });
+
+  it("reviews pull requests before any issue phase", async () => {
+    vi.mocked(deps.loadConfig).mockReturnValue(makeAppConfig({ execution: { maxIssuesPerRepo: 10 } }));
+    vi.mocked(deps.fetchReviewPullRequests).mockResolvedValue([makePullRequest({ number: 7 })]);
+    vi.mocked(deps.fetchIssues).mockImplementation(async (_repo, phase) =>
+      phase === Phase.IMPL ? [makeIssue({ number: 1, phase: Phase.IMPL })] : [],
+    );
+
+    await workerMain("/path/to/config.yml", deps);
+
+    const reviewOrder = vi.mocked(deps.processReviewRequest).mock.invocationCallOrder[0];
+    const implOrder = vi.mocked(deps.processIssue).mock.invocationCallOrder[0];
+    expect(reviewOrder).toBeLessThan(implOrder);
+  });
+
+  it("counts a review against max_issues_per_repo", async () => {
+    vi.mocked(deps.loadConfig).mockReturnValue(makeAppConfig({ execution: { maxIssuesPerRepo: 1 } }));
+    vi.mocked(deps.fetchReviewPullRequests).mockResolvedValue([
+      makePullRequest({ number: 7 }),
+      makePullRequest({ number: 8 }),
+    ]);
+    vi.mocked(deps.fetchIssues).mockImplementation(async (_repo, phase) =>
+      phase === Phase.IMPL ? [makeIssue({ number: 1, phase: Phase.IMPL })] : [],
+    );
+
+    await workerMain("/path/to/config.yml", deps);
+
+    expect(deps.processReviewRequest).toHaveBeenCalledOnce();
+    expect(deps.processIssue).not.toHaveBeenCalled();
+  });
+
+  it("does not count a review that never launched an agent", async () => {
+    vi.mocked(deps.loadConfig).mockReturnValue(makeAppConfig({ execution: { maxIssuesPerRepo: 1 } }));
+    vi.mocked(deps.fetchReviewPullRequests).mockResolvedValue([makePullRequest({ number: 7 })]);
+    vi.mocked(deps.processReviewRequest).mockResolvedValue({ outcome: "failure", claudeExecuted: false });
+    vi.mocked(deps.fetchIssues).mockImplementation(async (_repo, phase) =>
+      phase === Phase.IMPL ? [makeIssue({ number: 1, phase: Phase.IMPL })] : [],
+    );
+
+    await workerMain("/path/to/config.yml", deps);
+
+    expect(deps.processIssue).toHaveBeenCalledOnce();
+  });
+
+  it("passes the shared agent pool to the review", async () => {
+    vi.mocked(deps.loadConfig).mockReturnValue(makeAppConfig({ execution: { agents: [Agent.CLAUDE, Agent.CODEX] } }));
+    vi.mocked(deps.fetchReviewPullRequests).mockResolvedValue([makePullRequest()]);
+
+    await workerMain("/path/to/config.yml", deps);
+
+    const pool = vi.mocked(deps.processReviewRequest).mock.calls[0][4];
+    expect(pool).toBeInstanceOf(AgentPool);
+    expect(pool.available()).toEqual([Agent.CLAUDE, Agent.CODEX]);
+  });
+
+  it("stops reviewing once every agent has hit its usage limit", async () => {
+    vi.mocked(deps.loadConfig).mockReturnValue(
+      makeAppConfig({ execution: { agents: [Agent.CLAUDE], maxIssuesPerRepo: 10 } }),
+    );
+    vi.mocked(deps.fetchReviewPullRequests).mockResolvedValue([
+      makePullRequest({ number: 7 }),
+      makePullRequest({ number: 8 }),
+    ]);
+    vi.mocked(deps.processReviewRequest).mockImplementation(async (_pr, _repo, _exec, _token, agentPool) => {
+      agentPool.markExhausted(Agent.CLAUDE);
+      return { outcome: "failure", claudeExecuted: true };
+    });
+
+    await workerMain("/path/to/config.yml", deps);
+
+    expect(deps.processReviewRequest).toHaveBeenCalledOnce();
+  });
+
+  it("moves on to the issue phases when fetching pull requests fails", async () => {
+    vi.mocked(deps.loadConfig).mockReturnValue(makeAppConfig());
+    vi.mocked(deps.fetchReviewPullRequests).mockRejectedValue(new Error("gh failed"));
+    vi.mocked(deps.fetchIssues).mockImplementation(async (_repo, phase) =>
+      phase === Phase.PLAN ? [makeIssue({ number: 1, phase: Phase.PLAN })] : [],
+    );
+
+    const result = await workerMain("/path/to/config.yml", deps);
+
+    expect(result).toBe(0);
+    expect(deps.processIssue).toHaveBeenCalledOnce();
+  });
+
+  it("skips an issue step item with the same number as a pull request reviewed in this cycle", async () => {
+    vi.mocked(deps.loadConfig).mockReturnValue(makeAppConfig({ execution: { maxIssuesPerRepo: 10 } }));
+    vi.mocked(deps.fetchReviewPullRequests).mockResolvedValue([makePullRequest({ number: 7 })]);
+    vi.mocked(deps.fetchIssues).mockImplementation(async (_repo, phase) =>
+      phase === Phase.IMPL ? [makeIssue({ number: 7, phase: Phase.IMPL })] : [],
+    );
+
+    await workerMain("/path/to/config.yml", deps);
+
+    expect(deps.processIssue).not.toHaveBeenCalled();
+  });
+});
+
+describe("workerMain - review fetch error scope", () => {
+  let deps: WorkerDeps;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    deps = createMockWorkerDeps();
+  });
+
+  it("does not report an error thrown while reviewing as a fetch failure", async () => {
+    vi.mocked(deps.loadConfig).mockReturnValue(makeAppConfig());
+    vi.mocked(deps.fetchReviewPullRequests).mockResolvedValue([makePullRequest()]);
+    vi.mocked(deps.processReviewRequest).mockRejectedValue(new Error("boom"));
+
+    await workerMain("/path/to/config.yml", deps);
+
+    const messages = mockLoggerInstance.error.mock.calls.map((call) => String(call[0]));
+    expect(messages.some((m) => m.includes("PR の取得に失敗"))).toBe(false);
+    expect(messages.some((m) => m.includes("予期しないエラー"))).toBe(true);
   });
 });

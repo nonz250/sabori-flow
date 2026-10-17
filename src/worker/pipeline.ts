@@ -35,7 +35,7 @@ const MIN_IMPL_RESUME_BUDGET_MS = 5 * MS_PER_MINUTE;
 
 const RESUME_OUTPUT_SEPARATOR = "\n\n--- resumed session ---\n\n";
 
-function agentDisplayName(agent: Agent): string {
+export function agentDisplayName(agent: Agent): string {
   return agent === Agent.CODEX ? "Codex CLI" : "Claude Code CLI";
 }
 
@@ -522,13 +522,13 @@ async function runAttempt(
  * ones that were skipped for hitting their usage limit, whether on this
  * Issue or on an earlier one in the same run.
  */
-function describeFallback(priority: readonly Agent[], agent: Agent): string | null {
+export function describeFallback(priority: readonly Agent[], agent: Agent): string | null {
   const skipped = priority.slice(0, priority.indexOf(agent));
   if (skipped.length === 0) return null;
   return `Ran with ${agentDisplayName(agent)} because ${skipped.map(agentDisplayName).join(", ")} hit the usage limit.`;
 }
 
-function withFallbackNote(
+export function withFallbackNote(
   diagnostics: FailureDiagnostics,
   fallbackNote: string | null,
 ): FailureDiagnostics {
