@@ -129,7 +129,7 @@ describe("processReviewRequest - success", () => {
 
     await run();
 
-    expect(deps.collectScreenshots).toHaveBeenCalledWith(SCREENSHOT_DIR);
+    expect(deps.collectScreenshots).toHaveBeenCalledWith("/tmp/worktrees/pr-mock");
     expect(deps.postReviewComment).toHaveBeenCalledWith(REPO, 7, "## 総合判定\n\n問題なし", {
       reviewedSha: SHA,
       screenshotDir: SCREENSHOT_DIR,

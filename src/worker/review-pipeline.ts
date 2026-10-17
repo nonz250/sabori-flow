@@ -86,7 +86,7 @@ export interface ReviewPipelineDeps {
   ) => Promise<T>;
   resolveHeadSha: (worktreePath: string) => string;
   prepareScreenshotDir: (worktreePath: string) => string;
-  collectScreenshots: (dir: string) => string[];
+  collectScreenshots: (worktreePath: string) => string[];
 }
 
 export const defaultReviewDeps: ReviewPipelineDeps = {
@@ -376,7 +376,7 @@ async function runAttempt(ctx: ReviewContext, agent: Agent, attempt: number): Pr
           commentUrl = await deps.postReviewComment(repo, prNumber, result.stdout, {
             reviewedSha,
             screenshotDir,
-            screenshots: deps.collectScreenshots(screenshotDir),
+            screenshots: deps.collectScreenshots(worktreePath),
             note,
           });
         } catch (error: unknown) {
