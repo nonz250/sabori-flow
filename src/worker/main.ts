@@ -221,13 +221,16 @@ async function processRepository(
   // Review comes after impl in the workflow, so it goes first for the same
   // reason STEPS runs later phases first.
   logger.info("[%s] review (%s) の PR を取得中...", fullName, labels.review.trigger);
+  let pullRequests: readonly PullRequest[] | null = null;
   try {
-    const pullRequests = await deps.fetchReviewPullRequests(repoConfig, labels.review.trigger);
+    pullRequests = await deps.fetchReviewPullRequests(repoConfig, labels.review.trigger);
+  } catch (error: unknown) {
+    logger.error("[%s] review 対象の PR の取得に失敗: %s", fullName, error);
+  }
+  if (pullRequests !== null) {
     await processQueue("review", pullRequests, true, (pullRequest) =>
       deps.processReviewRequest(pullRequest, repoConfig, executionConfig, authToken, agentPool),
     );
-  } catch (error: unknown) {
-    logger.error("[%s] review 対象の PR の取得に失敗: %s", fullName, error);
   }
 
   for (const step of STEPS) {

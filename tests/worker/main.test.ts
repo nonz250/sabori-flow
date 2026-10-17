@@ -1001,3 +1001,24 @@ describe("workerMain - pull request review", () => {
     expect(deps.processIssue).not.toHaveBeenCalled();
   });
 });
+
+describe("workerMain - review fetch error scope", () => {
+  let deps: WorkerDeps;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    deps = createMockWorkerDeps();
+  });
+
+  it("does not report an error thrown while reviewing as a fetch failure", async () => {
+    vi.mocked(deps.loadConfig).mockReturnValue(makeAppConfig());
+    vi.mocked(deps.fetchReviewPullRequests).mockResolvedValue([makePullRequest()]);
+    vi.mocked(deps.processReviewRequest).mockRejectedValue(new Error("boom"));
+
+    await workerMain("/path/to/config.yml", deps);
+
+    const messages = mockLoggerInstance.error.mock.calls.map((call) => String(call[0]));
+    expect(messages.some((m) => m.includes("PR の取得に失敗"))).toBe(false);
+    expect(messages.some((m) => m.includes("予期しないエラー"))).toBe(true);
+  });
+});
