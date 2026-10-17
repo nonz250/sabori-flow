@@ -456,12 +456,15 @@ export async function postReviewComment(
   rawOutput: string,
   options: ReviewCommentOptions,
 ): Promise<string> {
-  let output = escapeWorkerMarkers(sanitizeOutput(rawOutput));
+  // Rewritten before sanitizing: the screenshot directory lives under the
+  // home directory, which sanitizeOutput masks.
+  let output = rawOutput;
   for (const name of options.screenshots) {
     output = output
       .replaceAll(`](${name})`, `](./${name})`)
       .replaceAll(`](${join(options.screenshotDir, name)})`, `](./${name})`);
   }
+  output = escapeWorkerMarkers(sanitizeOutput(output));
   // Anything still pointing at a local PNG was dropped by the screenshot
   // checks and would render as a broken image on GitHub.
   output = output.replace(

@@ -1582,14 +1582,15 @@ describe("postReviewComment", () => {
     );
   });
 
-  it("rewrites references written with the absolute screenshot path", async () => {
+  it("rewrites references written with the absolute screenshot path under the home directory", async () => {
     mockPosted();
+    const screenshotDir = "/Users/alice/.sabori-flow/worktrees/o/r/pr-7-1/.sabori-flow-review/screenshots";
 
     await postReviewComment(
       "nonz250/example-app",
       7,
-      "![abs](/wt/.sabori-flow-review/screenshots/01-before.png)",
-      { ...BASE_OPTIONS, screenshots: ["01-before.png"] },
+      `![abs](${screenshotDir}/01-before.png)`,
+      { ...BASE_OPTIONS, screenshotDir, screenshots: ["01-before.png"] },
     );
 
     expect(postedBody()).toContain("![abs](./01-before.png)");
