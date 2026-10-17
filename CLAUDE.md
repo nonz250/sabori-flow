@@ -130,7 +130,7 @@ spec の review 状態では、ワーカーが毎サイクル評価を行う。�
 - レビューは PR のコードを手元で実行するので、fork からの PR（`isCrossRepository`）はエージェントを起動せず `:failed` にする。作成者の権限チェックは Issue と同じ `PERMITTED_ASSOCIATIONS`
 - worktree は `pr-<番号>-<タイムスタンプ>` に detached HEAD で作る。コミットしないのでブランチを残さない。PR の head は `FETCH_HEAD` ではなく専用 ref に fetch する。`FETCH_HEAD` はユーザーのリポジトリでの他の fetch（IDE の自動 fetch など）で書き換わる
 - レビュー対象の SHA はエージェント実行前に取る。エージェントは動作確認中に別のコミットへ checkout しうる
-- スクリーンショットの保存先は worktree 内の `.sabori-flow-review/screenshots/`。Codex の `workspace-write` sandbox は cwd の外に書けないため、worktree の外へ移さないこと
+- スクリーンショットの保存先は worktree 内の `.sabori-flow-review/screenshots/`。Codex の `workspace-write` sandbox は cwd の外に書けないため、worktree の外へ移さないこと。チェックアウト直後に保存先が既にあれば PR が持ち込んだものなので、レビューを失敗させる。中の画像をエージェントが撮った証跡として添付しないため
 - 添付するのは symlink でない regular file で、名前が `^[A-Za-z0-9-]+\.png$` に合うものだけ。保存先までのディレクトリも各段を lstat で確かめる。PR のチェックアウトやエージェントが symlink を置けるので、辿ると worktree 外のファイルを PR に上げられてしまう
 - 再レビュー時の in-progress 遷移では、PR に実際に付いている done / failed だけを外す。リポジトリにまだ存在しないラベルを `--remove-label` に渡すと gh が失敗する
 - 利用上限でのフォールバックは Issue と同じだが、エージェントは何も投稿しないので、impl のような事前の PR 照会は不要
