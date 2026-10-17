@@ -192,7 +192,8 @@ function compareLabels(labels: LabelsConfig): Compared<LabelsConfig> {
   const matchesDefault =
     specLabelsMatchDefault(labels.spec, DEFAULT_LABELS.spec) &&
     phaseLabelsMatchDefault(labels.plan, DEFAULT_LABELS.plan) &&
-    phaseLabelsMatchDefault(labels.impl, DEFAULT_LABELS.impl);
+    phaseLabelsMatchDefault(labels.impl, DEFAULT_LABELS.impl) &&
+    phaseLabelsMatchDefault(labels.review, DEFAULT_LABELS.review);
   return { value: labels, matchesDefault };
 }
 
