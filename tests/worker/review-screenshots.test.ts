@@ -141,10 +141,17 @@ describe("prepareScreenshotDir", () => {
     expect(statSync(result).isDirectory()).toBe(true);
   });
 
-  it("succeeds when the directory already exists", () => {
-    prepareScreenshotDir(worktree);
+  it("accepts an existing parent directory but creates the screenshot directory itself", () => {
+    mkdirSync(join(worktree, ".sabori-flow-review"));
 
-    expect(() => prepareScreenshotDir(worktree)).not.toThrow();
+    expect(prepareScreenshotDir(worktree)).toBe(join(worktree, ".sabori-flow-review", "screenshots"));
+  });
+
+  it("refuses a screenshot directory the pull request already contains", () => {
+    mkdirSync(join(worktree, ".sabori-flow-review", "screenshots"), { recursive: true });
+    writeFileSync(join(worktree, ".sabori-flow-review", "screenshots", "01-tests-pass.png"), Buffer.alloc(1));
+
+    expect(() => prepareScreenshotDir(worktree)).toThrow(ScreenshotDirError);
   });
 
   it("refuses a screenshot directory checked out as a symbolic link", () => {

@@ -33,18 +33,23 @@ function screenshotDirChain(worktreePath: string): string[] {
 }
 
 /**
- * @throws {ScreenshotDirError} 途中に symlink やファイルがある場合
+ * @throws {ScreenshotDirError} 途中に symlink やファイルがある場合、または保存先が既にある場合
  */
 export function prepareScreenshotDir(worktreePath: string): string {
   const chain = screenshotDirChain(worktreePath);
+  const dir = chain[chain.length - 1];
   for (const path of chain) {
     if (!existsSync(path) && !isSymlink(path)) {
       mkdirSync(path, { mode: 0o700 });
+    } else if (path === dir) {
+      // Right after checkout it can only come from the pull request, and its
+      // files would be attached as if the agent had taken them.
+      throw new ScreenshotDirError(`The pull request already contains the screenshot directory: ${path}`);
     } else if (!isRealDirectory(path)) {
       throw new ScreenshotDirError(`Screenshot directory path is not a plain directory: ${path}`);
     }
   }
-  return chain[chain.length - 1];
+  return dir;
 }
 
 /**
