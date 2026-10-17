@@ -47,6 +47,8 @@ export function createMockWorkerDeps(
   return {
     loadConfig: vi.fn(),
     fetchIssues: vi.fn().mockResolvedValue([]),
+    fetchReviewPullRequests: vi.fn().mockResolvedValue([]),
+    processReviewRequest: vi.fn().mockResolvedValue({ outcome: "success", claudeExecuted: true }),
     processIssue: vi.fn().mockResolvedValue({ outcome: "success", claudeExecuted: true }),
     resumeSpecReview: vi.fn().mockResolvedValue({ outcome: "deferred", claudeExecuted: false }),
     ensureLabelsExist: vi.fn().mockResolvedValue(undefined),
