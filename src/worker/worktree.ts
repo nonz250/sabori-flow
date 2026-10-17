@@ -64,6 +64,48 @@ export async function withWorktree<T>(
   return useWorktree(repoConfig.localPath, worktreePath, callback);
 }
 
+/**
+ * Pull Request の head を detached HEAD でチェックアウトした worktree でコールバックを実行する。
+ *
+ * レビューはコミットしないため、ブランチは作らない。
+ */
+export async function withPullRequestWorktree<T>(
+  repoConfig: Pick<RepositoryConfig, "owner" | "repo" | "localPath">,
+  prNumber: number,
+  callback: (worktreePath: string) => T | Promise<T>,
+  timestampFn: () => string = defaultTimestampFn,
+  attempt: number = FIRST_ATTEMPT,
+): Promise<T> {
+  const ts = attemptTimestamp(timestampFn, attempt);
+  const repoDir = join(getWorktreesDir(), repoConfig.owner, repoConfig.repo);
+  const worktreePath = join(repoDir, `pr-${prNumber}-${ts}`);
+
+  // The base branch is fetched too so the agent can diff against origin/<base>.
+  runGit(
+    repoConfig.localPath,
+    ["fetch", "origin"],
+    "git fetch origin に失敗しました",
+    "fetch",
+  );
+  runGit(
+    repoConfig.localPath,
+    ["fetch", "origin", `pull/${prNumber}/head`],
+    `PR #${prNumber} の head の取得に失敗しました`,
+    "fetch",
+  );
+
+  ensureRepoDir(repoDir);
+
+  runGit(
+    repoConfig.localPath,
+    ["worktree", "add", "--detach", worktreePath, "FETCH_HEAD"],
+    `worktree の作成に失敗しました: ${worktreePath}`,
+    "create",
+  );
+
+  return useWorktree(repoConfig.localPath, worktreePath, callback);
+}
+
 function attemptTimestamp(timestampFn: () => string, attempt: number): string {
   // A retry with a fallback agent can start within the same second as the
   // attempt it replaces, and the previous branch is not deleted on cleanup.
