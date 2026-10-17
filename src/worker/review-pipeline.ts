@@ -148,10 +148,16 @@ export async function processReviewRequest(
     return { outcome: "failure", claudeExecuted: false };
   }
 
+  // A re-review starts from a PR that still carries the previous outcome.
+  // Only labels the PR actually has are removed, because gh fails on a
+  // label that does not exist in the repository yet.
+  const staleOutcomes = [labels.done, labels.failed].filter((label) => pullRequest.labels.includes(label));
+
   const unsupportedReason = findUnsupportedReason(details);
   if (unsupportedReason !== null) {
     logger.warn("PR #%s: レビュー対象外です [repo=%s]: %s", prNumber, repo, unsupportedReason);
-    await markFailed(deps, repo, prNumber, { add: [labels.failed], remove: [labels.trigger] }, {
+    const remove = [labels.trigger, ...staleOutcomes.filter((label) => label !== labels.failed)];
+    await markFailed(deps, repo, prNumber, { add: [labels.failed], remove }, {
       category: FailureCategory.REVIEW_UNSUPPORTED_PR,
       summary: unsupportedReason,
     });
@@ -163,10 +169,6 @@ export async function processReviewRequest(
     return { outcome: "deferred", claudeExecuted: false };
   }
 
-  // A re-review starts from a PR that still carries the previous outcome.
-  // Only labels the PR actually has are removed, because gh fails on a
-  // label that does not exist in the repository yet.
-  const staleOutcomes = [labels.done, labels.failed].filter((label) => pullRequest.labels.includes(label));
   try {
     await deps.applyLabelTransition(
       repo,
@@ -284,7 +286,33 @@ async function runAttempt(ctx: ReviewContext, agent: Agent, attempt: number): Pr
       repoConfig,
       prNumber,
       async (worktreePath: string): Promise<AttemptOutcome> => {
-        const screenshotDir = deps.prepareScreenshotDir(worktreePath);
+        let screenshotDir: string;
+        try {
+          screenshotDir = deps.prepareScreenshotDir(worktreePath);
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          logger.error("PR #%s: スクリーンショットの保存先を作れませんでした [repo=%s]: %s", prNumber, repo, errorMessage);
+          await fail({
+            category: FailureCategory.WORKTREE_CREATION,
+            summary: "Failed to prepare the screenshot directory",
+            errorMessage,
+          });
+          return done({ outcome: "failure", claudeExecuted: false });
+        }
+
+        // Read before the agent runs: it may check out other commits while
+        // verifying, and the comment must name the commit that was reviewed.
+        let reviewedSha = UNKNOWN_SHA;
+        try {
+          reviewedSha = deps.resolveHeadSha(worktreePath);
+        } catch (error: unknown) {
+          logger.warn(
+            "PR #%s: レビュー対象のコミットを特定できませんでした [repo=%s]: %s",
+            prNumber,
+            repo,
+            error instanceof Error ? error.message : String(error),
+          );
+        }
 
         let prompt: string;
         try {
@@ -359,18 +387,6 @@ async function runAttempt(ctx: ReviewContext, agent: Agent, attempt: number): Pr
           return done({ outcome: "failure", claudeExecuted: true });
         }
 
-        let reviewedSha = UNKNOWN_SHA;
-        try {
-          reviewedSha = deps.resolveHeadSha(worktreePath);
-        } catch (error: unknown) {
-          logger.warn(
-            "PR #%s: レビュー対象のコミットを特定できませんでした [repo=%s]: %s",
-            prNumber,
-            repo,
-            error instanceof Error ? error.message : String(error),
-          );
-        }
-
         let commentUrl: string;
         try {
           commentUrl = await deps.postReviewComment(repo, prNumber, result.stdout, {
@@ -414,8 +430,17 @@ async function runAttempt(ctx: ReviewContext, agent: Agent, attempt: number): Pr
     );
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
+    if (!(error instanceof WorktreeError)) {
+      logger.error("PR #%s: レビュー中に予期しないエラーが発生しました [repo=%s]: %s", prNumber, repo, errorMessage);
+      await fail({
+        category: FailureCategory.CLI_EXECUTION_ERROR,
+        summary: "Unexpected error during the review",
+        errorMessage,
+      });
+      return done({ outcome: "failure", claudeExecuted: false });
+    }
     logger.error("PR #%s: worktree の作成に失敗しました [repo=%s]: %s", prNumber, repo, errorMessage);
-    const isFetch = error instanceof WorktreeError && error.phase === "fetch";
+    const isFetch = error.phase === "fetch";
     await fail({
       category: isFetch ? FailureCategory.GIT_FETCH : FailureCategory.WORKTREE_CREATION,
       summary: isFetch ? "Git fetch failed" : "Worktree creation failed",

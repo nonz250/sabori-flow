@@ -5,7 +5,7 @@ import type { ReviewPipelineDeps } from "../../src/worker/review-pipeline.js";
 import type { ExecutionConfig } from "../../src/worker/models.js";
 import { WorktreeError } from "../../src/worker/worktree.js";
 import { CommentError } from "../../src/worker/comment.js";
-import { MAX_REVIEW_SCREENSHOTS } from "../../src/worker/review-screenshots.js";
+import { MAX_REVIEW_SCREENSHOTS, ScreenshotDirError } from "../../src/worker/review-screenshots.js";
 import { AgentPool } from "../../src/worker/agent-pool.js";
 import {
   makeRepoConfig,
@@ -147,6 +147,14 @@ describe("processReviewRequest - success", () => {
     });
   });
 
+  it("resolves the reviewed commit before the agent runs", async () => {
+    await run();
+
+    const shaOrder = vi.mocked(deps.resolveHeadSha).mock.invocationCallOrder[0];
+    const agentOrder = vi.mocked(deps.runAgent).mock.invocationCallOrder[0];
+    expect(shaOrder).toBeLessThan(agentOrder);
+  });
+
   it("still succeeds when the done transition fails", async () => {
     vi.mocked(deps.applyLabelTransition)
       .mockResolvedValueOnce(undefined)
@@ -185,6 +193,17 @@ describe("processReviewRequest - before the label changes", () => {
     ]);
     expect(failureComment()).toContain("Unsupported Pull Request");
     expect(deps.runAgent).not.toHaveBeenCalled();
+  });
+
+  it("also removes a stale done label when rejecting a re-labeled pull request", async () => {
+    vi.mocked(deps.fetchPullRequestDetails).mockResolvedValue({ baseRefName: "main", isCrossRepository: true });
+
+    await run({ pr: { labels: [REVIEW_LABELS.trigger, REVIEW_LABELS.done] } });
+
+    expect(transitions()[0].transition).toEqual({
+      add: [REVIEW_LABELS.failed],
+      remove: [REVIEW_LABELS.trigger, REVIEW_LABELS.done],
+    });
   });
 
   it("marks a pull request whose base branch name cannot be passed safely as failed", async () => {
@@ -330,6 +349,32 @@ describe("processReviewRequest - failures after the agent starts", () => {
 
     expect(result).toEqual({ outcome: "failure", claudeExecuted: false });
     expect(failureComment()).toContain("Worktree Creation");
+  });
+
+  it("reports a screenshot directory conflict without calling it a worktree failure", async () => {
+    vi.mocked(deps.prepareScreenshotDir).mockImplementation(() => {
+      throw new ScreenshotDirError("Screenshot directory path is not a plain directory: /x");
+    });
+
+    const result = await run();
+
+    expect(result).toEqual({ outcome: "failure", claudeExecuted: false });
+    expectFailedTransition();
+    const comment = failureComment();
+    expect(comment).toContain("Failed to prepare the screenshot directory");
+    expect(comment).not.toContain("Worktree creation failed");
+    expect(deps.runAgent).not.toHaveBeenCalled();
+  });
+
+  it("reports an error that is not a worktree error as unexpected", async () => {
+    vi.mocked(deps.withPullRequestWorktree).mockRejectedValue(new Error("EACCES"));
+
+    const result = await run();
+
+    expect(result.outcome).toBe("failure");
+    const comment = failureComment();
+    expect(comment).toContain("Unexpected error during the review");
+    expect(comment).not.toContain("Worktree creation failed");
   });
 
   it("keeps going when the reviewed commit cannot be resolved", async () => {
