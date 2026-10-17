@@ -39,5 +39,10 @@ execution:
 #         in_progress: ai/impl/in-progress
 #         done: ai/impl/done
 #         failed: ai/impl/failed
+#       review:   # pull request review
+#         trigger: ai/review
+#         in_progress: ai/review/in-progress
+#         done: ai/review/done
+#         failed: ai/review/failed
 
 # The Claude auth token is NOT stored here. Set it via `sabori-flow set-token` (saved to ~/.sabori-flow/auth-token) to avoid 401s during unattended runs.
