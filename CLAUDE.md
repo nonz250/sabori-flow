@@ -128,9 +128,10 @@ spec の review 状態では、ワーカーが毎サイクル評価を行う。�
 
 - エージェントは stdout にレビュー結果を書くだけで、PR へのコメント投稿とラベル操作はワーカーが行う。done にするのは `gh pr comment` がコメント URL を返したときだけで、投稿の失敗は他フローと違いレベル 2（`REVIEW_COMMENT` で `:failed`）として扱う。コメントそのものが成果物のため
 - レビューは PR のコードを手元で実行するので、fork からの PR（`isCrossRepository`）はエージェントを起動せず `:failed` にする。作成者の権限チェックは Issue と同じ `PERMITTED_ASSOCIATIONS`
-- worktree は `pr-<番号>-<タイムスタンプ>` に detached HEAD で作る。コミットしないのでブランチを残さない
+- worktree は `pr-<番号>-<タイムスタンプ>` に detached HEAD で作る。コミットしないのでブランチを残さない。PR の head は `FETCH_HEAD` ではなく専用 ref に fetch する。`FETCH_HEAD` はユーザーのリポジトリでの他の fetch（IDE の自動 fetch など）で書き換わる
+- レビュー対象の SHA はエージェント実行前に取る。エージェントは動作確認中に別のコミットへ checkout しうる
 - スクリーンショットの保存先は worktree 内の `.sabori-flow-review/screenshots/`。Codex の `workspace-write` sandbox は cwd の外に書けないため、worktree の外へ移さないこと
-- 添付するのは symlink でない regular file で、名前が `^[A-Za-z0-9-]+\.png$` に合うものだけ。エージェントが自由に書けるディレクトリなので、symlink を辿ると worktree 外のファイルを PR に上げられてしまう
+- 添付するのは symlink でない regular file で、名前が `^[A-Za-z0-9-]+\.png$` に合うものだけ。保存先までのディレクトリも各段を lstat で確かめる。PR のチェックアウトやエージェントが symlink を置けるので、辿ると worktree 外のファイルを PR に上げられてしまう
 - 再レビュー時の in-progress 遷移では、PR に実際に付いている done / failed だけを外す。リポジトリにまだ存在しないラベルを `--remove-label` に渡すと gh が失敗する
 - 利用上限でのフォールバックは Issue と同じだが、エージェントは何も投稿しないので、impl のような事前の PR 照会は不要
 
