@@ -187,6 +187,9 @@ export const FailureCategory = {
   GIT_FETCH: "git_fetch",
   SPEC_PROPOSAL_COMMENT: "spec_proposal_comment",
   AGENT_USAGE_LIMIT: "agent_usage_limit",
+  REVIEW_UNSUPPORTED_PR: "review_unsupported_pr",
+  REVIEW_EMPTY_OUTPUT: "review_empty_output",
+  REVIEW_COMMENT: "review_comment",
 } as const;
 export type FailureCategory = (typeof FailureCategory)[keyof typeof FailureCategory];
 

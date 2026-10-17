@@ -217,6 +217,9 @@ const FAILURE_CATEGORY_LABELS: Record<FailureCategory, string> = {
   [FailureCategory.GIT_FETCH]: "Git Fetch Error",
   [FailureCategory.SPEC_PROPOSAL_COMMENT]: "Spec Proposal Comment Error",
   [FailureCategory.AGENT_USAGE_LIMIT]: "Agent Usage Limit Reached",
+  [FailureCategory.REVIEW_UNSUPPORTED_PR]: "Unsupported Pull Request",
+  [FailureCategory.REVIEW_EMPTY_OUTPUT]: "Empty Review Output",
+  [FailureCategory.REVIEW_COMMENT]: "Review Comment Not Posted",
 };
 
 // ---------- Output section labels ----------

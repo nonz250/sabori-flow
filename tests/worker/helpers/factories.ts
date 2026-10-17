@@ -1,5 +1,6 @@
 import type {
   Issue,
+  PullRequest,
   PhaseLabels,
   SpecPhaseLabels,
   LabelsConfig,
@@ -88,6 +89,19 @@ export function makeIssue(overrides?: Partial<Issue>): Issue {
     authorAssociation: "OWNER",
     phase,
     priority: Priority.HIGH,
+    ...overrides,
+  };
+}
+
+export function makePullRequest(overrides?: Partial<PullRequest>): PullRequest {
+  const number = overrides?.number ?? 7;
+  return {
+    number,
+    title: "Test Pull Request",
+    body: "Pull request body",
+    labels: [REVIEW_LABELS.trigger],
+    url: `https://github.com/testowner/testrepo/pull/${number}`,
+    authorAssociation: "MEMBER",
     ...overrides,
   };
 }
