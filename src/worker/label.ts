@@ -16,13 +16,15 @@ export class LabelError extends Error {
   }
 }
 
+export type LabelTarget = "issue" | "pr";
+
 export interface LabelTransition {
   readonly add: readonly string[];
   readonly remove: readonly string[];
 }
 
 /**
- * Issue のラベルを操作する。
+ * Issue または Pull Request のラベルを操作する。
  *
  * remove は絞り込まずそのまま gh issue edit に渡す。
  * Issue.labels は fetch 時点のスナップショットで、worker が後から付ける
@@ -35,9 +37,10 @@ export async function applyLabelTransition(
   repoFullName: string,
   issueNumber: number,
   transition: LabelTransition,
+  target: LabelTarget = "issue",
 ): Promise<void> {
   try {
-    const args = buildGhEditArgs(repoFullName, issueNumber, transition);
+    const args = buildGhEditArgs(repoFullName, issueNumber, transition, target);
     const result = await runCommand("gh", args, { timeoutMs: GH_TIMEOUT_MS });
 
     if (!result.success) {
@@ -69,7 +72,7 @@ export async function applyLabelTransition(
     }
     if (error instanceof ProcessTimeoutError) {
       throw new LabelError(
-        `gh issue edit timed out after ${GH_TIMEOUT_MS / 1_000} seconds`,
+        `gh ${target} edit timed out after ${GH_TIMEOUT_MS / 1_000} seconds`,
       );
     }
     if (error instanceof ProcessExecutionError) {
@@ -85,9 +88,10 @@ function buildGhEditArgs(
   repoFullName: string,
   issueNumber: number,
   transition: LabelTransition,
+  target: LabelTarget,
 ): string[] {
   const args = [
-    "issue",
+    target,
     "edit",
     "--repo",
     repoFullName,

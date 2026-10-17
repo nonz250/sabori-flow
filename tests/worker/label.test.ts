@@ -513,3 +513,66 @@ describe("ラベル自動作成", () => {
     expect(mockedRunCommand).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("applyLabelTransition - pull request target", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("uses gh pr edit for a pull request", async () => {
+    mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
+
+    await applyLabelTransition(
+      "nonz250/example-app",
+      7,
+      { add: ["ai/review/in-progress"], remove: ["ai/review"] },
+      "pr",
+    );
+
+    expect(mockedRunCommand).toHaveBeenCalledWith(
+      "gh",
+      [
+        "pr",
+        "edit",
+        "--repo",
+        "nonz250/example-app",
+        "7",
+        "--add-label",
+        "ai/review/in-progress",
+        "--remove-label",
+        "ai/review",
+      ],
+      { timeoutMs: 120_000 },
+    );
+  });
+
+  it("creates a missing label and retries with gh pr edit", async () => {
+    mockedRunCommand
+      .mockResolvedValueOnce({ success: false, stdout: "", stderr: "'ai/review/done' not found" })
+      .mockResolvedValueOnce({ success: true, stdout: "", stderr: "" })
+      .mockResolvedValueOnce({ success: true, stdout: "", stderr: "" });
+
+    await applyLabelTransition(
+      "nonz250/example-app",
+      7,
+      { add: ["ai/review/done"], remove: ["ai/review/in-progress"] },
+      "pr",
+    );
+
+    expect(mockedRunCommand).toHaveBeenNthCalledWith(
+      2,
+      "gh",
+      ["label", "create", "ai/review/done", "--repo", "nonz250/example-app"],
+      { timeoutMs: 120_000 },
+    );
+    expect(mockedRunCommand.mock.calls[2][1].slice(0, 2)).toEqual(["pr", "edit"]);
+  });
+
+  it("reports gh pr edit in the timeout message", async () => {
+    mockedRunCommand.mockRejectedValue(new ProcessTimeoutError(120_000));
+
+    await expect(
+      applyLabelTransition("nonz250/example-app", 7, { add: ["x"], remove: [] }, "pr"),
+    ).rejects.toThrow("gh pr edit timed out after 120 seconds");
+  });
+});
