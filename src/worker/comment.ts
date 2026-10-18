@@ -10,7 +10,10 @@ import type { Language } from "../i18n/types.js";
 import type { FailureDiagnostics } from "./models.js";
 import { FailureCategory } from "./models.js";
 
+import { createLogger } from "./logger.js";
 import { formatMarker } from "./spec-thread.js";
+
+const logger = createLogger("comment");
 
 const GH_TIMEOUT_MS = 120_000;
 
@@ -374,6 +377,14 @@ export class CommentError extends Error {
   }
 }
 
+/** gh exited with an error, so the comment was not posted */
+class CommentRejectedError extends CommentError {
+  constructor(message: string) {
+    super(message);
+    Object.setPrototypeOf(this, CommentRejectedError.prototype);
+  }
+}
+
 /**
  * 成功時のコメントを Issue に投稿する。
  * claudeOutput がコメント上限を超える場合は切り詰めて省略メッセージを付与する。
@@ -473,11 +484,39 @@ export interface ReviewCommentOptions {
  *
  * The comment is the review's whole result, so a gh run that succeeds
  * without printing a comment URL counts as a failure: the post cannot be
- * confirmed.
+ * confirmed. When gh rejects a post with attachments, such as a gh too old
+ * to know --attach, the review is posted again without them. A timeout or
+ * a missing URL is not retried, since the first post may have gone through
+ * and a second would duplicate it.
  *
  * @throws {CommentError} when posting fails or cannot be confirmed
  */
 export async function postReviewComment(
+  repoFullName: string,
+  prNumber: number,
+  rawOutput: string,
+  options: ReviewCommentOptions,
+): Promise<string> {
+  try {
+    return await sendReviewComment(repoFullName, prNumber, rawOutput, options);
+  } catch (error: unknown) {
+    if (!(error instanceof CommentRejectedError) || options.screenshots.length === 0) {
+      throw error;
+    }
+    logger.warn(
+      "PR #%s: gh rejected the review with screenshots, posting it without them: %s",
+      prNumber,
+      error.message,
+    );
+    return await sendReviewComment(repoFullName, prNumber, rawOutput, {
+      ...options,
+      attachmentDir: null,
+      screenshots: [],
+    });
+  }
+}
+
+async function sendReviewComment(
   repoFullName: string,
   prNumber: number,
   rawOutput: string,
@@ -531,7 +570,7 @@ export async function postReviewComment(
       cwd: options.attachmentDir ?? undefined,
     });
     if (!result.success) {
-      throw new CommentError(result.stderr);
+      throw new CommentRejectedError(result.stderr);
     }
     stdout = result.stdout;
   } catch (error: unknown) {

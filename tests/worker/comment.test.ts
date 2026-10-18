@@ -1744,6 +1744,73 @@ describe("postReviewComment", () => {
     await expect(
       postReviewComment("nonz250/example-app", 7, "review", BASE_OPTIONS),
     ).rejects.toThrow("unknown flag: --attach");
+    expect(mockedRunCommand).toHaveBeenCalledTimes(1);
+  });
+
+  describe("when gh rejects a post with screenshots", () => {
+    const WITH_SCREENSHOTS = {
+      ...BASE_OPTIONS,
+      attachmentDir: "/home/.sabori-flow/review-attachments/review-1",
+      screenshots: ["01-shot.png"],
+    };
+
+    function mockRejectedThenPosted(): void {
+      mockedRunCommand
+        .mockResolvedValueOnce({ success: false, stdout: "", stderr: "unknown flag: --attach", exitCode: 1 })
+        .mockResolvedValueOnce({ success: true, stdout: `${COMMENT_URL}\n`, stderr: "", exitCode: 0 });
+    }
+
+    it("posts the review again without attachments and returns its URL", async () => {
+      mockRejectedThenPosted();
+
+      await expect(
+        postReviewComment("nonz250/example-app", 7, "![shot](01-shot.png)", WITH_SCREENSHOTS),
+      ).resolves.toBe(COMMENT_URL);
+
+      expect(mockedRunCommand).toHaveBeenCalledTimes(2);
+      const [, args, options] = mockedRunCommand.mock.calls[1];
+      expect(args).not.toContain("--attach");
+      expect(options!.cwd).toBeUndefined();
+    });
+
+    it("marks the screenshot the retry could not attach", async () => {
+      mockRejectedThenPosted();
+
+      await postReviewComment("nonz250/example-app", 7, "![shot](01-shot.png)", WITH_SCREENSHOTS);
+
+      const body = mockedRunCommand.mock.calls[1][2]!.input!;
+      expect(body).toContain("（添付されていないスクリーンショット: shot, 01-shot.png）");
+      expect(body).not.toContain("](./01-shot.png)");
+    });
+
+    it("throws the retry's error when the post without attachments also fails", async () => {
+      mockedRunCommand
+        .mockResolvedValueOnce({ success: false, stdout: "", stderr: "unknown flag: --attach", exitCode: 1 })
+        .mockResolvedValueOnce({ success: false, stdout: "", stderr: "HTTP 502", exitCode: 1 });
+
+      await expect(
+        postReviewComment("nonz250/example-app", 7, "review", WITH_SCREENSHOTS),
+      ).rejects.toThrow("HTTP 502");
+      expect(mockedRunCommand).toHaveBeenCalledTimes(2);
+    });
+
+    it("does not post again after a timeout, since the first post may have gone through", async () => {
+      mockedRunCommand.mockRejectedValue(new ProcessTimeoutError(REVIEW_COMMENT_TIMEOUT_MS));
+
+      await expect(
+        postReviewComment("nonz250/example-app", 7, "review", WITH_SCREENSHOTS),
+      ).rejects.toThrow(/timed out/);
+      expect(mockedRunCommand).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not post again when gh succeeds without printing a comment URL", async () => {
+      mockPosted("ok\n");
+
+      await expect(
+        postReviewComment("nonz250/example-app", 7, "review", WITH_SCREENSHOTS),
+      ).rejects.toThrow(/did not print a comment URL/);
+      expect(mockedRunCommand).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("throws CommentError mentioning gh pr comment on timeout", async () => {
