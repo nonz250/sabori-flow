@@ -32,20 +32,10 @@ export const ALL_TEMPLATE_FILES: readonly string[] = [
   REVIEW_TEMPLATE_FILE,
 ];
 
+const PLACEHOLDER_PATTERN = /\{(\w+)\}/g;
+
 /** テンプレートファイルの最大サイズ (100KB) */
 const MAX_TEMPLATE_SIZE = 100 * 1024;
-
-/**
- * ユーザー入力由来の変数キー。
- * 二重展開防止のため、これらは最後に展開する。
- */
-const USER_INPUT_KEYS: ReadonlySet<string> = new Set([
-  "issue_body",
-  "issue_title",
-  "spec",
-  "pr_body",
-  "pr_title",
-]);
 
 /**
  * Issue とリポジトリ設定からプロンプト文字列を組み立てる。
@@ -243,34 +233,13 @@ function buildVariables(
 }
 
 /**
- * テンプレート内のプレースホルダを変数で展開する。
- *
- * 各プレースホルダ `{key}` を対応する値で置換する。
- * `String.replace()` の第2引数に関数を使用し、`$&` や `$'` 等の
- * 特殊パターン解釈を回避する。
- *
- * ユーザー入力由来の変数（`issue_body`, `issue_title`）は最後に展開する。
- * これにより、ユーザー入力に `{repo_full_name}` のようなプレースホルダ風
- * 文字列が含まれていた場合でも二重展開を防止できる。
+ * Expands every placeholder in one pass. Substituted values are never
+ * scanned again, so a placeholder-like string in user input, such as a
+ * title of `{issue_body}`, stays literal instead of pulling the body outside
+ * its boundary. A function replacer keeps `$&` and `$'` in values literal.
  */
 function render(template: string, variables: Map<string, string>): string {
-  let result = template;
-
-  const userInputVars = new Map<string, string>();
-
-  for (const [key, value] of variables) {
-    if (USER_INPUT_KEYS.has(key)) {
-      userInputVars.set(key, value);
-    } else {
-      result = result.replaceAll(`{${key}}`, () => value);
-    }
-  }
-
-  for (const [key, value] of userInputVars) {
-    result = result.replaceAll(`{${key}}`, () => value);
-  }
-
-  return result;
+  return template.replace(PLACEHOLDER_PATTERN, (match: string, key: string) => variables.get(key) ?? match);
 }
 
 /**
