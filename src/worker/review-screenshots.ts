@@ -173,15 +173,16 @@ function readScreenshot(path: string): Buffer | string {
     if (stat.size > MAX_SCREENSHOT_BYTES) {
       return `it is larger than ${MAX_SCREENSHOT_BYTES} bytes`;
     }
-    // One byte of headroom tells a file that grew past the limit after fstat.
-    const content = Buffer.alloc(MAX_SCREENSHOT_BYTES + 1);
+    // One byte of headroom tells a file that grew after fstat, which would
+    // otherwise be copied cut short.
+    const content = Buffer.allocUnsafe(stat.size + 1);
     let length = 0;
     let read: number;
     while (length < content.length && (read = readSync(fd, content, length, content.length - length, length)) > 0) {
       length += read;
     }
-    if (length > MAX_SCREENSHOT_BYTES) {
-      return `it is larger than ${MAX_SCREENSHOT_BYTES} bytes`;
+    if (length > stat.size) {
+      return "it was still being written";
     }
     if (length < PNG_SIGNATURE.length || !content.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
       return "its content is not a PNG image";
