@@ -49,7 +49,7 @@ src/
     fetcher.ts       # gh api で Issue 取得・優先度ソート
     pipeline.ts      # 1 Issue の処理パイプライン + resumeSpecReview（DI パターン）
     review-pipeline.ts # 1 PR のレビューパイプライン（DI パターン）
-    review-screenshots.ts # レビューのスクリーンショット保存先の作成と添付対象の選別
+    review-screenshots.ts # レビューのスクリーンショット保存先の作成、添付対象の選別とコピー
     prompt.ts        # プロンプトテンプレート読み込み・展開
     prompt-migration.ts # フラットレイアウト→言語別ディレクトリへの移行
     executor.ts      # CLI エージェント実行（Claude / Codex）
@@ -131,7 +131,8 @@ spec の review 状態では、ワーカーが毎サイクル評価を行う。�
 - worktree は `pr-<番号>-<タイムスタンプ>` に detached HEAD で作る。コミットしないのでブランチを残さない。PR の head は `FETCH_HEAD` ではなく専用 ref に fetch する。`FETCH_HEAD` はユーザーのリポジトリでの他の fetch（IDE の自動 fetch など）で書き換わる
 - レビュー対象の SHA はエージェント実行前に取る。エージェントは動作確認中に別のコミットへ checkout しうる
 - スクリーンショットの保存先は worktree 内の `.sabori-flow-review/screenshots/`。Codex の `workspace-write` sandbox は cwd の外に書けないため、worktree の外へ移さないこと。チェックアウト直後に保存先が既にあれば PR が持ち込んだものなので、レビューを失敗させる。中の画像をエージェントが撮った証跡として添付しないため
-- 添付するのは symlink でない regular file で、名前が `^[A-Za-z0-9-]+\.png$` に合うものだけ。保存先までのディレクトリも各段を lstat で確かめる。PR のチェックアウトやエージェントが symlink を置けるので、辿ると worktree 外のファイルを PR に上げられてしまう
+- 添付するのは名前が `^[A-Za-z0-9-]+\.png$` に合い、中身が PNG のシグネチャで始まり、ハードリンクが 1 本だけの regular file。保存先までのディレクトリは各段を lstat で確かめ、ファイルは `O_NOFOLLOW` で開いた fd 上で判定する。PR のチェックアウトやエージェントが symlink やハードリンクを置けるので、辿ると worktree 外のファイルを PR に上げられてしまう
+- 判定した中身は `~/.sabori-flow/review-attachments/` の下に毎回作る 0700 のディレクトリへコピーし、gh にはそのコピーを添付させる。投稿後に削除する。エージェントが残したプロセスが、判定後に元のファイルを差し替えられるため
 - 再レビュー時の in-progress 遷移では、PR に実際に付いている done / failed だけを外す。リポジトリにまだ存在しないラベルを `--remove-label` に渡すと gh が失敗する
 - 利用上限でのフォールバックは Issue と同じだが、エージェントは何も投稿しないので、impl のような事前の PR 照会は不要
 
@@ -189,6 +190,7 @@ spec の review 状態では、ワーカーが毎サイクル評価を行う。�
 | プロンプトテンプレート | `~/.sabori-flow/prompts/{lang}/` |
 | ログ | `~/.sabori-flow/logs/` |
 | git worktree | `~/.sabori-flow/worktrees/<owner>/<repo>/issue-<番号>-<タイムスタンプ>/` |
+| レビューの添付コピー（投稿後に削除） | `~/.sabori-flow/review-attachments/review-<ランダム>/` |
 | plist バックアップ | `~/.sabori-flow/com.github.sabori-flow.plist` |
 | config.yml バックアップ（migrate 実行時） | `~/.sabori-flow/config.yml.bak-<タイムスタンプ>`（世代管理・自動削除なし） |
 
