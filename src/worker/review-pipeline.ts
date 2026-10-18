@@ -29,14 +29,20 @@ import {
   withPullRequestWorktree,
   resolveHeadSha,
   WorktreeError,
-  FIRST_ATTEMPT,
 } from "./worktree.js";
 import {
   prepareScreenshotDir,
   withStagedScreenshots,
   MAX_REVIEW_SCREENSHOTS,
 } from "./review-screenshots.js";
-import { agentDisplayName, describeFallback, withFallbackNote } from "./pipeline.js";
+import type { AttemptOutcome } from "./agent-fallback.js";
+import {
+  agentDisplayName,
+  describeFallback,
+  enterInProgress,
+  tryAgentsInOrder,
+  withFallbackNote,
+} from "./agent-fallback.js";
 import { AgentPool } from "./agent-pool.js";
 import { isUsageLimitReached } from "./usage-limit.js";
 import { createLogger } from "./logger.js";
@@ -168,48 +174,22 @@ export async function processReviewRequest(
     return { outcome: "failure", claudeExecuted: false };
   }
 
-  if (agentPool.next() === undefined) {
-    logger.info("PR #%s: 利用可能なエージェントがないため次回に回します [repo=%s]", prNumber, repo);
-    return { outcome: "deferred", claudeExecuted: false };
-  }
-
-  try {
-    await deps.applyLabelTransition(
+  const notStarted = await enterInProgress(agentPool, `PR #${prNumber}`, repo, {
+    claim: () => deps.applyLabelTransition(
       repo,
       prNumber,
       { add: [labels.inProgress], remove: [labels.trigger, ...staleOutcomes] },
       "pr",
-    );
-  } catch (error: unknown) {
-    logger.error(
-      "PR #%s: trigger -> in-progress のラベル遷移に失敗しました [repo=%s]: %s",
-      prNumber,
-      repo,
-      error instanceof Error ? error.message : String(error),
-    );
-    return { outcome: "failure", claudeExecuted: false };
-  }
-
-  if (agentPool.next() === undefined) {
-    logger.info(
-      "PR #%s: ラベル遷移中に利用可能なエージェントがなくなったため trigger ラベルに戻します [repo=%s]",
-      prNumber,
-      repo,
-    );
-    await deps.applyLabelTransition(
+    ),
+    release: () => deps.applyLabelTransition(
       repo,
       prNumber,
       { add: [labels.trigger, ...staleOutcomes], remove: [labels.inProgress] },
       "pr",
-    ).catch((error: unknown) => {
-      logger.warn(
-        "PR #%s: trigger ラベルへの戻しに失敗しました [repo=%s]: %s",
-        prNumber,
-        repo,
-        error instanceof Error ? error.message : String(error),
-      );
-    });
-    return { outcome: "deferred", claudeExecuted: false };
+    ),
+  });
+  if (notStarted !== null) {
+    return notStarted;
   }
 
   const ctx: ReviewContext = {
@@ -237,44 +217,22 @@ function findUnsupportedReason(details: PullRequestDetails): string | null {
   return null;
 }
 
-type AttemptOutcome =
-  | { readonly kind: "done"; readonly result: StepResult }
-  | { readonly kind: "usage-limit"; readonly output: ProcessResult };
-
 /**
  * Unlike impl, a review that stops at the usage limit has no side effect to
  * check for: the agent never posts, so the next agent can simply start over.
  */
 async function runWithAgentFallback(ctx: ReviewContext, agentPool: AgentPool): Promise<StepResult> {
-  let attempt = 0;
-  let lastLimitOutput: ProcessResult | null = null;
-
-  for (let agent = agentPool.next(); agent !== undefined; agent = agentPool.next()) {
-    attempt++;
-    const outcome = await runAttempt(ctx, agent, attempt);
-    if (outcome.kind === "done") {
-      return attempt > FIRST_ATTEMPT ? { ...outcome.result, claudeExecuted: true } : outcome.result;
-    }
-
-    agentPool.markExhausted(agent);
-    lastLimitOutput = outcome.output;
-    logger.warn(
-      "PR #%s: %s が利用上限に達しました [repo=%s]",
-      ctx.pullRequest.number,
-      agentDisplayName(agent),
-      ctx.repo,
-    );
+  const fallback = await tryAgentsInOrder(
+    agentPool,
+    ctx.executionConfig.agents,
+    `PR #${ctx.pullRequest.number}`,
+    ctx.repo,
+    (agent, attempt) => runAttempt(ctx, agent, attempt),
+  );
+  if (fallback.kind === "exhausted") {
+    await markInProgressFailed(ctx, fallback.diagnostics);
   }
-
-  await markInProgressFailed(ctx, {
-    category: FailureCategory.AGENT_USAGE_LIMIT,
-    summary:
-      `Every configured agent has hit its usage limit (${ctx.executionConfig.agents.map(agentDisplayName).join(", ")})`,
-    stdout: lastLimitOutput?.stdout,
-    stderr: lastLimitOutput?.stderr,
-    exitCode: lastLimitOutput?.exitCode,
-  });
-  return { outcome: "failure", claudeExecuted: attempt > 0 };
+  return fallback.result;
 }
 
 async function runAttempt(ctx: ReviewContext, agent: Agent, attempt: number): Promise<AttemptOutcome> {
