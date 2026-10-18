@@ -126,9 +126,6 @@ interface ReviewContext {
   readonly baseBranch: string;
 }
 
-/**
- * Reviews one pull request labeled for review and posts the result as a comment.
- */
 export async function processReviewRequest(
   pullRequest: PullRequest,
   repoConfig: RepositoryConfig,

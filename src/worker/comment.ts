@@ -558,8 +558,6 @@ function escapeWorkerMarkers(text: string): string {
 export type CommentTarget = "issue" | "pr";
 
 /**
- * Posts through gh issue comment or gh pr comment.
- *
  * @throws {CommentError} when the command times out or exits non-zero
  */
 async function postComment(

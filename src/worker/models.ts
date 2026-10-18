@@ -64,7 +64,6 @@ export interface Issue {
   readonly priority: Priority;
 }
 
-/** A GitHub pull request to review */
 export interface PullRequest {
   readonly number: number;
   readonly title: string;
