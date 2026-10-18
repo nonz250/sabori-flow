@@ -181,16 +181,16 @@ const REVIEW_HEADINGS: Record<Language, { readonly header: string; readonly revi
 };
 
 /**
- * gh の --attach は本文中の `./<file>` をアップロード先 URL に書き換え、
- * 参照されていない添付は末尾に追記する。どちらでも本文は伸びるため、
- * 切り詰めの上限から 1 枚あたりこの文字数を差し引いておく。
+ * gh --attach rewrites each `./<file>` in the body to the uploaded URL and
+ * appends attachments the body does not reference. Either way the body
+ * grows, so this much is held back from the truncation limit per file.
  */
 const ATTACHMENT_URL_RESERVE = 200;
 
-/** 添付のアップロードを含むため、通常のコメント投稿より長く待つ */
+/** Longer than a plain comment because it includes uploading the attachments */
 const REVIEW_COMMENT_TIMEOUT_MS = 300_000;
 
-/** コメント URL が見つからなかったときにエラーへ含める gh 出力の長さ */
+/** How much of gh's output to quote when it prints no comment URL */
 const UNEXPECTED_OUTPUT_PREVIEW_LENGTH = 200;
 
 const COMMENT_URL_PATTERN = /https?:\/\/\S+#issuecomment-\d+/;
@@ -450,12 +450,13 @@ export interface ReviewCommentOptions {
 }
 
 /**
- * レビュー結果を Pull Request に投稿し、投稿したコメントの URL を返す。
+ * Posts the review to the pull request and returns the comment's URL.
  *
- * レビューではコメントそのものが成果物なので、gh が成功を返しても
- * コメント URL を出力しなかった場合は投稿を確認できなかったとして失敗にする。
+ * The comment is the review's whole result, so a gh run that succeeds
+ * without printing a comment URL counts as a failure: the post cannot be
+ * confirmed.
  *
- * @throws {CommentError} 投稿に失敗した、または投稿を確認できなかった場合
+ * @throws {CommentError} when posting fails or cannot be confirmed
  */
 export async function postReviewComment(
   repoFullName: string,
@@ -542,9 +543,9 @@ function escapeWorkerMarkers(text: string): string {
 export type CommentTarget = "issue" | "pr";
 
 /**
- * gh issue comment / gh pr comment でコメントを投稿する。
+ * Posts through gh issue comment or gh pr comment.
  *
- * @throws {CommentError} コマンドがタイムアウトまたは非0終了した場合
+ * @throws {CommentError} when the command times out or exits non-zero
  */
 async function postComment(
   repoFullName: string,

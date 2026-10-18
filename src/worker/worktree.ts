@@ -65,9 +65,8 @@ export async function withWorktree<T>(
 }
 
 /**
- * Pull Request の head を detached HEAD でチェックアウトした worktree でコールバックを実行する。
- *
- * レビューはコミットしないため、ブランチは作らない。
+ * The pull request head is checked out detached: a review never commits,
+ * so it gets no branch.
  */
 export async function withPullRequestWorktree<T>(
   repoConfig: Pick<RepositoryConfig, "owner" | "repo" | "localPath">,
@@ -116,7 +115,7 @@ export async function withPullRequestWorktree<T>(
 }
 
 /**
- * @throws {WorktreeError} git rev-parse に失敗した場合
+ * @throws {WorktreeError} when git rev-parse fails
  */
 export function resolveHeadSha(worktreePath: string): string {
   try {

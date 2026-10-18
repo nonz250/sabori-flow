@@ -26,7 +26,7 @@ export const TEMPLATE_FILES: Record<Phase, string> = {
 
 export const REVIEW_TEMPLATE_FILE = "review.md";
 
-/** init がユーザーディレクトリへコピーするテンプレート */
+/** Templates init copies into the user's directory */
 export const ALL_TEMPLATE_FILES: readonly string[] = [
   ...Object.values(TEMPLATE_FILES),
   REVIEW_TEMPLATE_FILE,
@@ -87,11 +87,9 @@ export interface ReviewPromptOptions {
 }
 
 /**
- * Pull Request とリポジトリ設定からレビュー用プロンプトを組み立てる。
+ * Resolves the template in the same order as buildPrompt.
  *
- * テンプレートの解決順は buildPrompt と同じ。
- *
- * @throws {PromptTemplateError} テンプレートの読み込みに失敗した場合
+ * @throws {PromptTemplateError} when the template cannot be read
  */
 export function buildReviewPrompt(
   pullRequest: PullRequest,

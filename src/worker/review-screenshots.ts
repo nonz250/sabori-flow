@@ -22,7 +22,7 @@ const logger = createLogger("review-screenshots");
 
 export const MAX_REVIEW_SCREENSHOTS = 10;
 
-/** GitHub の画像アップロード上限に合わせる */
+/** Matches GitHub's upload limit for images */
 export const MAX_SCREENSHOT_BYTES = 10 * 1024 * 1024;
 
 const SCREENSHOT_NAME_PATTERN = /^[A-Za-z0-9-]+\.png$/;
@@ -55,7 +55,7 @@ function screenshotDirChain(worktreePath: string): string[] {
 }
 
 /**
- * @throws {ScreenshotDirError} 途中に symlink やファイルがある場合、または保存先が既にある場合
+ * @throws {ScreenshotDirError} when a path component is a symbolic link or a file, or the directory already exists
  */
 export function prepareScreenshotDir(worktreePath: string): string {
   const chain = screenshotDirChain(worktreePath);

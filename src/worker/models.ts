@@ -64,7 +64,7 @@ export interface Issue {
   readonly priority: Priority;
 }
 
-/** レビュー対象の GitHub Pull Request */
+/** A GitHub pull request to review */
 export interface PullRequest {
   readonly number: number;
   readonly title: string;
@@ -74,7 +74,7 @@ export interface PullRequest {
   readonly authorAssociation: string;
 }
 
-/** レビュー前に追加で取得する Pull Request の属性 */
+/** Pull request attributes fetched separately before the review */
 export interface PullRequestDetails {
   readonly baseRefName: string;
   readonly isCrossRepository: boolean;

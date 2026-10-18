@@ -24,14 +24,14 @@ export interface LabelTransition {
 }
 
 /**
- * Issue または Pull Request のラベルを操作する。
+ * Changes the labels of an issue or a pull request.
  *
- * remove は絞り込まずそのまま gh issue edit に渡す。
- * Issue.labels は fetch 時点のスナップショットで、worker が後から付ける
- * inProgress を含まないため、交差を取ると done / failed 遷移で
- * inProgress が remove から落ちてラベルが残る。
+ * remove is passed to gh as is, not intersected with the known labels.
+ * Issue.labels is a snapshot from the fetch and lacks the inProgress label
+ * the worker adds later, so intersecting would drop inProgress from a done
+ * or failed transition and leave it on.
  *
- * @throws {LabelError} ラベル操作に失敗した場合
+ * @throws {LabelError} when the label change fails
  */
 export async function applyLabelTransition(
   repoFullName: string,

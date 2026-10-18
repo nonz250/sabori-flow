@@ -25,7 +25,7 @@ export class IssueParseError extends Error {
 
 const GH_TIMEOUT_MS = 120_000;
 
-/** パースに失敗した JSON をエラーメッセージに含める長さ */
+/** How much of the unparsable JSON to quote in the error message */
 const JSON_ERROR_PREVIEW_LENGTH = 200;
 
 const logger = createLogger("fetcher");
@@ -65,13 +65,11 @@ export async function fetchIssues(
 }
 
 /**
- * レビューラベルが付いた open な Pull Request を取得し、番号順に並べて返す。
+ * Fetched from the issues REST endpoint and filtered down to pull requests,
+ * because the JSON of `gh pr list` has no authorAssociation.
  *
- * `gh pr list` の JSON は authorAssociation を返さないため、Issue と同じ
- * REST エンドポイントで取得して Pull Request だけを残す。
- *
- * @throws {GitHubCLIError} gh コマンドの実行に失敗した場合
- * @throws {IssueParseError} JSON のパースに失敗した場合
+ * @throws {GitHubCLIError} when the gh command fails
+ * @throws {IssueParseError} when the JSON cannot be parsed
  */
 export async function fetchReviewPullRequests(
   repoConfig: RepositoryConfig,
@@ -83,10 +81,8 @@ export async function fetchReviewPullRequests(
 }
 
 /**
- * レビュー対象の Pull Request のベースブランチと fork 由来かどうかを取得する。
- *
- * @throws {GitHubCLIError} gh コマンドの実行に失敗した場合
- * @throws {IssueParseError} JSON のパースに失敗した場合
+ * @throws {GitHubCLIError} when the gh command fails
+ * @throws {IssueParseError} when the JSON cannot be parsed
  */
 export async function fetchPullRequestDetails(
   repoFullName: string,
@@ -117,7 +113,7 @@ export async function fetchPullRequestDetails(
   return { baseRefName: data.baseRefName, isCrossRepository: data.isCrossRepository };
 }
 
-/** Issue API は Pull Request も返すため、Issue と PR の両方の取得に使う */
+/** Serves both issues and pull requests, because the issues API returns pull requests too */
 function buildOpenIssuesArgs(repoConfig: RepositoryConfig, label: string): string[] {
   return [
     "api",
@@ -208,9 +204,7 @@ function parseIssues(
 }
 
 /**
- * JSON 文字列から Pull Request だけを取り出す。
- *
- * @throws {IssueParseError} JSON のパースに失敗した場合
+ * @throws {IssueParseError} when the JSON cannot be parsed
  */
 function parsePullRequests(rawJson: string): PullRequest[] {
   let data: GhIssueItem[];
@@ -273,8 +267,7 @@ function determinePriority(
 }
 
 /**
- * authorAssociation が許可リストに含まれないものを除外する。
- * 除外したものは WARNING ログに記録する。
+ * Each excluded item is logged as a warning.
  */
 function filterByAuthorAssociation<T extends { readonly number: number; readonly authorAssociation: string }>(
   items: readonly T[],

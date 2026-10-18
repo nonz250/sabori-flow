@@ -120,7 +120,7 @@ interface ReviewContext {
 }
 
 /**
- * ai/review が付いた Pull Request 1 件をレビューし、結果を PR コメントとして投稿する。
+ * Reviews one pull request labeled for review and posts the result as a comment.
  */
 export async function processReviewRequest(
   pullRequest: PullRequest,
