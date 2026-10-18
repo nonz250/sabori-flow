@@ -181,8 +181,11 @@ function readScreenshot(path: string): Buffer | string {
   let fd: number;
   try {
     fd = openSync(path, SCREENSHOT_OPEN_FLAGS);
-  } catch {
-    return "it cannot be opened without following a symbolic link";
+  } catch (error: unknown) {
+    const code = (error as NodeJS.ErrnoException).code;
+    // O_NOFOLLOW fails with ELOOP on a symbolic link; anything else, such as
+    // a missing file or a denied permission, is reported as it is.
+    return code === "ELOOP" ? "it is a symbolic link" : `it cannot be opened (${code ?? String(error)})`;
   }
   try {
     const stat = fstatSync(fd);

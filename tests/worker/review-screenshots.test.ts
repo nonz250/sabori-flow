@@ -1,4 +1,4 @@
-import { existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -141,6 +141,15 @@ describe("collectScreenshots", () => {
     symlinkSync(join(dir, "real.png"), join(dir, "link.png"));
 
     expect(collectScreenshots(worktree)).toEqual(["real.png"]);
+    expect(mockLogger.warn).toHaveBeenCalledWith(expect.any(String), "link.png", "it is a symbolic link");
+  });
+
+  it("logs why a screenshot that cannot be opened was skipped", () => {
+    write("locked.png");
+    chmodSync(join(dir, "locked.png"), 0o000);
+
+    expect(collectScreenshots(worktree)).toEqual([]);
+    expect(mockLogger.warn).toHaveBeenCalledWith(expect.any(String), "locked.png", "it cannot be opened (EACCES)");
   });
 
   it("skips a hard link even when it carries png content", () => {
