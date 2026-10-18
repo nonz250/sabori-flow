@@ -27,7 +27,6 @@ import {
   postSuccessComment,
   postFailureComment,
   postReviewComment,
-  REVIEW_HEADER,
   ATTACHMENT_URL_RESERVE,
   REVIEW_COMMENT_TIMEOUT_MS,
   postSpecProposalComment,
@@ -1500,6 +1499,7 @@ describe("postReviewComment", () => {
     reviewedSha: SHA,
     attachmentDir: "/home/.sabori-flow/review-attachments/review-1",
     screenshots: [] as string[],
+    language: "ja" as const,
     note: null,
   };
 
@@ -1521,10 +1521,21 @@ describe("postReviewComment", () => {
     await postReviewComment("nonz250/example-app", 7, "## 総合判定\n\n問題なし", BASE_OPTIONS);
 
     const body = postedBody();
-    expect(body.startsWith(REVIEW_HEADER)).toBe(true);
-    expect(body).toContain(SHA);
+    expect(body.startsWith("## 🔍 AI レビュー結果\n\n")).toBe(true);
+    expect(body).toContain(`レビュー対象のコミット: \`${SHA}\``);
     expect(body).toContain("## 総合判定\n\n問題なし");
     expect(body.endsWith("<!-- sabori-flow -->")).toBe(true);
+  });
+
+  it("writes the header and the reviewed commit in English when the language is en", async () => {
+    mockPosted();
+
+    await postReviewComment("nonz250/example-app", 7, "## Verdict", { ...BASE_OPTIONS, language: "en" });
+
+    const body = postedBody();
+    expect(body.startsWith("## 🔍 AI Review\n\n")).toBe(true);
+    expect(body).toContain(`Reviewed commit: \`${SHA}\``);
+    expect(body).not.toContain("レビュー");
   });
 
   it("returns the URL of the posted comment", async () => {

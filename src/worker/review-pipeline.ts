@@ -398,6 +398,7 @@ async function runAttempt(ctx: ReviewContext, agent: Agent, attempt: number): Pr
               attachmentDir,
               screenshots,
               note,
+              language: executionConfig.language,
             }),
           );
         } catch (error: unknown) {

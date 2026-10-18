@@ -138,6 +138,7 @@ describe("processReviewRequest - success", () => {
       attachmentDir: ATTACHMENT_DIR,
       screenshots: ["01-login.png"],
       note: null,
+      language: "ja",
     });
   });
 

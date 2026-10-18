@@ -6,6 +6,7 @@ import {
   ProcessTimeoutError,
   ProcessExecutionError,
 } from "./process.js";
+import type { Language } from "../i18n/types.js";
 import type { FailureDiagnostics } from "./models.js";
 import { FailureCategory } from "./models.js";
 
@@ -174,7 +175,10 @@ const SUCCESS_TRUNCATED_SUFFIX = "\n\n---\n⚠️ 出力が長すぎるため省
 
 const FAILURE_HEADER = "## ❌ Claude Code 実行結果: 失敗\n\n";
 
-const REVIEW_HEADER = "## 🔍 AI レビュー結果\n\n";
+const REVIEW_HEADINGS: Record<Language, { readonly header: string; readonly reviewedCommit: string }> = {
+  ja: { header: "## 🔍 AI レビュー結果\n\n", reviewedCommit: "レビュー対象のコミット" },
+  en: { header: "## 🔍 AI Review\n\n", reviewedCommit: "Reviewed commit" },
+};
 
 /**
  * gh の --attach は本文中の `./<file>` をアップロード先 URL に書き換え、
@@ -197,7 +201,6 @@ const UNATTACHED_IMAGE_PATTERN = /!\[([^\]]*)\]\((?![a-z][a-z0-9+.-]*:)([^)\s]+\
 const FAILURE_TRUNCATED_SUFFIX = "\n\n---\n⚠️ 出力が長すぎるため省略されました。";
 
 export {
-  REVIEW_HEADER,
   ATTACHMENT_URL_RESERVE,
   REVIEW_COMMENT_TIMEOUT_MS,
   MAX_COMMENT_LENGTH,
@@ -443,6 +446,7 @@ export interface ReviewCommentOptions {
   /** File names directly under attachmentDir */
   readonly screenshots: readonly string[];
   readonly note: string | null;
+  readonly language: Language;
 }
 
 /**
@@ -479,7 +483,8 @@ export async function postReviewComment(
   );
 
   const notePart = options.note === null ? "" : `> ${options.note}\n\n`;
-  const prefix = `${REVIEW_HEADER}${notePart}レビュー対象のコミット: \`${options.reviewedSha}\`\n\n`;
+  const headings = REVIEW_HEADINGS[options.language];
+  const prefix = `${headings.header}${notePart}${headings.reviewedCommit}: \`${options.reviewedSha}\`\n\n`;
   const markerSuffix = "\n\n" + WORKER_COMMENT_MARKER;
   const maxOutputLength =
     MAX_COMMENT_LENGTH -
