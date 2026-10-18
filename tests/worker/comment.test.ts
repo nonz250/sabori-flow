@@ -1497,7 +1497,7 @@ describe("postReviewComment", () => {
   const SHA = "0123456789abcdef0123456789abcdef01234567";
   const BASE_OPTIONS = {
     reviewedSha: SHA,
-    attachmentDir: "/home/.sabori-flow/review-attachments/review-1",
+    attachmentDir: null as string | null,
     screenshots: [] as string[],
     language: "ja" as const,
     note: null,
@@ -1570,6 +1570,7 @@ describe("postReviewComment", () => {
 
     await postReviewComment("nonz250/example-app", 7, "review", {
       ...BASE_OPTIONS,
+      attachmentDir: "/home/.sabori-flow/review-attachments/review-1",
       screenshots: ["01-before.png", "02-after.png"],
     });
 

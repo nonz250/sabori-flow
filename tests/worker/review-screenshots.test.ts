@@ -223,7 +223,8 @@ describe("withStagedScreenshots", () => {
   });
 
   it("returns the callback result and removes the directory afterwards", async () => {
-    let staged = "";
+    write("01-shot.png");
+    let staged: string | null = null;
 
     const result = await withStagedScreenshots(
       worktree,
@@ -235,11 +236,13 @@ describe("withStagedScreenshots", () => {
     );
 
     expect(result).toBe("posted");
-    expect(existsSync(staged)).toBe(false);
+    expect(staged).not.toBeNull();
+    expect(existsSync(staged!)).toBe(false);
   });
 
   it("removes the directory when the callback throws", async () => {
-    let staged = "";
+    write("01-shot.png");
+    let staged: string | null = null;
 
     await expect(
       withStagedScreenshots(
@@ -251,7 +254,43 @@ describe("withStagedScreenshots", () => {
         base,
       ),
     ).rejects.toThrow("gh failed");
-    expect(existsSync(staged)).toBe(false);
+    expect(staged).not.toBeNull();
+    expect(existsSync(staged!)).toBe(false);
+  });
+
+  it("hands the callback no directory when there is no screenshot to attach", async () => {
+    await withStagedScreenshots(
+      worktree,
+      (attachmentDir, names) => {
+        expect(attachmentDir).toBeNull();
+        expect(names).toEqual([]);
+      },
+      base,
+    );
+
+    expect(readdirSync(base)).toEqual([]);
+  });
+
+  it("still runs the callback, without screenshots, when the copies cannot be made", async () => {
+    write("01-shot.png");
+    const blocked = join(base, "..", "not-a-directory");
+    writeFileSync(blocked, "");
+
+    const result = await withStagedScreenshots(
+      worktree,
+      (attachmentDir, names) => {
+        expect(attachmentDir).toBeNull();
+        expect(names).toEqual([]);
+        return "posted";
+      },
+      join(blocked, "review-attachments"),
+    );
+
+    expect(result).toBe("posted");
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("without screenshots"),
+      expect.any(String),
+    );
   });
 });
 

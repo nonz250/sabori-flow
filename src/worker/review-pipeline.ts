@@ -95,7 +95,7 @@ export interface ReviewPipelineDeps {
   prepareScreenshotDir: (worktreePath: string) => string;
   withStagedScreenshots: <T>(
     worktreePath: string,
-    callback: (attachmentDir: string, screenshots: string[]) => Promise<T>,
+    callback: (attachmentDir: string | null, screenshots: string[]) => Promise<T>,
   ) => Promise<T>;
 }
 

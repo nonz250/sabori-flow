@@ -124,26 +124,48 @@ export function collectScreenshots(worktreePath: string, attachmentDir: string):
 /**
  * Runs callback with copies of the review's screenshots in a private
  * directory, and removes the directory afterwards.
+ *
+ * When the copies cannot be made, callback runs with no screenshots and a
+ * null directory instead of the error propagating: the review text is the
+ * result of the agent run, and failing here would throw it away.
  */
 export async function withStagedScreenshots<T>(
   worktreePath: string,
-  callback: (attachmentDir: string, screenshots: string[]) => T | Promise<T>,
+  callback: (attachmentDir: string | null, screenshots: string[]) => T | Promise<T>,
   baseDir: string = getReviewAttachmentsDir(),
 ): Promise<T> {
-  mkdirSync(baseDir, { recursive: true, mode: 0o700 });
-  const attachmentDir = mkdtempSync(join(baseDir, ATTACHMENT_DIR_PREFIX));
+  let attachmentDir: string | null = null;
+  let screenshots: string[] = [];
   try {
-    return await callback(attachmentDir, collectScreenshots(worktreePath, attachmentDir));
+    mkdirSync(baseDir, { recursive: true, mode: 0o700 });
+    attachmentDir = mkdtempSync(join(baseDir, ATTACHMENT_DIR_PREFIX));
+    screenshots = collectScreenshots(worktreePath, attachmentDir);
+  } catch (error: unknown) {
+    logger.warn(
+      "Posting the review without screenshots because they could not be copied: %s",
+      error instanceof Error ? error.message : String(error),
+    );
+    screenshots = [];
+  }
+
+  try {
+    return await callback(screenshots.length > 0 ? attachmentDir : null, screenshots);
   } finally {
-    try {
-      rmSync(attachmentDir, { recursive: true, force: true });
-    } catch (error: unknown) {
-      logger.warn(
-        "Failed to remove the attachment directory %s: %s",
-        attachmentDir,
-        error instanceof Error ? error.message : String(error),
-      );
+    if (attachmentDir !== null) {
+      removeAttachmentDir(attachmentDir);
     }
+  }
+}
+
+function removeAttachmentDir(attachmentDir: string): void {
+  try {
+    rmSync(attachmentDir, { recursive: true, force: true });
+  } catch (error: unknown) {
+    logger.warn(
+      "Failed to remove the attachment directory %s: %s",
+      attachmentDir,
+      error instanceof Error ? error.message : String(error),
+    );
   }
 }
 

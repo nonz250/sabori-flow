@@ -359,16 +359,6 @@ describe("processReviewRequest - failures after the agent starts", () => {
     expect(comment).toContain("unknown flag: --attach");
   });
 
-  it("fails the review when the screenshots cannot be staged", async () => {
-    vi.mocked(deps.withStagedScreenshots).mockRejectedValue(new Error("EACCES"));
-
-    await expect(run()).resolves.toEqual({ outcome: "failure", claudeExecuted: true });
-
-    expect(deps.postReviewComment).not.toHaveBeenCalled();
-    expectFailedTransition();
-    expect(failureComment()).toContain("Review Comment Not Posted");
-  });
-
   it("reports a git fetch failure", async () => {
     vi.mocked(deps.withPullRequestWorktree).mockRejectedValue(new WorktreeError("fetch failed", "fetch"));
 

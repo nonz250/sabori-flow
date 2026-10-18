@@ -460,8 +460,8 @@ export async function postSpecProposalComment(
 
 export interface ReviewCommentOptions {
   readonly reviewedSha: string;
-  /** The worker's copies that gh uploads, out of the agent's reach. */
-  readonly attachmentDir: string;
+  /** The worker's copies that gh uploads, out of the agent's reach. Null when nothing is attached. */
+  readonly attachmentDir: string | null;
   /** File names directly under attachmentDir */
   readonly screenshots: readonly string[];
   readonly note: string | null;
@@ -528,7 +528,7 @@ export async function postReviewComment(
     const result = await runCommand("gh", args, {
       input: prefix + output + markerSuffix,
       timeoutMs: REVIEW_COMMENT_TIMEOUT_MS,
-      cwd: options.screenshots.length > 0 ? options.attachmentDir : undefined,
+      cwd: options.attachmentDir ?? undefined,
     });
     if (!result.success) {
       throw new CommentError(result.stderr);
