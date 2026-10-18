@@ -395,7 +395,6 @@ async function runAttempt(ctx: ReviewContext, agent: Agent, attempt: number): Pr
           commentUrl = await deps.withStagedScreenshots(worktreePath, (attachmentDir, screenshots) =>
             deps.postReviewComment(repo, prNumber, result.stdout, {
               reviewedSha,
-              screenshotDir,
               attachmentDir,
               screenshots,
               note,

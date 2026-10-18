@@ -135,7 +135,6 @@ describe("processReviewRequest - success", () => {
     expect(deps.withStagedScreenshots).toHaveBeenCalledWith("/tmp/worktrees/pr-mock", expect.any(Function));
     expect(deps.postReviewComment).toHaveBeenCalledWith(REPO, 7, "## 総合判定\n\n問題なし", {
       reviewedSha: SHA,
-      screenshotDir: SCREENSHOT_DIR,
       attachmentDir: ATTACHMENT_DIR,
       screenshots: ["01-login.png"],
       note: null,

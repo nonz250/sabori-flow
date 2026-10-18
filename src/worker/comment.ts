@@ -1,5 +1,5 @@
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename } from "node:path";
 
 import {
   runCommand,
@@ -190,6 +190,8 @@ const REVIEW_COMMENT_TIMEOUT_MS = 300_000;
 const UNEXPECTED_OUTPUT_PREVIEW_LENGTH = 200;
 
 const COMMENT_URL_PATTERN = /https?:\/\/\S+#issuecomment-\d+/;
+
+const LOCAL_REFERENCE_PATTERN = /\]\((?![a-z][a-z0-9+.-]*:)([^)\s]+)\)/gi;
 
 const UNATTACHED_IMAGE_PATTERN = /!\[([^\]]*)\]\((?![a-z][a-z0-9+.-]*:)([^)\s]+\.png)\)/gi;
 const FAILURE_TRUNCATED_SUFFIX = "\n\n---\n⚠️ 出力が長すぎるため省略されました。";
@@ -436,8 +438,6 @@ export async function postSpecProposalComment(
 
 export interface ReviewCommentOptions {
   readonly reviewedSha: string;
-  /** Where the agent saved screenshots; references to it are rewritten. */
-  readonly screenshotDir: string;
   /** The worker's copies that gh uploads, out of the agent's reach. */
   readonly attachmentDir: string;
   /** File names directly under attachmentDir */
@@ -461,12 +461,12 @@ export async function postReviewComment(
 ): Promise<string> {
   // Rewritten before sanitizing: the screenshot directory lives under the
   // home directory, which sanitizeOutput masks.
-  let output = rawOutput;
-  for (const name of options.screenshots) {
-    output = output
-      .replaceAll(`](${name})`, `](./${name})`)
-      .replaceAll(`](${join(options.screenshotDir, name)})`, `](./${name})`);
-  }
+  // The agent may name a screenshot by any path from wherever it ran, so the
+  // file name decides; gh only rewrites the ./ form to the uploaded URL.
+  let output = rawOutput.replace(LOCAL_REFERENCE_PATTERN, (match: string, path: string) => {
+    const name = basename(path);
+    return options.screenshots.includes(name) ? `](./${name})` : match;
+  });
   output = escapeWorkerMarkers(sanitizeOutput(output));
   // Anything still pointing at a local PNG was dropped by the screenshot
   // checks and would render as a broken image on GitHub.

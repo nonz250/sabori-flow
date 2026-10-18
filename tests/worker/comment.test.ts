@@ -1498,7 +1498,6 @@ describe("postReviewComment", () => {
   const SHA = "0123456789abcdef0123456789abcdef01234567";
   const BASE_OPTIONS = {
     reviewedSha: SHA,
-    screenshotDir: "/wt/.sabori-flow-review/screenshots",
     attachmentDir: "/home/.sabori-flow/review-attachments/review-1",
     screenshots: [] as string[],
     note: null,
@@ -1591,11 +1590,38 @@ describe("postReviewComment", () => {
       "nonz250/example-app",
       7,
       `![abs](${screenshotDir}/01-before.png)`,
-      { ...BASE_OPTIONS, screenshotDir, screenshots: ["01-before.png"] },
+      { ...BASE_OPTIONS, screenshots: ["01-before.png"] },
     );
 
     expect(postedBody()).toContain("![abs](./01-before.png)");
     expect(postedBody()).not.toContain("not attached");
+  });
+
+  it("rewrites references written relative to the worktree or the screenshot directory", async () => {
+    mockPosted();
+
+    await postReviewComment(
+      "nonz250/example-app",
+      7,
+      "![a](.sabori-flow-review/screenshots/01-before.png) ![b](screenshots/02-after.png)",
+      { ...BASE_OPTIONS, screenshots: ["01-before.png", "02-after.png"] },
+    );
+
+    expect(postedBody()).toContain("![a](./01-before.png) ![b](./02-after.png)");
+    expect(postedBody()).not.toContain("not attached");
+  });
+
+  it("leaves remote images that share an attached screenshot's name untouched", async () => {
+    mockPosted();
+
+    await postReviewComment(
+      "nonz250/example-app",
+      7,
+      "![remote](https://example.com/01-before.png)",
+      { ...BASE_OPTIONS, screenshots: ["01-before.png"] },
+    );
+
+    expect(postedBody()).toContain("![remote](https://example.com/01-before.png)");
   });
 
   it("replaces references to screenshots that were not attached with a note", async () => {
