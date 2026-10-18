@@ -11,6 +11,7 @@ import {
   readSync,
   rmSync,
   writeFileSync,
+  type Stats,
 } from "node:fs";
 import { join } from "node:path";
 
@@ -80,21 +81,53 @@ export function prepareScreenshotDir(worktreePath: string): string {
  *
  * The agent can write to the screenshot directory freely, so following a
  * symbolic link there would attach files outside the worktree. The
- * directories are checked with lstat, and each file through its descriptor.
- * gh reads the copies, so nothing the agent leaves running can swap a file
- * between these checks and the upload.
+ * directories are entered one at a time, and each file is checked through its
+ * descriptor. gh reads the copies, so nothing the agent leaves running can
+ * swap a file between these checks and the upload.
  */
 export function collectScreenshots(worktreePath: string, attachmentDir: string): string[] {
-  const chain = screenshotDirChain(worktreePath);
-  if (!chain.every(isRealDirectory)) {
-    if (chain.some((path) => existsSync(path) || isSymlink(path))) {
-      logger.warn("Skipping screenshots: the screenshot directory is not a plain directory");
+  const originalCwd = process.cwd();
+  try {
+    process.chdir(worktreePath);
+    for (const name of SCREENSHOT_SUBDIR) {
+      const entered = enterPlainDirectory(name);
+      if (entered !== true) {
+        if (entered !== "missing") {
+          logger.warn("Skipping screenshots: the screenshot directory is not a plain directory");
+        }
+        return [];
+      }
     }
-    return [];
+    return copyScreenshots(attachmentDir);
+  } finally {
+    process.chdir(originalCwd);
   }
-  const dir = chain[chain.length - 1];
+}
 
-  const candidates = readdirSync(dir)
+/**
+ * Node has no openat, so a path checked with lstat is resolved again by the
+ * next call, and a directory on it swapped for a symbolic link in between
+ * would be followed. Entering each directory and comparing it with what lstat
+ * saw pins it: names opened afterwards resolve against the directory itself,
+ * not its path.
+ */
+function enterPlainDirectory(name: string): true | "missing" | "not-plain" {
+  let expected: Stats;
+  try {
+    expected = lstatSync(name);
+  } catch {
+    return "missing";
+  }
+  if (!expected.isDirectory()) {
+    return "not-plain";
+  }
+  process.chdir(name);
+  const entered = lstatSync(".");
+  return entered.dev === expected.dev && entered.ino === expected.ino ? true : "not-plain";
+}
+
+function copyScreenshots(attachmentDir: string): string[] {
+  const candidates = readdirSync(".")
     .sort()
     .filter((name) => {
       if (!SCREENSHOT_NAME_PATTERN.test(name)) {
@@ -110,7 +143,7 @@ export function collectScreenshots(worktreePath: string, attachmentDir: string):
       logger.warn("Attaching only the first %s screenshots", MAX_REVIEW_SCREENSHOTS);
       break;
     }
-    const screenshot = readScreenshot(join(dir, name));
+    const screenshot = readScreenshot(name);
     if (typeof screenshot === "string") {
       logger.warn("Skipping screenshot %s: %s", name, screenshot);
       continue;

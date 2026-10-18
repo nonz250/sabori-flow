@@ -1,6 +1,6 @@
-import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockLogger = vi.hoisted(() => ({
@@ -9,6 +9,18 @@ const mockLogger = vi.hoisted(() => ({
   warn: vi.fn(),
   error: vi.fn(),
 }));
+
+const lstatHook = vi.hoisted(() => ({ afterLstat: null as ((path: unknown) => void) | null }));
+
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs")>();
+  const lstatSync = ((...args: Parameters<typeof actual.lstatSync>) => {
+    const result = actual.lstatSync(...args);
+    lstatHook.afterLstat?.(args[0]);
+    return result;
+  }) as typeof actual.lstatSync;
+  return { ...actual, default: { ...actual, lstatSync }, lstatSync };
+});
 
 vi.mock("../../src/worker/logger.js", () => ({
   createLogger: vi.fn(() => mockLogger),
@@ -53,6 +65,7 @@ describe("collectScreenshots", () => {
   });
 
   afterEach(() => {
+    lstatHook.afterLstat = null;
     rmSync(worktree, { recursive: true, force: true });
     rmSync(attachments, { recursive: true, force: true });
   });
@@ -109,6 +122,52 @@ describe("collectScreenshots", () => {
 
     expect(collectScreenshots(worktree)).toEqual([]);
     rmSync(outside, { recursive: true, force: true });
+  });
+
+  it("returns nothing when the screenshot directory is swapped for a symbolic link after it was checked", () => {
+    const outside = mkdtempSync(join(tmpdir(), "sabori-flow-outside-"));
+    writeFileSync(join(outside, "secret.png"), pngBytes());
+    lstatHook.afterLstat = (path) => {
+      if (basename(String(path)) === "screenshots") {
+        lstatHook.afterLstat = null;
+        renameSync(dir, `${dir}-moved`);
+        symlinkSync(outside, dir);
+      }
+    };
+
+    expect(collectScreenshots(worktree)).toEqual([]);
+    expect(readdirSync(attachments)).toEqual([]);
+    rmSync(outside, { recursive: true, force: true });
+  });
+
+  it("returns nothing when the parent directory is swapped for a symbolic link after it was checked", () => {
+    const parent = join(worktree, ".sabori-flow-review");
+    const outside = mkdtempSync(join(tmpdir(), "sabori-flow-outside-"));
+    mkdirSync(join(outside, "screenshots"));
+    writeFileSync(join(outside, "screenshots", "secret.png"), pngBytes());
+    lstatHook.afterLstat = (path) => {
+      if (basename(String(path)) === ".sabori-flow-review") {
+        lstatHook.afterLstat = null;
+        renameSync(parent, `${parent}-moved`);
+        symlinkSync(outside, parent);
+      }
+    };
+
+    expect(collectScreenshots(worktree)).toEqual([]);
+    expect(readdirSync(attachments)).toEqual([]);
+    rmSync(outside, { recursive: true, force: true });
+  });
+
+  it("leaves the working directory as it was", () => {
+    const cwd = process.cwd();
+    write("01-before.png");
+
+    collectScreenshots(worktree);
+    expect(process.cwd()).toBe(cwd);
+
+    rmSync(dir, { recursive: true });
+    collectScreenshots(worktree);
+    expect(process.cwd()).toBe(cwd);
   });
 
   it("returns png files sorted by name", () => {
