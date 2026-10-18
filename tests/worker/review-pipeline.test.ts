@@ -252,6 +252,20 @@ describe("processReviewRequest - before the label changes", () => {
     expect(transitions()[1].transition).toEqual({ add: [REVIEW_LABELS.trigger], remove: [REVIEW_LABELS.inProgress] });
     expect(deps.runAgent).not.toHaveBeenCalled();
   });
+
+  it("restores the previous outcome label when handing a re-review back", async () => {
+    const pool = new AgentPool(["claude"]);
+    vi.mocked(deps.applyLabelTransition).mockImplementationOnce(async () => {
+      pool.markExhausted("claude");
+    });
+
+    await run({ pool, pr: { labels: [REVIEW_LABELS.trigger, REVIEW_LABELS.done] } });
+
+    expect(transitions()[1].transition).toEqual({
+      add: [REVIEW_LABELS.trigger, REVIEW_LABELS.done],
+      remove: [REVIEW_LABELS.inProgress],
+    });
+  });
 });
 
 describe("processReviewRequest - failures after the agent starts", () => {

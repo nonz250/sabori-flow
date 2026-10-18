@@ -198,7 +198,7 @@ export async function processReviewRequest(
     await deps.applyLabelTransition(
       repo,
       prNumber,
-      { add: [labels.trigger], remove: [labels.inProgress] },
+      { add: [labels.trigger, ...staleOutcomes], remove: [labels.inProgress] },
       "pr",
     ).catch((error: unknown) => {
       logger.warn(
