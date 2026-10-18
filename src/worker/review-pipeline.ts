@@ -81,6 +81,7 @@ export interface ReviewPipelineDeps {
   withPullRequestWorktree: <T>(
     repoConfig: Pick<RepositoryConfig, "owner" | "repo" | "localPath">,
     prNumber: number,
+    baseBranch: string,
     callback: (worktreePath: string) => Promise<T>,
     attempt: number,
   ) => Promise<T>;
@@ -99,8 +100,8 @@ export const defaultReviewDeps: ReviewPipelineDeps = {
   applyLabelTransition,
   postReviewComment,
   postFailureComment,
-  withPullRequestWorktree: (repoConfig, prNumber, callback, attempt) =>
-    withPullRequestWorktree(repoConfig, prNumber, callback, undefined, attempt),
+  withPullRequestWorktree: (repoConfig, prNumber, baseBranch, callback, attempt) =>
+    withPullRequestWorktree(repoConfig, prNumber, baseBranch, callback, undefined, attempt),
   resolveHeadSha,
   prepareScreenshotDir,
   withStagedScreenshots: (worktreePath, callback) => withStagedScreenshots(worktreePath, callback),
@@ -288,6 +289,7 @@ async function runAttempt(ctx: ReviewContext, agent: Agent, attempt: number): Pr
     return await deps.withPullRequestWorktree(
       repoConfig,
       prNumber,
+      ctx.baseBranch,
       async (worktreePath: string): Promise<AttemptOutcome> => {
         let screenshotDir: string;
         try {

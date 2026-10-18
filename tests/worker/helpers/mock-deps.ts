@@ -81,6 +81,7 @@ export function createMockReviewPipelineDeps(
       async (
         _repoConfig: Pick<RepositoryConfig, "owner" | "repo" | "localPath">,
         _prNumber: number,
+        _baseBranch: string,
         callback: (path: string) => Promise<unknown>,
       ) => callback("/tmp/worktrees/pr-mock"),
     ),

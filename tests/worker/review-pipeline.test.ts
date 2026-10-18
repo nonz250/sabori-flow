@@ -125,6 +125,14 @@ describe("processReviewRequest - success", () => {
     });
   });
 
+  it("checks out the pull request with its base branch so the agent can diff against it", async () => {
+    vi.mocked(deps.fetchPullRequestDetails).mockResolvedValue({ baseRefName: "develop", isCrossRepository: false });
+
+    await run();
+
+    expect(vi.mocked(deps.withPullRequestWorktree).mock.calls[0][2]).toBe("develop");
+  });
+
   it("posts the agent output with the reviewed commit and the staged screenshot copies", async () => {
     vi.mocked(deps.withStagedScreenshots).mockImplementation(async (_worktreePath, callback) =>
       callback(ATTACHMENT_DIR, ["01-login.png"]),
@@ -433,7 +441,7 @@ describe("processReviewRequest - agent fallback", () => {
 
     expect(result).toEqual({ outcome: "success", claudeExecuted: true });
     expect(vi.mocked(deps.runAgent).mock.calls.map((call) => call[1].agent)).toEqual(["claude", "codex"]);
-    expect(vi.mocked(deps.withPullRequestWorktree).mock.calls.map((call) => call[3])).toEqual([1, 2]);
+    expect(vi.mocked(deps.withPullRequestWorktree).mock.calls.map((call) => call[4])).toEqual([1, 2]);
     expect(pool.available()).toEqual(["codex"]);
     const options = vi.mocked(deps.postReviewComment).mock.calls[0][3];
     expect(options.note).toBe("Ran with Codex CLI because Claude Code CLI hit the usage limit.");

@@ -426,6 +426,7 @@ describe("withWorktree", () => {
 
 describe("withPullRequestWorktree", () => {
   const PR_NUMBER = 7;
+  const BASE_BRANCH = "develop";
 
   beforeEach(() => {
     mockedRunCommandSync.mockReset();
@@ -433,13 +434,14 @@ describe("withPullRequestWorktree", () => {
     mockLogger.warn.mockReset();
   });
 
-  it("fetches the pull request head and checks it out detached", async () => {
+  it("fetches the pull request head and the base branch in one fetch and checks the head out detached", async () => {
     mockedRunCommandSync.mockReturnValue("");
 
     let yieldedPath = "";
     await withPullRequestWorktree(
       makeRepoArg(),
       PR_NUMBER,
+      BASE_BRANCH,
       async (worktreePath) => { yieldedPath = worktreePath; },
       fixedTimestampFn,
     );
@@ -448,8 +450,14 @@ describe("withPullRequestWorktree", () => {
     expect(yieldedPath).toBe(expectedPath);
     const ref = `refs/sabori-flow/review/pr-${PR_NUMBER}`;
     expect(mockedRunCommandSync.mock.calls.map((call) => call[1])).toEqual([
-      ["-C", REPO_LOCAL_PATH, "fetch", "origin"],
-      ["-C", REPO_LOCAL_PATH, "fetch", "origin", `+refs/pull/${PR_NUMBER}/head:${ref}`],
+      [
+        "-C",
+        REPO_LOCAL_PATH,
+        "fetch",
+        "origin",
+        `+refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}`,
+        `+refs/pull/${PR_NUMBER}/head:${ref}`,
+      ],
       ["-C", REPO_LOCAL_PATH, "worktree", "add", "--detach", expectedPath, ref],
       ["-C", REPO_LOCAL_PATH, "update-ref", "-d", ref],
       ["-C", REPO_LOCAL_PATH, "worktree", "remove", expectedPath, "--force"],
@@ -464,6 +472,7 @@ describe("withPullRequestWorktree", () => {
     await withPullRequestWorktree(
       makeRepoArg(),
       PR_NUMBER,
+      BASE_BRANCH,
       async (worktreePath) => { yieldedPath = worktreePath; },
       fixedTimestampFn,
       2,
@@ -482,7 +491,7 @@ describe("withPullRequestWorktree", () => {
     const callback = vi.fn().mockResolvedValue("done");
 
     await expect(
-      withPullRequestWorktree(makeRepoArg(), PR_NUMBER, callback, fixedTimestampFn),
+      withPullRequestWorktree(makeRepoArg(), PR_NUMBER, BASE_BRANCH, callback, fixedTimestampFn),
     ).resolves.toBe("done");
     expect(mockLogger.warn).toHaveBeenCalled();
   });
@@ -490,7 +499,7 @@ describe("withPullRequestWorktree", () => {
   it("returns the callback result", async () => {
     mockedRunCommandSync.mockReturnValue("");
 
-    const result = await withPullRequestWorktree(makeRepoArg(), PR_NUMBER, async () => "done", fixedTimestampFn);
+    const result = await withPullRequestWorktree(makeRepoArg(), PR_NUMBER, BASE_BRANCH, async () => "done", fixedTimestampFn);
 
     expect(result).toBe("done");
   });
@@ -504,7 +513,7 @@ describe("withPullRequestWorktree", () => {
     });
     const callback = vi.fn();
 
-    const error = await withPullRequestWorktree(makeRepoArg(), PR_NUMBER, callback, fixedTimestampFn)
+    const error = await withPullRequestWorktree(makeRepoArg(), PR_NUMBER, BASE_BRANCH, callback, fixedTimestampFn)
       .catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(WorktreeError);
@@ -520,7 +529,7 @@ describe("withPullRequestWorktree", () => {
       return "";
     });
 
-    const error = await withPullRequestWorktree(makeRepoArg(), PR_NUMBER, vi.fn(), fixedTimestampFn)
+    const error = await withPullRequestWorktree(makeRepoArg(), PR_NUMBER, BASE_BRANCH, vi.fn(), fixedTimestampFn)
       .catch((e: unknown) => e);
 
     expect((error as WorktreeError).phase).toBe("create");
@@ -530,7 +539,7 @@ describe("withPullRequestWorktree", () => {
     mockedRunCommandSync.mockReturnValue("");
 
     await expect(
-      withPullRequestWorktree(makeRepoArg(), PR_NUMBER, async () => { throw new Error("boom"); }, fixedTimestampFn),
+      withPullRequestWorktree(makeRepoArg(), PR_NUMBER, BASE_BRANCH, async () => { throw new Error("boom"); }, fixedTimestampFn),
     ).rejects.toThrow("boom");
 
     const lastCall = mockedRunCommandSync.mock.calls.at(-1)![1];

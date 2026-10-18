@@ -71,6 +71,7 @@ export async function withWorktree<T>(
 export async function withPullRequestWorktree<T>(
   repoConfig: Pick<RepositoryConfig, "owner" | "repo" | "localPath">,
   prNumber: number,
+  baseBranch: string,
   callback: (worktreePath: string) => T | Promise<T>,
   timestampFn: () => string = defaultTimestampFn,
   attempt: number = FIRST_ATTEMPT,
@@ -79,20 +80,20 @@ export async function withPullRequestWorktree<T>(
   const repoDir = join(getWorktreesDir(), repoConfig.owner, repoConfig.repo);
   const worktreePath = join(repoDir, `pr-${prNumber}-${ts}`);
 
-  // The base branch is fetched too so the agent can diff against origin/<base>.
-  runGit(
-    repoConfig.localPath,
-    ["fetch", "origin"],
-    "git fetch origin に失敗しました",
-    "fetch",
-  );
   // FETCH_HEAD is shared with any other fetch in the user's repository
   // (an IDE's auto-fetch, for example), so the head goes to a dedicated ref.
+  // The base branch comes in the same fetch so the agent can diff against
+  // origin/<base>.
   const headRef = `refs/sabori-flow/review/pr-${prNumber}`;
   runGit(
     repoConfig.localPath,
-    ["fetch", "origin", `+refs/pull/${prNumber}/head:${headRef}`],
-    `PR #${prNumber} の head の取得に失敗しました`,
+    [
+      "fetch",
+      "origin",
+      `+refs/heads/${baseBranch}:refs/remotes/origin/${baseBranch}`,
+      `+refs/pull/${prNumber}/head:${headRef}`,
+    ],
+    `PR #${prNumber} の head とベースブランチの取得に失敗しました`,
     "fetch",
   );
 
