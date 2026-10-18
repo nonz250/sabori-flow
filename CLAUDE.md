@@ -55,6 +55,7 @@ src/
     executor.ts      # CLI エージェント実行（Claude / Codex）
     usage-limit.ts   # 失敗出力から利用上限・クレジット切れを判定
     agent-pool.ts    # 1 回の実行内で利用上限に達したエージェントを記録
+    agent-fallback.ts # in-progress 遷移前後のエージェント確認と、優先度順のフォールバック（Issue と PR で共有）
     worktree.ts      # git worktree ライフサイクル管理
     label.ts         # ラベル遷移操作（applyLabelTransition）
     comment.ts       # Issue コメント投稿（成功・失敗・spec 提案）
