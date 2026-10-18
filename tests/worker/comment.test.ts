@@ -1589,7 +1589,7 @@ describe("postReviewComment", () => {
     );
 
     expect(postedBody()).toContain(
-      "![before](./01-before.png) ![after](./02-after.png) _(screenshot not attached: other, 03-other.png)_",
+      "![before](./01-before.png) ![after](./02-after.png) （添付されていないスクリーンショット: other, 03-other.png）",
     );
   });
 
@@ -1646,8 +1646,19 @@ describe("postReviewComment", () => {
     );
 
     expect(postedBody()).toContain(
-      "![kept](./01-kept.png) _(screenshot not attached: dropped, 11-dropped.png)_ ![remote](https://example.com/a.png)",
+      "![kept](./01-kept.png) （添付されていないスクリーンショット: dropped, 11-dropped.png） ![remote](https://example.com/a.png)",
     );
+  });
+
+  it("writes the note for a screenshot that was not attached in English when the language is en", async () => {
+    mockPosted();
+
+    await postReviewComment("nonz250/example-app", 7, "![dropped](11-dropped.png)", {
+      ...BASE_OPTIONS,
+      language: "en",
+    });
+
+    expect(postedBody()).toContain("_(screenshot not attached: dropped, 11-dropped.png)_");
   });
 
   it("puts the fallback note under the header", async () => {
@@ -1697,6 +1708,18 @@ describe("postReviewComment", () => {
     expect(body.length).toBeLessThanOrEqual(
       MAX_COMMENT_LENGTH - screenshots.length * ATTACHMENT_URL_RESERVE,
     );
+  });
+
+  it("writes the truncation notice in English when the language is en", async () => {
+    mockPosted();
+
+    await postReviewComment("nonz250/example-app", 7, "x".repeat(MAX_COMMENT_LENGTH), {
+      ...BASE_OPTIONS,
+      language: "en",
+    });
+
+    expect(postedBody()).toContain("The output was too long and has been truncated.");
+    expect(postedBody()).not.toContain(SUCCESS_TRUNCATED_SUFFIX);
   });
 
   it("keeps output that fits exactly without truncating", async () => {

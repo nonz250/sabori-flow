@@ -175,9 +175,28 @@ const SUCCESS_TRUNCATED_SUFFIX = "\n\n---\n⚠️ 出力が長すぎるため省
 
 const FAILURE_HEADER = "## ❌ Claude Code 実行結果: 失敗\n\n";
 
-const REVIEW_HEADINGS: Record<Language, { readonly header: string; readonly reviewedCommit: string }> = {
-  ja: { header: "## 🔍 AI レビュー結果\n\n", reviewedCommit: "レビュー対象のコミット" },
-  en: { header: "## 🔍 AI Review\n\n", reviewedCommit: "Reviewed commit" },
+interface ReviewText {
+  readonly header: string;
+  readonly reviewedCommit: string;
+  readonly truncatedSuffix: string;
+  readonly unattached: (alt: string, path: string) => string;
+}
+
+const REVIEW_TEXT: Record<Language, ReviewText> = {
+  ja: {
+    header: "## 🔍 AI レビュー結果\n\n",
+    reviewedCommit: "レビュー対象のコミット",
+    truncatedSuffix: "\n\n---\n⚠️ 出力が長すぎるため省略されました。",
+    // Underscore emphasis does not close after full-width punctuation that
+    // is followed by Japanese text, so the note is left plain.
+    unattached: (alt, path) => `（添付されていないスクリーンショット: ${alt}, ${path}）`,
+  },
+  en: {
+    header: "## 🔍 AI Review\n\n",
+    reviewedCommit: "Reviewed commit",
+    truncatedSuffix: "\n\n---\n⚠️ The output was too long and has been truncated.",
+    unattached: (alt, path) => `_(screenshot not attached: ${alt}, ${path})_`,
+  },
 };
 
 /**
@@ -473,19 +492,15 @@ export async function postReviewComment(
     return options.screenshots.includes(name) ? `](./${name})` : match;
   });
   output = escapeWorkerMarkers(sanitizeOutput(output));
+  const text = REVIEW_TEXT[options.language];
   // Anything still pointing at a local PNG was dropped by the screenshot
   // checks and would render as a broken image on GitHub.
-  output = output.replace(
-    UNATTACHED_IMAGE_PATTERN,
-    (match: string, alt: string, path: string) =>
-      options.screenshots.some((name) => path === `./${name}`)
-        ? match
-        : `_(screenshot not attached: ${alt}, ${path})_`,
+  output = output.replace(UNATTACHED_IMAGE_PATTERN, (match: string, alt: string, path: string) =>
+    options.screenshots.some((name) => path === `./${name}`) ? match : text.unattached(alt, path),
   );
 
   const notePart = options.note === null ? "" : `> ${options.note}\n\n`;
-  const headings = REVIEW_HEADINGS[options.language];
-  const prefix = `${headings.header}${notePart}${headings.reviewedCommit}: \`${options.reviewedSha}\`\n\n`;
+  const prefix = `${text.header}${notePart}${text.reviewedCommit}: \`${options.reviewedSha}\`\n\n`;
   const markerSuffix = "\n\n" + WORKER_COMMENT_MARKER;
   const maxOutputLength =
     MAX_COMMENT_LENGTH -
@@ -493,8 +508,8 @@ export async function postReviewComment(
     prefix.length -
     markerSuffix.length;
   if (output.length > maxOutputLength) {
-    const truncatedLength = maxOutputLength - SUCCESS_TRUNCATED_SUFFIX.length;
-    output = output.slice(0, truncatedLength) + SUCCESS_TRUNCATED_SUFFIX;
+    const truncatedLength = maxOutputLength - text.truncatedSuffix.length;
+    output = output.slice(0, truncatedLength) + text.truncatedSuffix;
   }
 
   const args = [
