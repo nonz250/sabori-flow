@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { linkSync, mkdirSync, mkdtempSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -25,8 +25,16 @@ import {
 let worktree: string;
 let dir: string;
 
-function write(name: string, bytes = 1): void {
-  writeFileSync(join(dir, name), Buffer.alloc(bytes));
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+function pngBytes(bytes = PNG_SIGNATURE.length): Buffer {
+  const content = Buffer.alloc(bytes);
+  PNG_SIGNATURE.copy(content);
+  return content;
+}
+
+function write(name: string, bytes = PNG_SIGNATURE.length): void {
+  writeFileSync(join(dir, name), pngBytes(bytes));
 }
 
 describe("collectScreenshots", () => {
@@ -98,6 +106,29 @@ describe("collectScreenshots", () => {
     symlinkSync(join(dir, "real.png"), join(dir, "link.png"));
 
     expect(collectScreenshots(worktree)).toEqual(["real.png"]);
+  });
+
+  it("skips a hard link even when it carries png content", () => {
+    const outside = mkdtempSync(join(tmpdir(), "sabori-flow-outside-"));
+    writeFileSync(join(outside, "secret"), pngBytes());
+    linkSync(join(outside, "secret"), join(dir, "linked.png"));
+    write("real.png");
+
+    expect(collectScreenshots(worktree)).toEqual(["real.png"]);
+    rmSync(outside, { recursive: true, force: true });
+  });
+
+  it("skips a png-named file whose content is not a png", () => {
+    writeFileSync(join(dir, "credentials.png"), "aws_secret_access_key = abc");
+    write("real.png");
+
+    expect(collectScreenshots(worktree)).toEqual(["real.png"]);
+  });
+
+  it("skips a file shorter than the png signature", () => {
+    writeFileSync(join(dir, "short.png"), PNG_SIGNATURE.subarray(0, PNG_SIGNATURE.length - 1));
+
+    expect(collectScreenshots(worktree)).toEqual([]);
   });
 
   it("skips directories named like a png", () => {

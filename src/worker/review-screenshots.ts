@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, mkdirSync, readdirSync } from "node:fs";
+import { closeSync, constants, existsSync, fstatSync, lstatSync, mkdirSync, openSync, readdirSync, readSync } from "node:fs";
 import { join } from "node:path";
 
 import { createLogger } from "./logger.js";
@@ -11,6 +11,11 @@ export const MAX_REVIEW_SCREENSHOTS = 10;
 export const MAX_SCREENSHOT_BYTES = 10 * 1024 * 1024;
 
 const SCREENSHOT_NAME_PATTERN = /^[A-Za-z0-9-]+\.png$/;
+
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+// O_NONBLOCK keeps a FIFO swapped in after readdir from blocking the open.
+const SCREENSHOT_OPEN_FLAGS = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
 
 // Inside the worktree because Codex's workspace-write sandbox cannot write
 // outside its working directory. The worktree is removed after the review.
@@ -76,13 +81,9 @@ export function collectScreenshots(worktreePath: string): string[] {
         logger.warn("Skipping screenshot with an unexpected name: %s", name);
         return false;
       }
-      const stat = lstatSync(join(dir, name));
-      if (!stat.isFile()) {
-        logger.warn("Skipping screenshot that is not a regular file: %s", name);
-        return false;
-      }
-      if (stat.size > MAX_SCREENSHOT_BYTES) {
-        logger.warn("Skipping screenshot larger than %s bytes: %s", MAX_SCREENSHOT_BYTES, name);
+      const rejection = inspectScreenshot(join(dir, name));
+      if (rejection !== null) {
+        logger.warn("Skipping screenshot %s: %s", name, rejection);
         return false;
       }
       return true;
@@ -96,6 +97,42 @@ export function collectScreenshots(worktreePath: string): string[] {
     );
   }
   return accepted.slice(0, MAX_REVIEW_SCREENSHOTS);
+}
+
+/**
+ * Checks the file through one descriptor so the checks apply to what was
+ * opened, not to whatever the path names a moment later. A hard link passes
+ * every path-based check while pointing at a file outside the worktree, and
+ * the content check stops a renamed text file from being uploaded.
+ *
+ * @returns the reason for rejecting the file, or null when it can be attached
+ */
+function inspectScreenshot(path: string): string | null {
+  let fd: number;
+  try {
+    fd = openSync(path, SCREENSHOT_OPEN_FLAGS);
+  } catch {
+    return "it cannot be opened without following a symbolic link";
+  }
+  try {
+    const stat = fstatSync(fd);
+    if (!stat.isFile()) {
+      return "it is not a regular file";
+    }
+    if (stat.nlink !== 1) {
+      return "it has more than one hard link";
+    }
+    if (stat.size > MAX_SCREENSHOT_BYTES) {
+      return `it is larger than ${MAX_SCREENSHOT_BYTES} bytes`;
+    }
+    const header = Buffer.alloc(PNG_SIGNATURE.length);
+    if (readSync(fd, header, 0, header.length, 0) !== header.length || !header.equals(PNG_SIGNATURE)) {
+      return "its content is not a PNG image";
+    }
+    return null;
+  } finally {
+    closeSync(fd);
+  }
 }
 
 function isRealDirectory(path: string): boolean {
