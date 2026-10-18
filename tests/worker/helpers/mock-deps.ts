@@ -86,7 +86,10 @@ export function createMockReviewPipelineDeps(
     ),
     resolveHeadSha: vi.fn().mockReturnValue("0123456789abcdef0123456789abcdef01234567"),
     prepareScreenshotDir: vi.fn().mockReturnValue("/tmp/worktrees/pr-mock/.sabori-flow-review/screenshots"),
-    collectScreenshots: vi.fn().mockReturnValue([]),
+    withStagedScreenshots: vi.fn().mockImplementation(
+      async (_worktreePath: string, callback: (attachmentDir: string, screenshots: string[]) => Promise<unknown>) =>
+        callback("/tmp/review-attachments/review-mock", []),
+    ),
     ...overrides,
   };
 }

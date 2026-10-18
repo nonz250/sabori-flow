@@ -436,8 +436,11 @@ export async function postSpecProposalComment(
 
 export interface ReviewCommentOptions {
   readonly reviewedSha: string;
+  /** Where the agent saved screenshots; references to it are rewritten. */
   readonly screenshotDir: string;
-  /** screenshotDir 直下のファイル名 */
+  /** The worker's copies that gh uploads, out of the agent's reach. */
+  readonly attachmentDir: string;
+  /** File names directly under attachmentDir */
   readonly screenshots: readonly string[];
   readonly note: string | null;
 }
@@ -504,8 +507,7 @@ export async function postReviewComment(
     const result = await runCommand("gh", args, {
       input: prefix + output + markerSuffix,
       timeoutMs: REVIEW_COMMENT_TIMEOUT_MS,
-      // Without screenshots the directory may not exist, and spawn fails on a missing cwd.
-      cwd: options.screenshots.length > 0 ? options.screenshotDir : undefined,
+      cwd: options.screenshots.length > 0 ? options.attachmentDir : undefined,
     });
     if (!result.success) {
       throw new CommentError(result.stderr);

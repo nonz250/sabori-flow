@@ -1,4 +1,4 @@
-import { linkSync, mkdirSync, mkdtempSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -15,8 +15,9 @@ vi.mock("../../src/worker/logger.js", () => ({
 }));
 
 import {
-  collectScreenshots,
+  collectScreenshots as collectInto,
   prepareScreenshotDir,
+  withStagedScreenshots,
   ScreenshotDirError,
   MAX_REVIEW_SCREENSHOTS,
   MAX_SCREENSHOT_BYTES,
@@ -24,6 +25,11 @@ import {
 
 let worktree: string;
 let dir: string;
+let attachments: string;
+
+function collectScreenshots(worktreePath: string): string[] {
+  return collectInto(worktreePath, attachments);
+}
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
@@ -42,11 +48,40 @@ describe("collectScreenshots", () => {
     worktree = mkdtempSync(join(tmpdir(), "sabori-flow-worktree-"));
     dir = join(worktree, ".sabori-flow-review", "screenshots");
     mkdirSync(dir, { recursive: true });
+    attachments = mkdtempSync(join(tmpdir(), "sabori-flow-attachments-"));
     mockLogger.warn.mockReset();
   });
 
   afterEach(() => {
     rmSync(worktree, { recursive: true, force: true });
+    rmSync(attachments, { recursive: true, force: true });
+  });
+
+  it("copies accepted screenshots into the attachment directory", () => {
+    write("01-before.png", PNG_SIGNATURE.length + 3);
+
+    collectScreenshots(worktree);
+
+    expect(readFileSync(join(attachments, "01-before.png"))).toEqual(readFileSync(join(dir, "01-before.png")));
+    expect(statSync(join(attachments, "01-before.png")).ino).not.toBe(statSync(join(dir, "01-before.png")).ino);
+  });
+
+  it("keeps the copy unchanged when the agent rewrites the screenshot afterwards", () => {
+    write("01-before.png");
+    collectScreenshots(worktree);
+
+    writeFileSync(join(dir, "01-before.png"), "aws_secret_access_key = abc");
+
+    expect(readFileSync(join(attachments, "01-before.png"))).toEqual(pngBytes());
+  });
+
+  it("copies nothing that was rejected", () => {
+    write("real.png");
+    writeFileSync(join(dir, "credentials.png"), "aws_secret_access_key = abc");
+
+    collectScreenshots(worktree);
+
+    expect(readdirSync(attachments)).toEqual(["real.png"]);
   });
 
   it("returns an empty list when the directory does not exist", () => {
@@ -153,6 +188,70 @@ describe("collectScreenshots", () => {
 
     expect(collectScreenshots(worktree)).toEqual(names.slice(0, MAX_REVIEW_SCREENSHOTS));
     expect(mockLogger.warn).toHaveBeenCalledOnce();
+  });
+});
+
+describe("withStagedScreenshots", () => {
+  let base: string;
+
+  beforeEach(() => {
+    worktree = mkdtempSync(join(tmpdir(), "sabori-flow-worktree-"));
+    dir = join(worktree, ".sabori-flow-review", "screenshots");
+    mkdirSync(dir, { recursive: true });
+    base = join(mkdtempSync(join(tmpdir(), "sabori-flow-base-")), "review-attachments");
+    mockLogger.warn.mockReset();
+  });
+
+  afterEach(() => {
+    rmSync(worktree, { recursive: true, force: true });
+    rmSync(join(base, ".."), { recursive: true, force: true });
+  });
+
+  it("hands the callback a private directory outside the worktree holding the copies", async () => {
+    write("01-shot.png");
+
+    await withStagedScreenshots(
+      worktree,
+      (attachmentDir, names) => {
+        expect(attachmentDir.startsWith(base)).toBe(true);
+        expect(names).toEqual(["01-shot.png"]);
+        expect(statSync(attachmentDir).mode & 0o777).toBe(0o700);
+        expect(existsSync(join(attachmentDir, "01-shot.png"))).toBe(true);
+      },
+      base,
+    );
+  });
+
+  it("returns the callback result and removes the directory afterwards", async () => {
+    let staged = "";
+
+    const result = await withStagedScreenshots(
+      worktree,
+      (attachmentDir) => {
+        staged = attachmentDir;
+        return "posted";
+      },
+      base,
+    );
+
+    expect(result).toBe("posted");
+    expect(existsSync(staged)).toBe(false);
+  });
+
+  it("removes the directory when the callback throws", async () => {
+    let staged = "";
+
+    await expect(
+      withStagedScreenshots(
+        worktree,
+        (attachmentDir) => {
+          staged = attachmentDir;
+          throw new Error("gh failed");
+        },
+        base,
+      ),
+    ).rejects.toThrow("gh failed");
+    expect(existsSync(staged)).toBe(false);
   });
 });
 

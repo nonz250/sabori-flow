@@ -1,5 +1,20 @@
-import { closeSync, constants, existsSync, fstatSync, lstatSync, mkdirSync, openSync, readdirSync, readSync } from "node:fs";
+import {
+  closeSync,
+  constants,
+  existsSync,
+  fstatSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  openSync,
+  readdirSync,
+  readSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
+
+import { getReviewAttachmentsDir } from "../utils/paths.js";
 
 import { createLogger } from "./logger.js";
 
@@ -16,6 +31,8 @@ const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0
 
 // O_NONBLOCK keeps a FIFO swapped in after readdir from blocking the open.
 const SCREENSHOT_OPEN_FLAGS = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
+
+const ATTACHMENT_DIR_PREFIX = "review-";
 
 // Inside the worktree because Codex's workspace-write sandbox cannot write
 // outside its working directory. The worktree is removed after the review.
@@ -58,13 +75,16 @@ export function prepareScreenshotDir(worktreePath: string): string {
 }
 
 /**
- * レビューで撮影されたスクリーンショットのうち、添付してよいファイル名を返す。
+ * Copies the screenshots that may be attached into attachmentDir and returns
+ * their file names.
  *
- * ディレクトリはエージェントが自由に書き込めるため、symlink を辿ると
- * worktree の外にあるファイルを PR に添付できてしまう。ディレクトリと
- * ファイルの両方を lstat で確かめる。
+ * The agent can write to the screenshot directory freely, so following a
+ * symbolic link there would attach files outside the worktree. The
+ * directories are checked with lstat, and each file through its descriptor.
+ * gh reads the copies, so nothing the agent leaves running can swap a file
+ * between these checks and the upload.
  */
-export function collectScreenshots(worktreePath: string): string[] {
+export function collectScreenshots(worktreePath: string, attachmentDir: string): string[] {
   const chain = screenshotDirChain(worktreePath);
   if (!chain.every(isRealDirectory)) {
     if (chain.some((path) => existsSync(path) || isSymlink(path))) {
@@ -74,40 +94,68 @@ export function collectScreenshots(worktreePath: string): string[] {
   }
   const dir = chain[chain.length - 1];
 
-  const accepted = readdirSync(dir)
+  const candidates = readdirSync(dir)
     .sort()
     .filter((name) => {
       if (!SCREENSHOT_NAME_PATTERN.test(name)) {
         logger.warn("Skipping screenshot with an unexpected name: %s", name);
         return false;
       }
-      const rejection = inspectScreenshot(join(dir, name));
-      if (rejection !== null) {
-        logger.warn("Skipping screenshot %s: %s", name, rejection);
-        return false;
-      }
       return true;
     });
 
-  if (accepted.length > MAX_REVIEW_SCREENSHOTS) {
-    logger.warn(
-      "Attaching only the first %s of %s screenshots",
-      MAX_REVIEW_SCREENSHOTS,
-      accepted.length,
-    );
+  const accepted: string[] = [];
+  for (const name of candidates) {
+    if (accepted.length === MAX_REVIEW_SCREENSHOTS) {
+      logger.warn("Attaching only the first %s screenshots", MAX_REVIEW_SCREENSHOTS);
+      break;
+    }
+    const screenshot = readScreenshot(join(dir, name));
+    if (typeof screenshot === "string") {
+      logger.warn("Skipping screenshot %s: %s", name, screenshot);
+      continue;
+    }
+    writeFileSync(join(attachmentDir, name), screenshot, { flag: "wx", mode: 0o600 });
+    accepted.push(name);
   }
-  return accepted.slice(0, MAX_REVIEW_SCREENSHOTS);
+  return accepted;
 }
 
 /**
- * Checks the file through one descriptor so the checks apply to what was
- * opened, not to whatever the path names a moment later. A hard link passes
+ * Runs callback with copies of the review's screenshots in a private
+ * directory, and removes the directory afterwards.
+ */
+export async function withStagedScreenshots<T>(
+  worktreePath: string,
+  callback: (attachmentDir: string, screenshots: string[]) => T | Promise<T>,
+  baseDir: string = getReviewAttachmentsDir(),
+): Promise<T> {
+  mkdirSync(baseDir, { recursive: true, mode: 0o700 });
+  const attachmentDir = mkdtempSync(join(baseDir, ATTACHMENT_DIR_PREFIX));
+  try {
+    return await callback(attachmentDir, collectScreenshots(worktreePath, attachmentDir));
+  } finally {
+    try {
+      rmSync(attachmentDir, { recursive: true, force: true });
+    } catch (error: unknown) {
+      logger.warn(
+        "Failed to remove the attachment directory %s: %s",
+        attachmentDir,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  }
+}
+
+/**
+ * Reads the file through one descriptor so the checks apply to what was
+ * read, not to whatever the path names a moment later. A hard link passes
  * every path-based check while pointing at a file outside the worktree, and
  * the content check stops a renamed text file from being uploaded.
  *
- * @returns the reason for rejecting the file, or null when it can be attached
+ * @returns the file content, or the reason for rejecting the file
  */
-function inspectScreenshot(path: string): string | null {
+function readScreenshot(path: string): Buffer | string {
   let fd: number;
   try {
     fd = openSync(path, SCREENSHOT_OPEN_FLAGS);
@@ -125,11 +173,20 @@ function inspectScreenshot(path: string): string | null {
     if (stat.size > MAX_SCREENSHOT_BYTES) {
       return `it is larger than ${MAX_SCREENSHOT_BYTES} bytes`;
     }
-    const header = Buffer.alloc(PNG_SIGNATURE.length);
-    if (readSync(fd, header, 0, header.length, 0) !== header.length || !header.equals(PNG_SIGNATURE)) {
+    // One byte of headroom tells a file that grew past the limit after fstat.
+    const content = Buffer.alloc(MAX_SCREENSHOT_BYTES + 1);
+    let length = 0;
+    let read: number;
+    while (length < content.length && (read = readSync(fd, content, length, content.length - length, length)) > 0) {
+      length += read;
+    }
+    if (length > MAX_SCREENSHOT_BYTES) {
+      return `it is larger than ${MAX_SCREENSHOT_BYTES} bytes`;
+    }
+    if (length < PNG_SIGNATURE.length || !content.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
       return "its content is not a PNG image";
     }
-    return null;
+    return content.subarray(0, length);
   } finally {
     closeSync(fd);
   }

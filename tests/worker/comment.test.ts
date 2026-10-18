@@ -1499,6 +1499,7 @@ describe("postReviewComment", () => {
   const BASE_OPTIONS = {
     reviewedSha: SHA,
     screenshotDir: "/wt/.sabori-flow-review/screenshots",
+    attachmentDir: "/home/.sabori-flow/review-attachments/review-1",
     screenshots: [] as string[],
     note: null,
   };
@@ -1554,7 +1555,7 @@ describe("postReviewComment", () => {
     expect(options!.cwd).toBeUndefined();
   });
 
-  it("attaches screenshots relative to the screenshot directory", async () => {
+  it("attaches the copies from the attachment directory, not the agent's screenshot directory", async () => {
     mockPosted();
 
     await postReviewComment("nonz250/example-app", 7, "review", {
@@ -1564,7 +1565,7 @@ describe("postReviewComment", () => {
 
     const [, args, options] = mockedRunCommand.mock.calls[0];
     expect(args.slice(7)).toEqual(["--attach", "./01-before.png", "--attach", "./02-after.png"]);
-    expect(options!.cwd).toBe("/wt/.sabori-flow-review/screenshots");
+    expect(options!.cwd).toBe("/home/.sabori-flow/review-attachments/review-1");
   });
 
   it("rewrites bare screenshot references to the ./ form gh rewrites to uploaded URLs", async () => {

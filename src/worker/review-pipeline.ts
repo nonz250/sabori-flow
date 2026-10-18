@@ -32,8 +32,8 @@ import {
   FIRST_ATTEMPT,
 } from "./worktree.js";
 import {
-  collectScreenshots,
   prepareScreenshotDir,
+  withStagedScreenshots,
   MAX_REVIEW_SCREENSHOTS,
 } from "./review-screenshots.js";
 import { agentDisplayName, describeFallback, withFallbackNote } from "./pipeline.js";
@@ -86,7 +86,10 @@ export interface ReviewPipelineDeps {
   ) => Promise<T>;
   resolveHeadSha: (worktreePath: string) => string;
   prepareScreenshotDir: (worktreePath: string) => string;
-  collectScreenshots: (worktreePath: string) => string[];
+  withStagedScreenshots: <T>(
+    worktreePath: string,
+    callback: (attachmentDir: string, screenshots: string[]) => Promise<T>,
+  ) => Promise<T>;
 }
 
 export const defaultReviewDeps: ReviewPipelineDeps = {
@@ -100,7 +103,7 @@ export const defaultReviewDeps: ReviewPipelineDeps = {
     withPullRequestWorktree(repoConfig, prNumber, callback, undefined, attempt),
   resolveHeadSha,
   prepareScreenshotDir,
-  collectScreenshots,
+  withStagedScreenshots: (worktreePath, callback) => withStagedScreenshots(worktreePath, callback),
 };
 
 // ---------- Pipeline ----------
@@ -389,12 +392,15 @@ async function runAttempt(ctx: ReviewContext, agent: Agent, attempt: number): Pr
 
         let commentUrl: string;
         try {
-          commentUrl = await deps.postReviewComment(repo, prNumber, result.stdout, {
-            reviewedSha,
-            screenshotDir,
-            screenshots: deps.collectScreenshots(worktreePath),
-            note,
-          });
+          commentUrl = await deps.withStagedScreenshots(worktreePath, (attachmentDir, screenshots) =>
+            deps.postReviewComment(repo, prNumber, result.stdout, {
+              reviewedSha,
+              screenshotDir,
+              attachmentDir,
+              screenshots,
+              note,
+            }),
+          );
         } catch (error: unknown) {
           const errorMessage = error instanceof Error ? error.message : String(error);
           logger.error("PR #%s: レビューコメントの投稿に失敗しました [repo=%s]: %s", prNumber, repo, errorMessage);

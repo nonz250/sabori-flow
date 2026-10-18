@@ -38,6 +38,7 @@ const EXECUTION_CONFIG: ExecutionConfig = {
 const REPO = "testowner/testrepo";
 const SHA = "0123456789abcdef0123456789abcdef01234567";
 const SCREENSHOT_DIR = "/tmp/worktrees/pr-mock/.sabori-flow-review/screenshots";
+const ATTACHMENT_DIR = "/tmp/review-attachments/review-1";
 const USAGE_LIMIT_RESULT = makeProcessResult({
   success: false,
   stdout: "",
@@ -124,19 +125,23 @@ describe("processReviewRequest - success", () => {
     });
   });
 
-  it("posts the agent output with the reviewed commit and the collected screenshots", async () => {
-    vi.mocked(deps.collectScreenshots).mockReturnValue(["01-login.png"]);
+  it("posts the agent output with the reviewed commit and the staged screenshot copies", async () => {
+    vi.mocked(deps.withStagedScreenshots).mockImplementation(async (_worktreePath, callback) =>
+      callback(ATTACHMENT_DIR, ["01-login.png"]),
+    );
 
     await run();
 
-    expect(deps.collectScreenshots).toHaveBeenCalledWith("/tmp/worktrees/pr-mock");
+    expect(deps.withStagedScreenshots).toHaveBeenCalledWith("/tmp/worktrees/pr-mock", expect.any(Function));
     expect(deps.postReviewComment).toHaveBeenCalledWith(REPO, 7, "## 総合判定\n\n問題なし", {
       reviewedSha: SHA,
       screenshotDir: SCREENSHOT_DIR,
+      attachmentDir: ATTACHMENT_DIR,
       screenshots: ["01-login.png"],
       note: null,
     });
   });
+
 
   it("removes a stale done or failed label left by an earlier review", async () => {
     await run({ pr: { labels: [REVIEW_LABELS.trigger, REVIEW_LABELS.done, REVIEW_LABELS.failed, "bug"] } });
@@ -330,6 +335,16 @@ describe("processReviewRequest - failures after the agent starts", () => {
     const comment = failureComment();
     expect(comment).toContain("Review Comment Not Posted");
     expect(comment).toContain("unknown flag: --attach");
+  });
+
+  it("fails the review when the screenshots cannot be staged", async () => {
+    vi.mocked(deps.withStagedScreenshots).mockRejectedValue(new Error("EACCES"));
+
+    await expect(run()).resolves.toEqual({ outcome: "failure", claudeExecuted: true });
+
+    expect(deps.postReviewComment).not.toHaveBeenCalled();
+    expectFailedTransition();
+    expect(failureComment()).toContain("Review Comment Not Posted");
   });
 
   it("reports a git fetch failure", async () => {
