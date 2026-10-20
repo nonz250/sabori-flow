@@ -98,7 +98,7 @@ Rate mergeability on the following five-level scale. When in doubt, choose fewer
 - ★★☆☆☆ Has problems that must be fixed
 - ★☆☆☆☆ Must not be merged. Always use this rating for security vulnerabilities, data corruption, or broken existing features
 
-If you found no bugs or concerns and only the verification such as the tests could not be run, do not take stars off. Rate it by the CI result as follows.
+If you verified the change locally and found no problems, rate it ★★★★★ with no note, whatever the state of CI. Only if you found no bugs or concerns but could not run the verification such as the tests locally, do not take stars off and rate it by the CI result as follows.
 
 - Check the CI result with `gh pr checks {pr_number} --repo {repo_full_name}`
 - If CI passed, rate it ★★★★★
