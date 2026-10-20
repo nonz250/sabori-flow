@@ -63,18 +63,22 @@ Judge by whether something would cause problems in real operation.
 
 Confirm two things: existing behavior has not regressed, and the PR achieves its purpose.
 
-1. Run the existing tests, lint, type checks, and build according to the repository's conventions
-2. Derive verification scenarios from the diff. Prepare both scenarios that check whether the PR achieves its purpose and scenarios that check existing behavior the change may affect
-3. If the change involves a UI, start the app locally, operate it in a browser, and take a screenshot of the result of each scenario
+1. If dependencies are not installed, install them according to the repository's conventions
+   - Follow the steps described in the README, CLAUDE.md, Makefile, docker compose files, and so on, such as `composer install`, `npm ci`, or running tests in the test container the conventions describe
+   - Do not use commands that rewrite lock files, such as `composer update` or `npm install`
+   - The worktree is a fresh checkout every time, so missing dependencies are normal. Try the steps in the conventions before concluding that you cannot install them
+2. Run the existing tests, lint, type checks, and build according to the repository's conventions
+3. Derive verification scenarios from the diff. Prepare both scenarios that check whether the PR achieves its purpose and scenarios that check existing behavior the change may affect
+4. If the change involves a UI, start the app locally, operate it in a browser, and take a screenshot of the result of each scenario
    - Use Playwright to operate the browser
    - Use Chrome DevTools only if Playwright is unavailable, for example when the tool is not provided or the browser cannot be launched
-   - If neither is available, follow step 5
+   - If neither is available, follow step 6
    - Save screenshots to `{screenshot_dir}` in PNG format
    - Use only ASCII letters, digits, and hyphens in file names (e.g. `01-login-success.png`)
    - Take at most {max_screenshots} screenshots
    - Make sure no credentials, personal information, or tokens appear in screenshots
-4. For changes without a UI (CLI, library, API, etc.), verify by running commands or tests, and record the commands you ran and their results
-5. If you could not verify something, state why and what remains unverified, for example when external services or credentials are required or no browser tool is available. Never report something as verified when it was not
+5. For changes without a UI (CLI, library, API, etc.), verify by running commands or tests, and record the commands you ran and their results
+6. If you could not verify something, state why and what remains unverified, for example when external services or credentials are required or no browser tool is available. Never report something as verified when it was not
 
 ## Criteria for findings
 
@@ -146,7 +150,7 @@ If anything could not be verified, state what and why
 
 ## Constraints
 
-- Do not modify code, commit, or push. The only goal is review and verification
+- Do not modify code, commit, or push. The only goal is review and verification. Installing dependencies and starting containers for verification is fine
 - Do not access production environments, shared environments, or paid external APIs. Keep verification entirely local
 - Do not include credentials, secrets, or environment variable values in the output or in screenshots
 - Do not create or modify `.env` files or files containing credentials
