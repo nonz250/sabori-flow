@@ -147,14 +147,30 @@ export function resolveAutonomyLogMessage(
   autonomy: Autonomy,
   agent: Agent,
 ): AutonomyLogMessage | null {
-  if (autonomy === Autonomy.INTERACTIVE) {
+  const level = resolveAutonomyLogLevel(autonomy);
+  if (level === null) {
     return null;
   }
   const flags = AUTONOMY_FLAG_RESOLVERS[agent](autonomy).join(" ");
   return {
-    level: autonomy === Autonomy.FULL ? "warn" : "info",
+    level,
     message: `autonomy is set to '${autonomy}'. ${AGENT_CLI_NAMES[agent]} will run with ${flags}.`,
   };
+}
+
+function resolveAutonomyLogLevel(autonomy: Autonomy): AutonomyLogLevel | null {
+  switch (autonomy) {
+    case Autonomy.FULL:
+      return "warn";
+    case Autonomy.AUTO:
+      return "info";
+    case Autonomy.INTERACTIVE:
+      return null;
+    default: {
+      const _exhaustive: never = autonomy;
+      throw new Error(`Unknown autonomy level: ${_exhaustive}`);
+    }
+  }
 }
 
 /**
