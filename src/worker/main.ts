@@ -1,9 +1,10 @@
-import type { AppConfig, ExecutionConfig, Issue, LabelsConfig, Phase, RepositoryConfig, StepResult } from "./models.js";
+import type { AppConfig, ExecutionConfig, Issue, LabelsConfig, Phase, PullRequest, RepositoryConfig, StepResult } from "./models.js";
 import { Autonomy, Agent, repoFullName } from "./models.js";
 import { Phase as PhaseEnum } from "./models.js";
 import { loadConfig } from "./config.js";
-import { fetchIssues } from "./fetcher.js";
+import { fetchIssues, fetchReviewPullRequests } from "./fetcher.js";
 import { processIssue, resumeSpecReview, defaultDeps } from "./pipeline.js";
+import { processReviewRequest, defaultReviewDeps } from "./review-pipeline.js";
 import { AgentPool } from "./agent-pool.js";
 import { resolveAutonomyLogMessage } from "./executor.js";
 import { migrateFlatPromptTemplates } from "./prompt-migration.js";
@@ -30,6 +31,17 @@ export interface WorkerDeps {
     phase: Phase,
     label: string,
   ) => Promise<readonly Issue[]>;
+  fetchReviewPullRequests: (
+    repoConfig: RepositoryConfig,
+    label: string,
+  ) => Promise<readonly PullRequest[]>;
+  processReviewRequest: (
+    pullRequest: PullRequest,
+    repoConfig: RepositoryConfig,
+    executionConfig: ExecutionConfig,
+    authToken: string | null,
+    agentPool: AgentPool,
+  ) => Promise<StepResult>;
   processIssue: (
     issue: Issue,
     repoConfig: RepositoryConfig,
@@ -57,6 +69,9 @@ export interface WorkerDeps {
 export const defaultWorkerDeps: WorkerDeps = {
   loadConfig,
   fetchIssues: (repoConfig, phase, label) => fetchIssues(repoConfig, phase, label),
+  fetchReviewPullRequests,
+  processReviewRequest: (pullRequest, repoConfig, executionConfig, authToken, agentPool) =>
+    processReviewRequest(pullRequest, repoConfig, executionConfig, authToken, defaultReviewDeps, agentPool),
   processIssue: (issue, repoConfig, executionConfig, authToken, entryLabel, agentPool) =>
     processIssue(issue, repoConfig, executionConfig, authToken, entryLabel, defaultDeps, agentPool),
   resumeSpecReview: (issue, repoConfig, executionConfig, authToken, canRunClaude, agentPool) =>
@@ -146,13 +161,77 @@ async function processRepository(
     labels.spec.approved,
     labels.plan.trigger,
     labels.impl.trigger,
+    labels.review.trigger,
   ]);
 
   let anySuccess = false;
   let remaining = executionConfig.maxIssuesPerRepo;
-  const processedIssueNumbers = new Set<number>();
+  // Issues and pull requests share one number space in a repository.
+  const processedNumbers = new Set<number>();
 
   const ctx: StepContext = { repoConfig, executionConfig, deps, authToken, agentPool };
+
+  const processQueue = async <T extends { readonly number: number; readonly title: string }>(
+    queueName: string,
+    items: readonly T[],
+    requiresQuota: boolean,
+    run: (item: T, canRunClaude: boolean) => Promise<StepResult>,
+  ): Promise<void> => {
+    logger.info("[%s] %s: %s 件を取得", fullName, queueName, items.length);
+
+    if (items.length === 0) {
+      anySuccess = true;
+      return;
+    }
+
+    for (const item of items) {
+      if (processedNumbers.has(item.number)) {
+        logger.warn(
+          "[%s] #%s は今サイクルで処理済みのためスキップ",
+          fullName,
+          item.number,
+        );
+        continue;
+      }
+
+      const hasAvailableAgent = agentPool.next() !== undefined;
+      const canRunClaude = remaining > 0 && hasAvailableAgent;
+      if (!canRunClaude && requiresQuota) {
+        logger.info(
+          hasAvailableAgent
+            ? "[%s] %s: claude 起動上限に達したため残りをスキップ"
+            : "[%s] %s: 全エージェントが利用上限に達したため残りをスキップ",
+          fullName,
+          queueName,
+        );
+        break;
+      }
+      logger.info("  #%s %s の処理を開始", item.number, item.title);
+      const result = await run(item, canRunClaude);
+      processedNumbers.add(item.number);
+      if (result.outcome === "success") {
+        anySuccess = true;
+      }
+      if (result.claudeExecuted) {
+        remaining--;
+      }
+    }
+  };
+
+  // Review comes after impl in the workflow, so it goes first for the same
+  // reason STEPS runs later phases first.
+  logger.info("[%s] review (%s) の PR を取得中...", fullName, labels.review.trigger);
+  let pullRequests: readonly PullRequest[] | null = null;
+  try {
+    pullRequests = await deps.fetchReviewPullRequests(repoConfig, labels.review.trigger);
+  } catch (error: unknown) {
+    logger.error("[%s] review 対象の PR の取得に失敗: %s", fullName, error);
+  }
+  if (pullRequests !== null) {
+    await processQueue("review", pullRequests, true, (pullRequest) =>
+      deps.processReviewRequest(pullRequest, repoConfig, executionConfig, authToken, agentPool),
+    );
+  }
 
   for (const step of STEPS) {
     const stepLabel = step.label(labels);
@@ -171,55 +250,9 @@ async function processRepository(
       continue;
     }
 
-    logger.info(
-      "[%s] %s フェーズ: %s 件の Issue を取得",
-      fullName,
-      step.phase,
-      issues.length,
+    await processQueue(`${step.phase} フェーズ`, issues, step.requiresQuota, (issue, canRunClaude) =>
+      step.run(ctx, issue, canRunClaude),
     );
-
-    if (issues.length === 0) {
-      anySuccess = true;
-      continue;
-    }
-
-    for (const issue of issues) {
-      if (processedIssueNumbers.has(issue.number)) {
-        logger.warn(
-          "[%s] Issue #%s は今サイクルで処理済みのためスキップ",
-          fullName,
-          issue.number,
-        );
-        continue;
-      }
-
-      const hasAvailableAgent = agentPool.next() !== undefined;
-      const canRunClaude = remaining > 0 && hasAvailableAgent;
-      if (!canRunClaude && step.requiresQuota) {
-        logger.info(
-          hasAvailableAgent
-            ? "[%s] %s フェーズ: claude 起動上限に達したため残りをスキップ"
-            : "[%s] %s フェーズ: 全エージェントが利用上限に達したため残りをスキップ",
-          fullName,
-          step.phase,
-        );
-        break;
-      }
-      logger.info(
-        "  #%s [%s] %s の処理を開始",
-        issue.number,
-        issue.priority,
-        issue.title,
-      );
-      const result = await step.run(ctx, issue, canRunClaude);
-      processedIssueNumbers.add(issue.number);
-      if (result.outcome === "success") {
-        anySuccess = true;
-      }
-      if (result.claudeExecuted) {
-        remaining--;
-      }
-    }
   }
 
   return anySuccess;

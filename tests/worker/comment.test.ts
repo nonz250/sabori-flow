@@ -26,6 +26,9 @@ vi.mock("../../src/worker/process.js", async (importOriginal) => {
 import {
   postSuccessComment,
   postFailureComment,
+  postReviewComment,
+  ATTACHMENT_URL_RESERVE,
+  REVIEW_COMMENT_TIMEOUT_MS,
   postSpecProposalComment,
   sanitizeOutput,
   CommentError,
@@ -1460,5 +1463,361 @@ describe("sanitizeOutput - homedir masking", () => {
     expect(result).toContain("Reading [REDACTED_PATH] failed");
     expect(result).not.toContain("/Users/alice/.ssh/id_rsa");
     expect(result).not.toContain("[REDACTED_HOME]");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Pull request comments
+// ---------------------------------------------------------------------------
+
+describe("postFailureComment - pull request target", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("posts through gh pr comment", async () => {
+    mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
+
+    await postFailureComment("nonz250/example-app", 7, "error", "pr");
+
+    expect(mockedRunCommand.mock.calls[0][1]).toEqual([
+      "pr",
+      "comment",
+      "7",
+      "--repo",
+      "nonz250/example-app",
+      "--body-file",
+      "-",
+    ]);
+  });
+});
+
+describe("postReviewComment", () => {
+  const COMMENT_URL = "https://github.com/nonz250/example-app/pull/7#issuecomment-123";
+  const SHA = "0123456789abcdef0123456789abcdef01234567";
+  const BASE_OPTIONS = {
+    reviewedSha: SHA,
+    attachmentDir: null as string | null,
+    screenshots: [] as string[],
+    language: "ja" as const,
+    note: null,
+  };
+
+  function mockPosted(stdout = `${COMMENT_URL}\n`): void {
+    mockedRunCommand.mockResolvedValue({ success: true, stdout, stderr: "", exitCode: 0 });
+  }
+
+  function postedBody(): string {
+    return mockedRunCommand.mock.calls[0][2]!.input!;
+  }
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("posts the review with a header, the reviewed commit and the worker marker", async () => {
+    mockPosted();
+
+    await postReviewComment("nonz250/example-app", 7, "## 総合判定\n\n問題なし", BASE_OPTIONS);
+
+    const body = postedBody();
+    expect(body.startsWith("## 🔍 AI レビュー結果\n\n")).toBe(true);
+    expect(body).toContain(`レビュー対象のコミット: \`${SHA}\``);
+    expect(body).toContain("## 総合判定\n\n問題なし");
+    expect(body.endsWith("<!-- sabori-flow -->")).toBe(true);
+  });
+
+  it("writes the header and the reviewed commit in English when the language is en", async () => {
+    mockPosted();
+
+    await postReviewComment("nonz250/example-app", 7, "## Verdict", { ...BASE_OPTIONS, language: "en" });
+
+    const body = postedBody();
+    expect(body.startsWith("## 🔍 AI Review\n\n")).toBe(true);
+    expect(body).toContain(`Reviewed commit: \`${SHA}\``);
+    expect(body).not.toContain("レビュー");
+  });
+
+  it("returns the URL of the posted comment", async () => {
+    mockPosted(`${COMMENT_URL}\n`);
+
+    await expect(
+      postReviewComment("nonz250/example-app", 7, "review", BASE_OPTIONS),
+    ).resolves.toBe(COMMENT_URL);
+  });
+
+  it("fails when gh succeeds without printing a comment URL", async () => {
+    mockPosted("");
+
+    await expect(
+      postReviewComment("nonz250/example-app", 7, "review", BASE_OPTIONS),
+    ).rejects.toThrow(CommentError);
+  });
+
+  it("posts through gh pr comment without attachments or a working directory when there are no screenshots", async () => {
+    mockPosted();
+
+    await postReviewComment("nonz250/example-app", 7, "review", BASE_OPTIONS);
+
+    const [file, args, options] = mockedRunCommand.mock.calls[0];
+    expect(file).toBe("gh");
+    expect(args).toEqual(["pr", "comment", "7", "--repo", "nonz250/example-app", "--body-file", "-"]);
+    expect(options!.cwd).toBeUndefined();
+  });
+
+  it("attaches the copies from the attachment directory, not the agent's screenshot directory", async () => {
+    mockPosted();
+
+    await postReviewComment("nonz250/example-app", 7, "review", {
+      ...BASE_OPTIONS,
+      attachmentDir: "/home/.sabori-flow/review-attachments/review-1",
+      screenshots: ["01-before.png", "02-after.png"],
+    });
+
+    const [, args, options] = mockedRunCommand.mock.calls[0];
+    expect(args.slice(7)).toEqual(["--attach", "./01-before.png", "--attach", "./02-after.png"]);
+    expect(options!.cwd).toBe("/home/.sabori-flow/review-attachments/review-1");
+  });
+
+  it("rewrites bare screenshot references to the ./ form gh rewrites to uploaded URLs", async () => {
+    mockPosted();
+
+    await postReviewComment(
+      "nonz250/example-app",
+      7,
+      "![before](01-before.png) ![after](./02-after.png) ![other](03-other.png)",
+      { ...BASE_OPTIONS, screenshots: ["01-before.png", "02-after.png"] },
+    );
+
+    expect(postedBody()).toContain(
+      "![before](./01-before.png) ![after](./02-after.png) （添付されていないスクリーンショット: other, 03-other.png）",
+    );
+  });
+
+  it("rewrites references written with the absolute screenshot path under the home directory", async () => {
+    mockPosted();
+    const screenshotDir = "/Users/alice/.sabori-flow/worktrees/o/r/pr-7-1/.sabori-flow-review/screenshots";
+
+    await postReviewComment(
+      "nonz250/example-app",
+      7,
+      `![abs](${screenshotDir}/01-before.png)`,
+      { ...BASE_OPTIONS, screenshots: ["01-before.png"] },
+    );
+
+    expect(postedBody()).toContain("![abs](./01-before.png)");
+    expect(postedBody()).not.toContain("not attached");
+  });
+
+  it("rewrites references written relative to the worktree or the screenshot directory", async () => {
+    mockPosted();
+
+    await postReviewComment(
+      "nonz250/example-app",
+      7,
+      "![a](.sabori-flow-review/screenshots/01-before.png) ![b](screenshots/02-after.png)",
+      { ...BASE_OPTIONS, screenshots: ["01-before.png", "02-after.png"] },
+    );
+
+    expect(postedBody()).toContain("![a](./01-before.png) ![b](./02-after.png)");
+    expect(postedBody()).not.toContain("not attached");
+  });
+
+  it("leaves remote images that share an attached screenshot's name untouched", async () => {
+    mockPosted();
+
+    await postReviewComment(
+      "nonz250/example-app",
+      7,
+      "![remote](https://example.com/01-before.png)",
+      { ...BASE_OPTIONS, screenshots: ["01-before.png"] },
+    );
+
+    expect(postedBody()).toContain("![remote](https://example.com/01-before.png)");
+  });
+
+  it("replaces references to screenshots that were not attached with a note", async () => {
+    mockPosted();
+
+    await postReviewComment(
+      "nonz250/example-app",
+      7,
+      "![kept](01-kept.png) ![dropped](11-dropped.png) ![remote](https://example.com/a.png)",
+      { ...BASE_OPTIONS, screenshots: ["01-kept.png"] },
+    );
+
+    expect(postedBody()).toContain(
+      "![kept](./01-kept.png) （添付されていないスクリーンショット: dropped, 11-dropped.png） ![remote](https://example.com/a.png)",
+    );
+  });
+
+  it("writes the note for a screenshot that was not attached in English when the language is en", async () => {
+    mockPosted();
+
+    await postReviewComment("nonz250/example-app", 7, "![dropped](11-dropped.png)", {
+      ...BASE_OPTIONS,
+      language: "en",
+    });
+
+    expect(postedBody()).toContain("_(screenshot not attached: dropped, 11-dropped.png)_");
+  });
+
+  it("puts the fallback note under the header", async () => {
+    mockPosted();
+
+    await postReviewComment("nonz250/example-app", 7, "review", {
+      ...BASE_OPTIONS,
+      note: "Ran with Codex CLI because Claude Code CLI hit the usage limit.",
+    });
+
+    expect(postedBody()).toContain("> Ran with Codex CLI because Claude Code CLI hit the usage limit.");
+  });
+
+  it("masks secrets in the review output", async () => {
+    mockPosted();
+
+    await postReviewComment(
+      "nonz250/example-app",
+      7,
+      "token ghp_abcdefghijklmnopqrstuvwxyz0123456789",
+      BASE_OPTIONS,
+    );
+
+    expect(postedBody()).not.toContain("ghp_abcdefghijklmnopqrstuvwxyz0123456789");
+    expect(postedBody()).toContain("[REDACTED]");
+  });
+
+  it("neutralizes worker markers written in the review output", async () => {
+    mockPosted();
+
+    await postReviewComment("nonz250/example-app", 7, "<!-- sabori-flow:spec round=1 -->", BASE_OPTIONS);
+
+    expect(postedBody().match(/<!-- sabori-flow/g)).toHaveLength(1);
+  });
+
+  it("truncates long output so the body stays within the comment limit with room for attachment URLs", async () => {
+    mockPosted();
+    const screenshots = ["01-a.png", "02-b.png"];
+
+    await postReviewComment("nonz250/example-app", 7, "x".repeat(MAX_COMMENT_LENGTH), {
+      ...BASE_OPTIONS,
+      screenshots,
+    });
+
+    const body = postedBody();
+    expect(body).toContain(SUCCESS_TRUNCATED_SUFFIX);
+    expect(body.length).toBeLessThanOrEqual(
+      MAX_COMMENT_LENGTH - screenshots.length * ATTACHMENT_URL_RESERVE,
+    );
+  });
+
+  it("writes the truncation notice in English when the language is en", async () => {
+    mockPosted();
+
+    await postReviewComment("nonz250/example-app", 7, "x".repeat(MAX_COMMENT_LENGTH), {
+      ...BASE_OPTIONS,
+      language: "en",
+    });
+
+    expect(postedBody()).toContain("The output was too long and has been truncated.");
+    expect(postedBody()).not.toContain(SUCCESS_TRUNCATED_SUFFIX);
+  });
+
+  it("keeps output that fits exactly without truncating", async () => {
+    mockPosted();
+    const probe = "probe";
+    await postReviewComment("nonz250/example-app", 7, probe, BASE_OPTIONS);
+    const overhead = postedBody().length - probe.length;
+    mockedRunCommand.mockClear();
+    mockPosted();
+
+    const exact = "y".repeat(MAX_COMMENT_LENGTH - overhead);
+    await postReviewComment("nonz250/example-app", 7, exact, BASE_OPTIONS);
+
+    expect(postedBody()).not.toContain(SUCCESS_TRUNCATED_SUFFIX);
+    expect(postedBody().length).toBe(MAX_COMMENT_LENGTH);
+  });
+
+  it("throws CommentError when gh fails", async () => {
+    mockedRunCommand.mockResolvedValue({ success: false, stdout: "", stderr: "unknown flag: --attach", exitCode: 1 });
+
+    await expect(
+      postReviewComment("nonz250/example-app", 7, "review", BASE_OPTIONS),
+    ).rejects.toThrow("unknown flag: --attach");
+    expect(mockedRunCommand).toHaveBeenCalledTimes(1);
+  });
+
+  describe("when gh rejects a post with screenshots", () => {
+    const WITH_SCREENSHOTS = {
+      ...BASE_OPTIONS,
+      attachmentDir: "/home/.sabori-flow/review-attachments/review-1",
+      screenshots: ["01-shot.png"],
+    };
+
+    function mockRejectedThenPosted(): void {
+      mockedRunCommand
+        .mockResolvedValueOnce({ success: false, stdout: "", stderr: "unknown flag: --attach", exitCode: 1 })
+        .mockResolvedValueOnce({ success: true, stdout: `${COMMENT_URL}\n`, stderr: "", exitCode: 0 });
+    }
+
+    it("posts the review again without attachments and returns its URL", async () => {
+      mockRejectedThenPosted();
+
+      await expect(
+        postReviewComment("nonz250/example-app", 7, "![shot](01-shot.png)", WITH_SCREENSHOTS),
+      ).resolves.toBe(COMMENT_URL);
+
+      expect(mockedRunCommand).toHaveBeenCalledTimes(2);
+      const [, args, options] = mockedRunCommand.mock.calls[1];
+      expect(args).not.toContain("--attach");
+      expect(options!.cwd).toBeUndefined();
+    });
+
+    it("marks the screenshot the retry could not attach", async () => {
+      mockRejectedThenPosted();
+
+      await postReviewComment("nonz250/example-app", 7, "![shot](01-shot.png)", WITH_SCREENSHOTS);
+
+      const body = mockedRunCommand.mock.calls[1][2]!.input!;
+      expect(body).toContain("（添付されていないスクリーンショット: shot, 01-shot.png）");
+      expect(body).not.toContain("](./01-shot.png)");
+    });
+
+    it("throws the retry's error when the post without attachments also fails", async () => {
+      mockedRunCommand
+        .mockResolvedValueOnce({ success: false, stdout: "", stderr: "unknown flag: --attach", exitCode: 1 })
+        .mockResolvedValueOnce({ success: false, stdout: "", stderr: "HTTP 502", exitCode: 1 });
+
+      await expect(
+        postReviewComment("nonz250/example-app", 7, "review", WITH_SCREENSHOTS),
+      ).rejects.toThrow("HTTP 502");
+      expect(mockedRunCommand).toHaveBeenCalledTimes(2);
+    });
+
+    it("does not post again after a timeout, since the first post may have gone through", async () => {
+      mockedRunCommand.mockRejectedValue(new ProcessTimeoutError(REVIEW_COMMENT_TIMEOUT_MS));
+
+      await expect(
+        postReviewComment("nonz250/example-app", 7, "review", WITH_SCREENSHOTS),
+      ).rejects.toThrow(/timed out/);
+      expect(mockedRunCommand).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not post again when gh succeeds without printing a comment URL", async () => {
+      mockPosted("ok\n");
+
+      await expect(
+        postReviewComment("nonz250/example-app", 7, "review", WITH_SCREENSHOTS),
+      ).rejects.toThrow(/did not print a comment URL/);
+      expect(mockedRunCommand).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("throws CommentError mentioning gh pr comment on timeout", async () => {
+    mockedRunCommand.mockRejectedValue(new ProcessTimeoutError(REVIEW_COMMENT_TIMEOUT_MS));
+
+    await expect(
+      postReviewComment("nonz250/example-app", 7, "review", BASE_OPTIONS),
+    ).rejects.toThrow(/gh pr comment timed out/);
   });
 });

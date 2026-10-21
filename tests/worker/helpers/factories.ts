@@ -1,5 +1,6 @@
 import type {
   Issue,
+  PullRequest,
   PhaseLabels,
   SpecPhaseLabels,
   LabelsConfig,
@@ -38,10 +39,18 @@ export const IMPL_LABELS: PhaseLabels = {
   failed: "test/impl/failed",
 };
 
+export const REVIEW_LABELS: PhaseLabels = {
+  trigger: "test/review",
+  inProgress: "test/review/in-progress",
+  done: "test/review/done",
+  failed: "test/review/failed",
+};
+
 export const DEFAULT_LABELS_CONFIG: LabelsConfig = {
   spec: SPEC_LABELS,
   plan: PLAN_LABELS,
   impl: IMPL_LABELS,
+  review: REVIEW_LABELS,
 };
 
 // ---------- Factory functions ----------
@@ -80,6 +89,19 @@ export function makeIssue(overrides?: Partial<Issue>): Issue {
     authorAssociation: "OWNER",
     phase,
     priority: Priority.HIGH,
+    ...overrides,
+  };
+}
+
+export function makePullRequest(overrides?: Partial<PullRequest>): PullRequest {
+  const number = overrides?.number ?? 7;
+  return {
+    number,
+    title: "Test Pull Request",
+    body: "Pull request body",
+    labels: [REVIEW_LABELS.trigger],
+    url: `https://github.com/testowner/testrepo/pull/${number}`,
+    authorAssociation: "MEMBER",
     ...overrides,
   };
 }

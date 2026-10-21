@@ -3,7 +3,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 
 import type { Language } from "../i18n/types.js";
-import type { Issue, RepositoryConfig } from "./models.js";
+import type { Issue, PullRequest, RepositoryConfig } from "./models.js";
 import { Phase, repoFullName } from "./models.js";
 import { getUserPromptsLanguageDir, getDefaultPromptsDir } from "../utils/paths.js";
 import { createLogger } from "./logger.js";
@@ -24,18 +24,18 @@ export const TEMPLATE_FILES: Record<Phase, string> = {
   [Phase.IMPL]: "impl.md",
 };
 
+export const REVIEW_TEMPLATE_FILE = "review.md";
+
+/** Templates init copies into the user's directory */
+export const ALL_TEMPLATE_FILES: readonly string[] = [
+  ...Object.values(TEMPLATE_FILES),
+  REVIEW_TEMPLATE_FILE,
+];
+
+const PLACEHOLDER_PATTERN = /\{(\w+)\}/g;
+
 /** テンプレートファイルの最大サイズ (100KB) */
 const MAX_TEMPLATE_SIZE = 100 * 1024;
-
-/**
- * ユーザー入力由来の変数キー。
- * 二重展開防止のため、これらは最後に展開する。
- */
-const USER_INPUT_KEYS: ReadonlySet<string> = new Set([
-  "issue_body",
-  "issue_title",
-  "spec",
-]);
 
 /**
  * Issue とリポジトリ設定からプロンプト文字列を組み立てる。
@@ -53,9 +53,11 @@ export function buildPrompt(
   language: Language,
   specContext: string | null = null,
 ): string {
-  const userDir = getUserPromptsLanguageDir(language);
-  const defaultDir = join(getDefaultPromptsDir(), language);
-  const template = loadTemplate(issue.phase, userDir, defaultDir);
+  const filename = TEMPLATE_FILES[issue.phase];
+  if (filename === undefined) {
+    throw new PromptTemplateError(`Unknown phase: ${issue.phase}`);
+  }
+  const template = loadTemplate(filename, language);
   const variables = buildVariables(issue, repoConfig, specContext);
 
   if (specContext !== null && !template.includes("{spec}")) {
@@ -68,24 +70,55 @@ export function buildPrompt(
   return render(template, variables);
 }
 
+export interface ReviewPromptOptions {
+  readonly baseBranch: string;
+  readonly screenshotDir: string;
+  readonly maxScreenshots: number;
+}
+
+/**
+ * Resolves the template in the same order as buildPrompt.
+ *
+ * @throws {PromptTemplateError} when the template cannot be read
+ */
+export function buildReviewPrompt(
+  pullRequest: PullRequest,
+  repoConfig: RepositoryConfig,
+  language: Language,
+  options: ReviewPromptOptions,
+): string {
+  const template = loadTemplate(REVIEW_TEMPLATE_FILE, language);
+  const boundary = createBoundary();
+
+  const variables = new Map<string, string>([
+    ["repo_full_name", repoFullName(repoConfig)],
+    ["repo_owner", repoConfig.owner],
+    ["repo_name", repoConfig.repo],
+    ["pr_number", String(pullRequest.number)],
+    ["pr_url", pullRequest.url],
+    ["base_branch", options.baseBranch],
+    ["screenshot_dir", options.screenshotDir],
+    ["max_screenshots", String(options.maxScreenshots)],
+    ["boundary_open", boundary.open],
+    ["boundary_close", boundary.close],
+    ["pr_title", pullRequest.title],
+    ["pr_body", sanitizeBoundaryInBody(pullRequest.body ?? "", boundary.token)],
+  ]);
+
+  return render(template, variables);
+}
+
 /**
  * 2 段階フォールバックでテンプレートファイルを読み込む。
  *
  *   1. ユーザーディレクトリ (`~/.sabori-flow/prompts/<language>/`)
  *   2. パッケージ同梱のデフォルトディレクトリ (`prompts/<language>/`)
  *
- * @throws {PromptTemplateError} フェーズが未定義、テンプレートが存在しない、
- *   またはファイルサイズ超過の場合
+ * @throws {PromptTemplateError} テンプレートが存在しない、またはファイルサイズ超過の場合
  */
-function loadTemplate(
-  phase: Phase,
-  userDir: string,
-  defaultDir: string,
-): string {
-  const filename = TEMPLATE_FILES[phase];
-  if (filename === undefined) {
-    throw new PromptTemplateError(`Unknown phase: ${phase}`);
-  }
+function loadTemplate(filename: string, language: Language): string {
+  const userDir = getUserPromptsLanguageDir(language);
+  const defaultDir = join(getDefaultPromptsDir(), language);
 
   // 1. ユーザーディレクトリ (~/.sabori-flow/prompts/<language>/)
   const userPath = resolve(userDir, filename);
@@ -149,6 +182,15 @@ function generateBoundaryToken(): string {
   return randomUUID();
 }
 
+function createBoundary(): { token: string; open: string; close: string } {
+  const token = generateBoundaryToken();
+  return {
+    token,
+    open: `<!-- BOUNDARY-${token} DATA START -->`,
+    close: `<!-- BOUNDARY-${token} DATA END -->`,
+  };
+}
+
 /**
  * Issue ボディからバウンダリ終了パターンを除去する。
  *
@@ -168,12 +210,12 @@ function buildVariables(
   repoConfig: RepositoryConfig,
   specContext: string | null,
 ): Map<string, string> {
-  const token = generateBoundaryToken();
+  const boundary = createBoundary();
   const rawBody = issue.body ?? "";
-  const sanitizedBody = sanitizeBoundaryInBody(rawBody, token);
+  const sanitizedBody = sanitizeBoundaryInBody(rawBody, boundary.token);
 
   const specValue = specContext !== null
-    ? sanitizeBoundaryInBody(specContext, token)
+    ? sanitizeBoundaryInBody(specContext, boundary.token)
     : "(no specification has been agreed for this issue)";
 
   return new Map<string, string>([
@@ -183,42 +225,21 @@ function buildVariables(
     ["issue_number", String(issue.number)],
     ["issue_title", issue.title],
     ["issue_url", issue.url],
-    ["boundary_open", `<!-- BOUNDARY-${token} DATA START -->`],
-    ["boundary_close", `<!-- BOUNDARY-${token} DATA END -->`],
+    ["boundary_open", boundary.open],
+    ["boundary_close", boundary.close],
     ["issue_body", sanitizedBody],
     ["spec", specValue],
   ]);
 }
 
 /**
- * テンプレート内のプレースホルダを変数で展開する。
- *
- * 各プレースホルダ `{key}` を対応する値で置換する。
- * `String.replace()` の第2引数に関数を使用し、`$&` や `$'` 等の
- * 特殊パターン解釈を回避する。
- *
- * ユーザー入力由来の変数（`issue_body`, `issue_title`）は最後に展開する。
- * これにより、ユーザー入力に `{repo_full_name}` のようなプレースホルダ風
- * 文字列が含まれていた場合でも二重展開を防止できる。
+ * Expands every placeholder in one pass. Substituted values are never
+ * scanned again, so a placeholder-like string in user input, such as a
+ * title of `{issue_body}`, stays literal instead of pulling the body outside
+ * its boundary. A function replacer keeps `$&` and `$'` in values literal.
  */
 function render(template: string, variables: Map<string, string>): string {
-  let result = template;
-
-  const userInputVars = new Map<string, string>();
-
-  for (const [key, value] of variables) {
-    if (USER_INPUT_KEYS.has(key)) {
-      userInputVars.set(key, value);
-    } else {
-      result = result.replaceAll(`{${key}}`, () => value);
-    }
-  }
-
-  for (const [key, value] of userInputVars) {
-    result = result.replaceAll(`{${key}}`, () => value);
-  }
-
-  return result;
+  return template.replace(PLACEHOLDER_PATTERN, (match: string, key: string) => variables.get(key) ?? match);
 }
 
 /**

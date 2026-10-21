@@ -16,28 +16,31 @@ export class LabelError extends Error {
   }
 }
 
+export type LabelTarget = "issue" | "pr";
+
 export interface LabelTransition {
   readonly add: readonly string[];
   readonly remove: readonly string[];
 }
 
 /**
- * Issue のラベルを操作する。
+ * Changes the labels of an issue or a pull request.
  *
- * remove は絞り込まずそのまま gh issue edit に渡す。
- * Issue.labels は fetch 時点のスナップショットで、worker が後から付ける
- * inProgress を含まないため、交差を取ると done / failed 遷移で
- * inProgress が remove から落ちてラベルが残る。
+ * remove is passed to gh as is, not intersected with the known labels.
+ * Issue.labels is a snapshot from the fetch and lacks the inProgress label
+ * the worker adds later, so intersecting would drop inProgress from a done
+ * or failed transition and leave it on.
  *
- * @throws {LabelError} ラベル操作に失敗した場合
+ * @throws {LabelError} when the label change fails
  */
 export async function applyLabelTransition(
   repoFullName: string,
   issueNumber: number,
   transition: LabelTransition,
+  target: LabelTarget = "issue",
 ): Promise<void> {
   try {
-    const args = buildGhEditArgs(repoFullName, issueNumber, transition);
+    const args = buildGhEditArgs(repoFullName, issueNumber, transition, target);
     const result = await runCommand("gh", args, { timeoutMs: GH_TIMEOUT_MS });
 
     if (!result.success) {
@@ -69,7 +72,7 @@ export async function applyLabelTransition(
     }
     if (error instanceof ProcessTimeoutError) {
       throw new LabelError(
-        `gh issue edit timed out after ${GH_TIMEOUT_MS / 1_000} seconds`,
+        `gh ${target} edit timed out after ${GH_TIMEOUT_MS / 1_000} seconds`,
       );
     }
     if (error instanceof ProcessExecutionError) {
@@ -85,9 +88,10 @@ function buildGhEditArgs(
   repoFullName: string,
   issueNumber: number,
   transition: LabelTransition,
+  target: LabelTarget,
 ): string[] {
   const args = [
-    "issue",
+    target,
     "edit",
     "--repo",
     repoFullName,

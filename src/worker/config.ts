@@ -61,6 +61,12 @@ export const DEFAULT_LABELS: LabelsConfig = {
     done: "ai/impl/done",
     failed: "ai/impl/failed",
   },
+  review: {
+    trigger: "ai/review",
+    inProgress: "ai/review/in-progress",
+    done: "ai/review/done",
+    failed: "ai/review/failed",
+  },
 };
 
 export const MAX_PARALLEL_MIN = 1;
@@ -210,8 +216,11 @@ function parseRepositories(raw: unknown): readonly RepositoryConfig[] {
       const impl = "impl" in labelsRecord
         ? parsePhaseLabels(labelsRecord["impl"], `${prefix}.labels.impl`)
         : DEFAULT_LABELS.impl;
+      const review = "review" in labelsRecord
+        ? parsePhaseLabels(labelsRecord["review"], `${prefix}.labels.review`)
+        : DEFAULT_LABELS.review;
 
-      labels = { spec, plan, impl };
+      labels = { spec, plan, impl, review };
     } else {
       labels = DEFAULT_LABELS;
     }

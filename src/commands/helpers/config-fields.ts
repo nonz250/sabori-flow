@@ -107,6 +107,7 @@ const LABEL_PHASES = [
   { phase: "spec", keys: SPEC_LABEL_KEYS },
   { phase: "plan", keys: PHASE_LABEL_KEYS },
   { phase: "impl", keys: PHASE_LABEL_KEYS },
+  { phase: "review", keys: PHASE_LABEL_KEYS },
 ] as const;
 
 export const CURRENT_SCHEMA_VERSION = 1;

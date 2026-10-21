@@ -1,4 +1,4 @@
-import type { Issue, RepositoryConfig } from "./models.js";
+import type { Issue, PullRequest, PullRequestDetails, RepositoryConfig } from "./models.js";
 import { Phase, Priority, PERMITTED_ASSOCIATIONS, repoFullName } from "./models.js";
 import {
   runCommand,
@@ -25,6 +25,9 @@ export class IssueParseError extends Error {
 
 const GH_TIMEOUT_MS = 120_000;
 
+/** How much of the unparsable JSON to quote in the error message */
+const JSON_ERROR_PREVIEW_LENGTH = 200;
+
 const logger = createLogger("fetcher");
 
 
@@ -41,6 +44,7 @@ interface GhIssueItem {
   readonly labels?: readonly GhLabel[];
   readonly html_url?: string;
   readonly author_association?: string;
+  readonly pull_request?: unknown;
 }
 
 /**
@@ -54,7 +58,64 @@ export async function fetchIssues(
   phase: Phase,
   label: string,
 ): Promise<readonly Issue[]> {
-  const args = [
+  const rawJson = await runGhCommand(buildOpenIssuesArgs(repoConfig, label));
+  const issues = parseIssues(rawJson, phase, repoConfig);
+  const permitted = filterByAuthorAssociation(issues, "Issue");
+  return sortByPriority(permitted);
+}
+
+/**
+ * Fetched from the issues REST endpoint and filtered down to pull requests,
+ * because the JSON of `gh pr list` has no authorAssociation.
+ *
+ * @throws {GitHubCLIError} when the gh command fails
+ * @throws {IssueParseError} when the JSON cannot be parsed
+ */
+export async function fetchReviewPullRequests(
+  repoConfig: RepositoryConfig,
+  label: string,
+): Promise<readonly PullRequest[]> {
+  const rawJson = await runGhCommand(buildOpenIssuesArgs(repoConfig, label));
+  const permitted = filterByAuthorAssociation(parsePullRequests(rawJson), "PR");
+  return [...permitted].sort((a, b) => a.number - b.number);
+}
+
+/**
+ * @throws {GitHubCLIError} when the gh command fails
+ * @throws {IssueParseError} when the JSON cannot be parsed
+ */
+export async function fetchPullRequestDetails(
+  repoFullName: string,
+  prNumber: number,
+): Promise<PullRequestDetails> {
+  const rawJson = await runGhCommand([
+    "pr",
+    "view",
+    String(prNumber),
+    "--repo",
+    repoFullName,
+    "--json",
+    "baseRefName,isCrossRepository",
+  ]);
+
+  let data: { baseRefName?: unknown; isCrossRepository?: unknown };
+  try {
+    data = JSON.parse(rawJson) as typeof data;
+  } catch {
+    throw new IssueParseError(`Failed to parse JSON: ${rawJson.slice(0, JSON_ERROR_PREVIEW_LENGTH)}`);
+  }
+  if (typeof data.baseRefName !== "string" || data.baseRefName === "") {
+    throw new IssueParseError("Missing required field in pull request data: baseRefName");
+  }
+  if (typeof data.isCrossRepository !== "boolean") {
+    throw new IssueParseError("Missing required field in pull request data: isCrossRepository");
+  }
+  return { baseRefName: data.baseRefName, isCrossRepository: data.isCrossRepository };
+}
+
+/** Serves both issues and pull requests, because the issues API returns pull requests too */
+function buildOpenIssuesArgs(repoConfig: RepositoryConfig, label: string): string[] {
+  return [
     "api",
     `repos/${repoFullName(repoConfig)}/issues`,
     "--method",
@@ -66,11 +127,6 @@ export async function fetchIssues(
     "--field",
     "per_page=100",
   ];
-
-  const rawJson = await runGhCommand(args);
-  const issues = parseIssues(rawJson, phase, repoConfig);
-  const permitted = filterByAuthorAssociation(issues);
-  return sortByPriority(permitted);
 }
 
 /**
@@ -117,7 +173,7 @@ function parseIssues(
   try {
     data = JSON.parse(rawJson) as GhIssueItem[];
   } catch {
-    throw new IssueParseError(`Failed to parse JSON: ${rawJson.slice(0, 200)}`);
+    throw new IssueParseError(`Failed to parse JSON: ${rawJson.slice(0, JSON_ERROR_PREVIEW_LENGTH)}`);
   }
 
   return data.map((item) => {
@@ -145,6 +201,41 @@ function parseIssues(
       priority,
     };
   });
+}
+
+/**
+ * @throws {IssueParseError} when the JSON cannot be parsed
+ */
+function parsePullRequests(rawJson: string): PullRequest[] {
+  let data: GhIssueItem[];
+  try {
+    data = JSON.parse(rawJson) as GhIssueItem[];
+  } catch {
+    throw new IssueParseError(`Failed to parse JSON: ${rawJson.slice(0, JSON_ERROR_PREVIEW_LENGTH)}`);
+  }
+
+  return data
+    .filter((item) => item.pull_request !== undefined)
+    .map((item) => {
+      if (item.number === undefined) {
+        throw new IssueParseError("Missing required field in pull request data: number");
+      }
+      if (item.title === undefined) {
+        throw new IssueParseError("Missing required field in pull request data: title");
+      }
+      if (item.html_url === undefined) {
+        throw new IssueParseError("Missing required field in pull request data: html_url");
+      }
+
+      return {
+        number: item.number,
+        title: item.title,
+        body: item.body ?? null,
+        labels: (item.labels ?? []).map((label) => label.name),
+        url: item.html_url,
+        authorAssociation: item.author_association ?? "",
+      };
+    });
 }
 
 /**
@@ -176,18 +267,21 @@ function determinePriority(
 }
 
 /**
- * authorAssociation が許可リストに含まれない Issue を除外する。
- * 除外された Issue は WARNING ログに記録する。
+ * Each excluded item is logged as a warning.
  */
-function filterByAuthorAssociation(issues: Issue[]): Issue[] {
-  return issues.filter((issue) => {
-    if (PERMITTED_ASSOCIATIONS.has(issue.authorAssociation)) {
+function filterByAuthorAssociation<T extends { readonly number: number; readonly authorAssociation: string }>(
+  items: readonly T[],
+  kind: "Issue" | "PR",
+): T[] {
+  return items.filter((item) => {
+    if (PERMITTED_ASSOCIATIONS.has(item.authorAssociation)) {
       return true;
     }
     logger.warn(
-      "Issue #%s skipped: author association '%s' is not permitted",
-      issue.number,
-      issue.authorAssociation,
+      "%s #%s skipped: author association '%s' is not permitted",
+      kind,
+      item.number,
+      item.authorAssociation,
     );
     return false;
   });

@@ -31,7 +31,7 @@ vi.mock("../../src/worker/logger.js", () => ({
   createLogger: vi.fn(() => mockLogger),
 }));
 
-import { withWorktree, WorktreeError } from "../../src/worker/worktree.js";
+import { withWorktree, withPullRequestWorktree, resolveHeadSha, WorktreeError } from "../../src/worker/worktree.js";
 import { runCommandSync, ProcessExecutionError } from "../../src/worker/process.js";
 import { mkdirSync } from "node:fs";
 import { makeRepoConfig } from "./helpers/factories.js";
@@ -421,5 +421,153 @@ describe("withWorktree", () => {
       expect(removeArgs).not.toContain(REPO_DIR);
       expect(removeArgs).not.toContain(WORKTREES_BASE);
     });
+  });
+});
+
+describe("withPullRequestWorktree", () => {
+  const PR_NUMBER = 7;
+  const BASE_BRANCH = "develop";
+
+  beforeEach(() => {
+    mockedRunCommandSync.mockReset();
+    mockedMkdirSync.mockReset();
+    mockLogger.warn.mockReset();
+  });
+
+  it("fetches the pull request head and the base branch in one fetch and checks the head out detached", async () => {
+    mockedRunCommandSync.mockReturnValue("");
+
+    let yieldedPath = "";
+    await withPullRequestWorktree(
+      makeRepoArg(),
+      PR_NUMBER,
+      BASE_BRANCH,
+      async (worktreePath) => { yieldedPath = worktreePath; },
+      fixedTimestampFn,
+    );
+
+    const expectedPath = path.join(REPO_DIR, `pr-${PR_NUMBER}-${FIXED_TIMESTAMP}`);
+    expect(yieldedPath).toBe(expectedPath);
+    const ref = `refs/sabori-flow/review/pr-${PR_NUMBER}`;
+    expect(mockedRunCommandSync.mock.calls.map((call) => call[1])).toEqual([
+      [
+        "-C",
+        REPO_LOCAL_PATH,
+        "fetch",
+        "origin",
+        `+refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}`,
+        `+refs/pull/${PR_NUMBER}/head:${ref}`,
+      ],
+      ["-C", REPO_LOCAL_PATH, "worktree", "add", "--detach", expectedPath, ref],
+      ["-C", REPO_LOCAL_PATH, "update-ref", "-d", ref],
+      ["-C", REPO_LOCAL_PATH, "worktree", "remove", expectedPath, "--force"],
+    ]);
+    expect(mockedMkdirSync).toHaveBeenCalledWith(REPO_DIR, { recursive: true });
+  });
+
+  it("suffixes the path with the attempt number after the first attempt", async () => {
+    mockedRunCommandSync.mockReturnValue("");
+
+    let yieldedPath = "";
+    await withPullRequestWorktree(
+      makeRepoArg(),
+      PR_NUMBER,
+      BASE_BRANCH,
+      async (worktreePath) => { yieldedPath = worktreePath; },
+      fixedTimestampFn,
+      2,
+    );
+
+    expect(yieldedPath).toBe(path.join(REPO_DIR, `pr-${PR_NUMBER}-${FIXED_TIMESTAMP}-2`));
+  });
+
+  it("still runs the review when the temporary ref cannot be deleted", async () => {
+    mockedRunCommandSync.mockImplementation((_cmd, args) => {
+      if (args.includes("update-ref")) {
+        throw new ProcessExecutionError("cannot lock ref");
+      }
+      return "";
+    });
+    const callback = vi.fn().mockResolvedValue("done");
+
+    await expect(
+      withPullRequestWorktree(makeRepoArg(), PR_NUMBER, BASE_BRANCH, callback, fixedTimestampFn),
+    ).resolves.toBe("done");
+    expect(mockLogger.warn).toHaveBeenCalled();
+  });
+
+  it("returns the callback result", async () => {
+    mockedRunCommandSync.mockReturnValue("");
+
+    const result = await withPullRequestWorktree(makeRepoArg(), PR_NUMBER, BASE_BRANCH, async () => "done", fixedTimestampFn);
+
+    expect(result).toBe("done");
+  });
+
+  it("throws a fetch-phase WorktreeError when the pull request head cannot be fetched", async () => {
+    mockedRunCommandSync.mockImplementation((_cmd, args) => {
+      if (args.some((arg) => arg.startsWith(`+refs/pull/${PR_NUMBER}/head:`))) {
+        throw new ProcessExecutionError("couldn't find remote ref");
+      }
+      return "";
+    });
+    const callback = vi.fn();
+
+    const error = await withPullRequestWorktree(makeRepoArg(), PR_NUMBER, BASE_BRANCH, callback, fixedTimestampFn)
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(WorktreeError);
+    expect((error as WorktreeError).phase).toBe("fetch");
+    expect(callback).not.toHaveBeenCalled();
+  });
+
+  it("throws a create-phase WorktreeError when worktree add fails", async () => {
+    mockedRunCommandSync.mockImplementation((_cmd, args) => {
+      if (args.includes("add")) {
+        throw new ProcessExecutionError("already exists");
+      }
+      return "";
+    });
+
+    const error = await withPullRequestWorktree(makeRepoArg(), PR_NUMBER, BASE_BRANCH, vi.fn(), fixedTimestampFn)
+      .catch((e: unknown) => e);
+
+    expect((error as WorktreeError).phase).toBe("create");
+  });
+
+  it("removes the worktree even when the callback throws", async () => {
+    mockedRunCommandSync.mockReturnValue("");
+
+    await expect(
+      withPullRequestWorktree(makeRepoArg(), PR_NUMBER, BASE_BRANCH, async () => { throw new Error("boom"); }, fixedTimestampFn),
+    ).rejects.toThrow("boom");
+
+    const lastCall = mockedRunCommandSync.mock.calls.at(-1)![1];
+    expect(lastCall).toContain("remove");
+  });
+});
+
+describe("resolveHeadSha", () => {
+  beforeEach(() => {
+    mockedRunCommandSync.mockReset();
+  });
+
+  it("returns the trimmed commit hash of HEAD", () => {
+    mockedRunCommandSync.mockReturnValue("0123456789abcdef0123456789abcdef01234567\n");
+
+    expect(resolveHeadSha("/wt/pr-7")).toBe("0123456789abcdef0123456789abcdef01234567");
+    expect(mockedRunCommandSync).toHaveBeenCalledWith(
+      "git",
+      ["-C", "/wt/pr-7", "rev-parse", "HEAD"],
+      { timeoutMs: 120_000 },
+    );
+  });
+
+  it("throws a WorktreeError when git fails", () => {
+    mockedRunCommandSync.mockImplementation(() => {
+      throw new ProcessExecutionError("not a git repository");
+    });
+
+    expect(() => resolveHeadSha("/wt/pr-7")).toThrow(WorktreeError);
   });
 });

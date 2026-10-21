@@ -341,6 +341,21 @@ describe("inspectConfig - labels comparison", () => {
 
     expect(result.repositories[0].labels.matchesDefault).toBe(false);
   });
+
+  it("different review.trigger label alone produces matchesDefault === false", () => {
+    const modified: LabelsConfig = {
+      ...DEFAULT_LABELS,
+      review: { ...DEFAULT_LABELS.review, trigger: "custom/review" },
+    };
+    const config = makeConfig({
+      repositories: [makeRepo({ labels: modified })],
+    });
+    const raw = { repositories: [makeRawRepo()] };
+
+    const result = inspectConfig(config, raw);
+
+    expect(result.repositories[0].labels.matchesDefault).toBe(false);
+  });
 });
 
 // ---------- Tests: priority_labels comparison ----------

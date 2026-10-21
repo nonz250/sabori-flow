@@ -1,14 +1,19 @@
 import { homedir } from "node:os";
+import { basename } from "node:path";
 
 import {
   runCommand,
   ProcessTimeoutError,
   ProcessExecutionError,
 } from "./process.js";
+import type { Language } from "../i18n/types.js";
 import type { FailureDiagnostics } from "./models.js";
 import { FailureCategory } from "./models.js";
 
+import { createLogger } from "./logger.js";
 import { formatMarker } from "./spec-thread.js";
+
+const logger = createLogger("comment");
 
 const GH_TIMEOUT_MS = 120_000;
 
@@ -172,9 +177,54 @@ const SUCCESS_HEADER = "## ✅ Claude Code 実行結果: 成功\n\n";
 const SUCCESS_TRUNCATED_SUFFIX = "\n\n---\n⚠️ 出力が長すぎるため省略されました。";
 
 const FAILURE_HEADER = "## ❌ Claude Code 実行結果: 失敗\n\n";
+
+interface ReviewText {
+  readonly header: string;
+  readonly reviewedCommit: string;
+  readonly truncatedSuffix: string;
+  readonly unattached: (alt: string, path: string) => string;
+}
+
+const REVIEW_TEXT: Record<Language, ReviewText> = {
+  ja: {
+    header: "## 🔍 AI レビュー結果\n\n",
+    reviewedCommit: "レビュー対象のコミット",
+    truncatedSuffix: "\n\n---\n⚠️ 出力が長すぎるため省略されました。",
+    // Underscore emphasis does not close after full-width punctuation that
+    // is followed by Japanese text, so the note is left plain.
+    unattached: (alt, path) => `（添付されていないスクリーンショット: ${alt}, ${path}）`,
+  },
+  en: {
+    header: "## 🔍 AI Review\n\n",
+    reviewedCommit: "Reviewed commit",
+    truncatedSuffix: "\n\n---\n⚠️ The output was too long and has been truncated.",
+    unattached: (alt, path) => `_(screenshot not attached: ${alt}, ${path})_`,
+  },
+};
+
+/**
+ * gh --attach rewrites each `./<file>` in the body to the uploaded URL and
+ * appends attachments the body does not reference. Either way the body
+ * grows, so this much is held back from the truncation limit per file.
+ */
+const ATTACHMENT_URL_RESERVE = 200;
+
+/** Longer than a plain comment because it includes uploading the attachments */
+const REVIEW_COMMENT_TIMEOUT_MS = 300_000;
+
+/** How much of gh's output to quote when it prints no comment URL */
+const UNEXPECTED_OUTPUT_PREVIEW_LENGTH = 200;
+
+const COMMENT_URL_PATTERN = /https?:\/\/\S+#issuecomment-\d+/;
+
+const LOCAL_REFERENCE_PATTERN = /\]\((?![a-z][a-z0-9+.-]*:)([^)\s]+)\)/gi;
+
+const UNATTACHED_IMAGE_PATTERN = /!\[([^\]]*)\]\((?![a-z][a-z0-9+.-]*:)([^)\s]+\.png)\)/gi;
 const FAILURE_TRUNCATED_SUFFIX = "\n\n---\n⚠️ 出力が長すぎるため省略されました。";
 
 export {
+  ATTACHMENT_URL_RESERVE,
+  REVIEW_COMMENT_TIMEOUT_MS,
   MAX_COMMENT_LENGTH,
   PARTIAL_STDOUT_TAIL_LENGTH,
   PARTIAL_STDERR_TAIL_LENGTH,
@@ -200,6 +250,9 @@ const FAILURE_CATEGORY_LABELS: Record<FailureCategory, string> = {
   [FailureCategory.GIT_FETCH]: "Git Fetch Error",
   [FailureCategory.SPEC_PROPOSAL_COMMENT]: "Spec Proposal Comment Error",
   [FailureCategory.AGENT_USAGE_LIMIT]: "Agent Usage Limit Reached",
+  [FailureCategory.REVIEW_UNSUPPORTED_PR]: "Unsupported Pull Request",
+  [FailureCategory.REVIEW_EMPTY_OUTPUT]: "Empty Review Output",
+  [FailureCategory.REVIEW_COMMENT]: "Review Comment Not Posted",
 };
 
 // ---------- Output section labels ----------
@@ -324,6 +377,14 @@ export class CommentError extends Error {
   }
 }
 
+/** gh exited with an error, so the comment was not posted */
+class CommentRejectedError extends CommentError {
+  constructor(message: string) {
+    super(message);
+    Object.setPrototypeOf(this, CommentRejectedError.prototype);
+  }
+}
+
 /**
  * 成功時のコメントを Issue に投稿する。
  * claudeOutput がコメント上限を超える場合は切り詰めて省略メッセージを付与する。
@@ -361,6 +422,7 @@ export async function postFailureComment(
   repoFullName: string,
   issueNumber: number,
   errorMessage: string,
+  target: CommentTarget = "issue",
 ): Promise<void> {
   const markerSuffix = "\n\n" + WORKER_COMMENT_MARKER;
   const maxOutputLength =
@@ -373,7 +435,7 @@ export async function postFailureComment(
   }
 
   const body = FAILURE_HEADER + message + markerSuffix;
-  await postComment(repoFullName, issueNumber, body);
+  await postComment(repoFullName, issueNumber, body, target);
 }
 
 /**
@@ -407,6 +469,123 @@ export async function postSpecProposalComment(
   await postComment(repoFullName, issueNumber, body);
 }
 
+export interface ReviewCommentOptions {
+  readonly reviewedSha: string;
+  /** The worker's copies that gh uploads, out of the agent's reach. Null when nothing is attached. */
+  readonly attachmentDir: string | null;
+  /** File names directly under attachmentDir */
+  readonly screenshots: readonly string[];
+  readonly note: string | null;
+  readonly language: Language;
+}
+
+/**
+ * Posts the review to the pull request and returns the comment's URL.
+ *
+ * The comment is the review's whole result, so a gh run that succeeds
+ * without printing a comment URL counts as a failure: the post cannot be
+ * confirmed. When gh rejects a post with attachments, such as a gh too old
+ * to know --attach, the review is posted again without them. A timeout or
+ * a missing URL is not retried, since the first post may have gone through
+ * and a second would duplicate it.
+ *
+ * @throws {CommentError} when posting fails or cannot be confirmed
+ */
+export async function postReviewComment(
+  repoFullName: string,
+  prNumber: number,
+  rawOutput: string,
+  options: ReviewCommentOptions,
+): Promise<string> {
+  try {
+    return await sendReviewComment(repoFullName, prNumber, rawOutput, options);
+  } catch (error: unknown) {
+    if (!(error instanceof CommentRejectedError) || options.screenshots.length === 0) {
+      throw error;
+    }
+    logger.warn(
+      "PR #%s: gh rejected the review with screenshots, posting it without them: %s",
+      prNumber,
+      error.message,
+    );
+    return await sendReviewComment(repoFullName, prNumber, rawOutput, {
+      ...options,
+      attachmentDir: null,
+      screenshots: [],
+    });
+  }
+}
+
+async function sendReviewComment(
+  repoFullName: string,
+  prNumber: number,
+  rawOutput: string,
+  options: ReviewCommentOptions,
+): Promise<string> {
+  // Rewritten before sanitizing: the screenshot directory lives under the
+  // home directory, which sanitizeOutput masks.
+  // The agent may name a screenshot by any path from wherever it ran, so the
+  // file name decides; gh only rewrites the ./ form to the uploaded URL.
+  let output = rawOutput.replace(LOCAL_REFERENCE_PATTERN, (match: string, path: string) => {
+    const name = basename(path);
+    return options.screenshots.includes(name) ? `](./${name})` : match;
+  });
+  output = escapeWorkerMarkers(sanitizeOutput(output));
+  const text = REVIEW_TEXT[options.language];
+  // Anything still pointing at a local PNG was dropped by the screenshot
+  // checks and would render as a broken image on GitHub.
+  output = output.replace(UNATTACHED_IMAGE_PATTERN, (match: string, alt: string, path: string) =>
+    options.screenshots.some((name) => path === `./${name}`) ? match : text.unattached(alt, path),
+  );
+
+  const notePart = options.note === null ? "" : `> ${options.note}\n\n`;
+  const prefix = `${text.header}${notePart}${text.reviewedCommit}: \`${options.reviewedSha}\`\n\n`;
+  const markerSuffix = "\n\n" + WORKER_COMMENT_MARKER;
+  const maxOutputLength =
+    MAX_COMMENT_LENGTH -
+    options.screenshots.length * ATTACHMENT_URL_RESERVE -
+    prefix.length -
+    markerSuffix.length;
+  if (output.length > maxOutputLength) {
+    const truncatedLength = maxOutputLength - text.truncatedSuffix.length;
+    output = output.slice(0, truncatedLength) + text.truncatedSuffix;
+  }
+
+  const args = [
+    "pr",
+    "comment",
+    String(prNumber),
+    "--repo",
+    repoFullName,
+    "--body-file",
+    "-",
+    ...options.screenshots.flatMap((name) => ["--attach", `./${name}`]),
+  ];
+
+  let stdout: string;
+  try {
+    const result = await runCommand("gh", args, {
+      input: prefix + output + markerSuffix,
+      timeoutMs: REVIEW_COMMENT_TIMEOUT_MS,
+      cwd: options.attachmentDir ?? undefined,
+    });
+    if (!result.success) {
+      throw new CommentRejectedError(result.stderr);
+    }
+    stdout = result.stdout;
+  } catch (error: unknown) {
+    throw toCommentError(error, "gh pr comment", REVIEW_COMMENT_TIMEOUT_MS);
+  }
+
+  const url = stdout.match(COMMENT_URL_PATTERN);
+  if (url === null) {
+    throw new CommentError(
+      `gh pr comment exited successfully but did not print a comment URL: ${stdout.slice(0, UNEXPECTED_OUTPUT_PREVIEW_LENGTH)}`,
+    );
+  }
+  return url[0];
+}
+
 /**
  * Neutralize worker marker sequences in text to prevent marker spoofing.
  * Inserts a zero-width space after "<!--" in any sabori-flow marker prefix.
@@ -415,21 +594,22 @@ function escapeWorkerMarkers(text: string): string {
   return text.replaceAll(WORKER_COMMENT_MARKER_PREFIX, "<!--​ sabori-flow");
 }
 
+export type CommentTarget = "issue" | "pr";
+
 /**
- * gh issue comment で Issue にコメントを投稿する。
- *
- * @throws {CommentError} コマンドがタイムアウトまたは非0終了した場合
+ * @throws {CommentError} when the command times out or exits non-zero
  */
 async function postComment(
   repoFullName: string,
   issueNumber: number,
   body: string,
+  target: CommentTarget = "issue",
 ): Promise<void> {
   try {
     const result = await runCommand(
       "gh",
       [
-        "issue",
+        target,
         "comment",
         String(issueNumber),
         "--repo",
@@ -444,17 +624,16 @@ async function postComment(
       throw new CommentError(result.stderr);
     }
   } catch (error: unknown) {
-    if (error instanceof CommentError) {
-      throw error;
-    }
-    if (error instanceof ProcessTimeoutError) {
-      throw new CommentError(
-        `gh issue comment timed out after ${GH_TIMEOUT_MS / 1_000} seconds`,
-      );
-    }
-    if (error instanceof ProcessExecutionError) {
-      throw new CommentError(error.message);
-    }
-    throw error;
+    throw toCommentError(error, `gh ${target} comment`, GH_TIMEOUT_MS);
   }
+}
+
+function toCommentError(error: unknown, command: string, timeoutMs: number): unknown {
+  if (error instanceof ProcessTimeoutError) {
+    return new CommentError(`${command} timed out after ${timeoutMs / 1_000} seconds`);
+  }
+  if (error instanceof ProcessExecutionError) {
+    return new CommentError(error.message);
+  }
+  return error;
 }

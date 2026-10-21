@@ -96,6 +96,11 @@ export function getWorktreesDir(): string {
   return path.join(getBaseDir(), "worktrees");
 }
 
+/** ~/.sabori-flow/review-attachments */
+export function getReviewAttachmentsDir(): string {
+  return path.join(getBaseDir(), "review-attachments");
+}
+
 /** ~/.sabori-flow/auth-token */
 export function getAuthTokenPath(): string {
   return path.join(getBaseDir(), "auth-token");

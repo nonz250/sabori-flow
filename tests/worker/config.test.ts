@@ -384,6 +384,61 @@ repositories:
     expect(repo.labels.spec.needsHuman).toBe("ai/spec/needs-human");
   });
 
+  it("labels.review omitted defaults to ai/review/*", () => {
+    mockYaml(VALID_YAML);
+    const result = loadConfig("/path/to/config.yml");
+    const repo = result.repositories[0];
+
+    expect(repo.labels.review.trigger).toBe("ai/review");
+    expect(repo.labels.review.inProgress).toBe("ai/review/in-progress");
+    expect(repo.labels.review.done).toBe("ai/review/done");
+    expect(repo.labels.review.failed).toBe("ai/review/failed");
+  });
+
+  it("labels.review specified — review from config, other phases default", () => {
+    const yaml = `\
+repositories:
+  - owner: my-org
+    repo: my-repo
+    local_path: /tmp/my-org/my-repo
+    labels:
+      review:
+        trigger: "custom/review"
+        in_progress: "custom/review:wip"
+        done: "custom/review:done"
+        failed: "custom/review:failed"
+    priority_labels: []
+`;
+    mockYaml(yaml);
+    const repo = loadConfig("/path/to/config.yml").repositories[0];
+
+    expect(repo.labels.review).toEqual({
+      trigger: "custom/review",
+      inProgress: "custom/review:wip",
+      done: "custom/review:done",
+      failed: "custom/review:failed",
+    });
+    expect(repo.labels.impl.trigger).toBe("ai/impl");
+  });
+
+  it("labels.review specified with incomplete keys throws ConfigValidationError", () => {
+    const yaml = `\
+repositories:
+  - owner: my-org
+    repo: my-repo
+    local_path: /tmp/my-org/my-repo
+    labels:
+      review:
+        trigger: "custom/review"
+    priority_labels: []
+`;
+    mockYaml(yaml);
+
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      "repositories[0].labels.review: 'in_progress' key is required",
+    );
+  });
+
   it("labels.spec specified with incomplete keys throws ConfigValidationError", () => {
     const yaml = `\
 repositories:

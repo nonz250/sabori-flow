@@ -98,7 +98,8 @@ Claude offers [Scheduled Tasks](https://code.claude.com/docs/en/scheduled-tasks)
 - Node.js v24+
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (`claude`)
 - [OpenAI Codex CLI](https://developers.openai.com/codex/cli/reference) (`codex`, when using `execution.agent: codex`)
-- [GitHub CLI](https://cli.github.com/) (`gh`) -- must be authenticated
+- [GitHub CLI](https://cli.github.com/) (`gh`) -- must be authenticated. Pull request review attaches screenshots with `gh pr comment --attach` (verified with gh 2.102.0); an older gh without that flag fails only reviews that took screenshots
+- Optional, for pull request review: a Playwright MCP server, or Chrome DevTools MCP as a fallback, configured for the agent you use
 
 ## Setup
 
@@ -201,6 +202,10 @@ flowchart LR
     K["ai/impl"] --> L["ai/impl/in-progress"]
     L --> M["ai/impl/done"]
     L --> N["ai/impl/failed"]
+
+    O["ai/review (on a PR)"] --> P["ai/review/in-progress"]
+    P --> Q["ai/review/done"]
+    P --> R["ai/review/failed"]
 ```
 
 ### Spec Phase
@@ -216,6 +221,18 @@ The spec phase lets you get AI-generated specifications reviewed before planning
 
 The spec phase is optional. You can still add `ai/plan` or `ai/impl` directly to skip it.
 
+### Pull Request Review
+
+Add `ai/review` to a pull request to have an agent review it.
+
+1. The worker checks out the pull request's head in a temporary worktree and runs the agent with the review prompt (`prompts/{lang}/review.md`)
+2. The agent checks security, design, and coverage of the PR description, and verifies the change locally. For UI changes it takes screenshots with Playwright, falling back to Chrome DevTools
+3. The worker posts the review as a pull request comment with the screenshots attached, then applies `ai/review/done`
+
+Reviews share `execution.max_issues_per_repo` with the issue phases and run before them in each cycle. To review again after pushing fixes, add `ai/review` again.
+
+Only pull requests whose head branch is in the same repository and whose author is an owner, member, or collaborator are reviewed. The review runs the pull request's code on your machine, so a pull request from a fork is moved to `ai/review/failed` without running any agent.
+
 ### Handling Failures
 
 When processing fails, a `failed` label is applied and a failure comment is posted to the Issue.
@@ -226,7 +243,7 @@ Because `claude -p` terminates as soon as the model returns its final message, a
 
 1. Check `~/.sabori-flow/logs/worker.log` for details
 2. Fix the Issue content as needed
-3. Remove the `failed` label and re-apply the trigger label (`ai/spec`, `ai/plan`, or `ai/impl`)
+3. Remove the `failed` label and re-apply the trigger label (`ai/spec`, `ai/plan`, `ai/impl`, or `ai/review`)
 
 ### Viewing the Current Configuration
 

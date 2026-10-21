@@ -64,6 +64,21 @@ export interface Issue {
   readonly priority: Priority;
 }
 
+export interface PullRequest {
+  readonly number: number;
+  readonly title: string;
+  readonly body: string | null;
+  readonly labels: readonly string[];
+  readonly url: string;
+  readonly authorAssociation: string;
+}
+
+/** Pull request attributes fetched separately before the review */
+export interface PullRequestDetails {
+  readonly baseRefName: string;
+  readonly isCrossRepository: boolean;
+}
+
 /** 1 フェーズ分のラベル定義 */
 export interface PhaseLabels {
   readonly trigger: string;
@@ -84,6 +99,7 @@ export interface LabelsConfig {
   readonly spec: SpecPhaseLabels;
   readonly plan: PhaseLabels;
   readonly impl: PhaseLabels;
+  readonly review: PhaseLabels;
 }
 
 /** 処理を許可する authorAssociation の一覧 */
@@ -170,6 +186,9 @@ export const FailureCategory = {
   GIT_FETCH: "git_fetch",
   SPEC_PROPOSAL_COMMENT: "spec_proposal_comment",
   AGENT_USAGE_LIMIT: "agent_usage_limit",
+  REVIEW_UNSUPPORTED_PR: "review_unsupported_pr",
+  REVIEW_EMPTY_OUTPUT: "review_empty_output",
+  REVIEW_COMMENT: "review_comment",
 } as const;
 export type FailureCategory = (typeof FailureCategory)[keyof typeof FailureCategory];
 
