@@ -1,15 +1,11 @@
 import type { FailureDiagnostics, StepResult } from "./models.js";
-import { Agent, FailureCategory } from "./models.js";
+import { Agent, FailureCategory, agentDisplayName } from "./models.js";
 import type { AgentPool } from "./agent-pool.js";
 import type { ProcessResult } from "./process.js";
 import { FIRST_ATTEMPT } from "./worktree.js";
 import { createLogger } from "./logger.js";
 
 const logger = createLogger("agent-fallback");
-
-export function agentDisplayName(agent: Agent): string {
-  return agent === Agent.CODEX ? "Codex CLI" : "Claude Code CLI";
-}
 
 /**
  * Agents ahead of the one that ran in the priority list are exactly the

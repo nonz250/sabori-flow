@@ -208,3 +208,7 @@ export interface FailureDiagnostics {
 export function repoFullName(config: RepositoryConfig): string {
   return `${config.owner}/${config.repo}`;
 }
+
+export function agentDisplayName(agent: Agent): string {
+  return agent === Agent.CODEX ? "Codex CLI" : "Claude Code CLI";
+}

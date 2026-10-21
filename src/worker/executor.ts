@@ -4,8 +4,7 @@ import {
   ProcessExecutionError,
 } from "./process.js";
 import type { ProcessResult, RunCommandOptions } from "./process.js";
-import { Autonomy, Agent } from "./models.js";
-import { agentDisplayName } from "./agent-fallback.js";
+import { Autonomy, Agent, agentDisplayName } from "./models.js";
 
 export class ExecutorError extends Error {
   constructor(message: string) {

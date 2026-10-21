@@ -1,6 +1,6 @@
 import type { Language } from "../i18n/types.js";
 import type { Issue, IssueComment, PhaseLabels, RepositoryConfig, ExecutionConfig, FailureDiagnostics, StepResult, SpecPhaseLabels } from "./models.js";
-import { Autonomy, Agent, Phase, FailureCategory, repoFullName } from "./models.js";
+import { Autonomy, Agent, Phase, FailureCategory, agentDisplayName, repoFullName } from "./models.js";
 import type { ProcessResult } from "./process.js";
 import { buildPrompt, IMPL_NO_CHANGE_MARKER, IMPL_RESUME_PROMPTS } from "./prompt.js";
 import { runAgent, ExecutorTimeoutError } from "./executor.js";
@@ -21,7 +21,6 @@ import { withWorktree, WorktreeError } from "./worktree.js";
 import { AgentPool } from "./agent-pool.js";
 import type { AttemptOutcome } from "./agent-fallback.js";
 import {
-  agentDisplayName,
   describeFallback,
   enterInProgress,
   tryAgentsInOrder,
