@@ -321,7 +321,7 @@ execution:
   max_parallel: 1
   max_issues_per_repo: 1
   agent: codex
-  autonomy: full # Uses --yolo with Codex
+  autonomy: auto # Uses --approve-for-me with Codex
   interval_minutes: 10
   timeout_minutes: 60
 
@@ -342,7 +342,7 @@ Labels default to `ai/*` (e.g. `ai/spec`, `ai/plan/in-progress`). To customize p
 | `execution.max_parallel` | Number of parallel executions. Default is `1` (sequential) |
 | `execution.max_issues_per_repo` | Maximum number of issues to process per repository. Default is `1` |
 | `execution.agent` | Execution agent: `claude` / `codex`, or a list in priority order (e.g. `[claude, codex]`). When an agent fails because its usage limit or credits ran out, the Issue is retried with the next agent in the list. Default is `claude` |
-| `execution.autonomy` | CLI autonomy level. For Codex, `full` uses `--yolo`, while `auto` / `sandboxed` use `--sandbox workspace-write`. Claude maps these values to its permission modes. Default is `interactive` |
+| `execution.autonomy` | CLI autonomy level. `auto` uses `--permission-mode auto` on Claude Code and `--approve-for-me` on Codex. `full` uses `--dangerously-skip-permissions` on Claude Code and `--yolo` on Codex. `sandboxed` uses `--sandbox workspace-write` on Codex and falls back to `interactive` on Claude Code. Default is `interactive` |
 | `execution.interval_minutes` | Scheduled execution interval in minutes (10-1440). Default is `10` |
 | `execution.timeout_minutes` | Agent CLI execution timeout in minutes (1-240). Default is `60`. Budgets the whole impl session, including a possible resume. When falling back to another agent, each agent gets its own budget |
 | `language` | Language for CLI messages and prompt templates (`ja` / `en`). Default is `ja` |
@@ -351,11 +351,10 @@ Labels default to `ai/*` (e.g. `ai/spec`, `ai/plan/in-progress`). To customize p
 
 ## Security
 
-By default, this tool runs Claude Code CLI in `interactive` mode, which requires user approval for each action. For unattended launchd runs you have two autonomous options, from safer to riskier:
+By default, this tool runs the agent CLI in `interactive` mode, which requires user approval for each action. For unattended launchd runs you have two autonomous options, from safer to riskier:
 
-- `execution.autonomy: auto` — Claude Code's `--permission-mode auto`. A classifier blocks dangerous actions (deploys, mass deletions, etc.) and auto-approves the rest. Requires Claude Code v2.1.83+ and a Max/Team/Enterprise plan.
-- `execution.autonomy: full` — passes `--dangerously-skip-permissions`, allowing nearly arbitrary operations on your machine. Use only when `auto` is not available.
-- For Codex unattended runs, use `full` to pass `--yolo`. This disables approvals and sandboxing, so restrict it to an externally isolated runner. Use `auto` or `sandboxed` to retain the workspace-write sandbox.
+- `execution.autonomy: auto` — approval requests go to an automatic judge. Claude Code runs with `--permission-mode auto`, where a classifier blocks dangerous actions (deploys, mass deletions, etc.) and auto-approves the rest. Requires Claude Code v2.1.83+ and a Max/Team/Enterprise plan. Codex runs with `--approve-for-me`, which keeps the workspace-write sandbox and routes escalations such as network access to Codex's automatic review. Requires Codex 0.147.0+.
+- `execution.autonomy: full` — skips every approval. Claude Code runs with `--dangerously-skip-permissions` and Codex with `--yolo`, which also disables Codex's sandbox. Both allow nearly arbitrary operations on your machine, so restrict `full` to an externally isolated runner.
 
 When using `npx` (after npm publish), packages are fetched from the npm registry at runtime. If the npm package were compromised, malicious code could be executed automatically by the scheduler. Using `npm link` with a local build (as described in [Setup](#setup)) avoids this risk since you can audit the code before running it.
 

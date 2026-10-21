@@ -217,9 +217,10 @@ spec の review 状態では、ワーカーが毎サイクル評価を行う。�
 - `execution.agent`: 実行エージェント（`claude` / `codex`、または優先度順のリスト、デフォルト: `claude`）
 - `execution.autonomy`: CLI の自律実行レベル（`interactive` / `auto` / `full` / `sandboxed`、デフォルト: `interactive`）
   - `interactive`: 各操作にユーザー承認が必要。launchd 無人実行には不向き
-  - `auto`: Claude Code の `--permission-mode auto`。分類器が危険操作のみブロック (v2.1.83+ / Max・Team・Enterprise プラン必須)
-  - `full`: Claude は `--dangerously-skip-permissions`、Codex は `--yolo`。全許可
-  - `sandboxed`: Codex は `--sandbox workspace-write`、Claude は interactive にフォールバック
+  - `auto`: 承認要求を自動判定に回す。Claude は `--permission-mode auto` で、分類器が危険操作のみブロック (v2.1.83+ / Max・Team・Enterprise プラン必須)。Codex は `--approve-for-me` で、workspace-write sandbox のまま権限昇格を自動レビューに回す (0.147.0+)
+  - `full`: 承認をすべて省略する。Claude は `--dangerously-skip-permissions`、Codex は `--yolo` で sandbox も無効
+  - `sandboxed`: Codex は自動レビューなしの `--sandbox workspace-write`、Claude は interactive にフォールバック
+  - Codex の再開に使う `codex exec resume` は `--sandbox` と `--approve-for-me` を受け付けないため、フラグは `resume` の前に置く。置かないと再開後の approval が `never` に戻り、自動レビューが外れる
 - `repositories[].labels`: 各フェーズのラベル名（省略可、デフォルト: `ai/*`）。フェーズ単位でフォールバック
 - `execution.interval_minutes`: スケジュール実行間隔（整数、10-1440分、デフォルト: 10）
 - `execution.timeout_minutes`: エージェントCLI実行タイムアウト（整数、1-240分、デフォルト: 60）
