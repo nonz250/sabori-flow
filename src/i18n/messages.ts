@@ -267,7 +267,7 @@ const enMessages: MessageKeys = {
   "prompt.autonomyDescInteractive":
     "Safest. Not suitable for unattended launchd runs (blocks on approval prompts).",
   "prompt.autonomyDescAuto":
-    "Requires Claude Code v2.1.83+ with a Max / Team / Enterprise plan, or Codex 0.147.0+. Recommended for unattended launchd runs.",
+    "Claude Code needs v2.1.83+ and a Max / Team / Enterprise plan, and Codex needs 0.147.0+. Recommended for unattended launchd runs.",
   "prompt.autonomyDescFull":
     "Warning: allows nearly any operation on your machine. Use with caution.",
 
