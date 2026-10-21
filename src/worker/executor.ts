@@ -5,6 +5,7 @@ import {
 } from "./process.js";
 import type { ProcessResult, RunCommandOptions } from "./process.js";
 import { Autonomy, Agent } from "./models.js";
+import { agentDisplayName } from "./agent-fallback.js";
 
 export class ExecutorError extends Error {
   constructor(message: string) {
@@ -123,11 +124,6 @@ export interface AutonomyLogMessage {
   readonly message: string;
 }
 
-const AGENT_CLI_NAMES: Readonly<Record<Agent, string>> = {
-  [Agent.CLAUDE]: "Claude Code CLI",
-  [Agent.CODEX]: "Codex CLI",
-};
-
 const AUTONOMY_FLAG_RESOLVERS: Readonly<
   Record<Agent, (autonomy: Autonomy) => readonly string[]>
 > = {
@@ -154,7 +150,7 @@ export function resolveAutonomyLogMessage(
   const flags = AUTONOMY_FLAG_RESOLVERS[agent](autonomy).join(" ");
   return {
     level,
-    message: `autonomy is set to '${autonomy}'. ${AGENT_CLI_NAMES[agent]} will run with ${flags}.`,
+    message: `autonomy is set to '${autonomy}'. ${agentDisplayName(agent)} will run with ${flags}.`,
   };
 }
 
