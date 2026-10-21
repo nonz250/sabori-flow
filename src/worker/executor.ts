@@ -127,12 +127,28 @@ export interface AutonomyLogMessage {
 }
 
 /**
- * Return the startup log entry (if any) for a given autonomy level.
+ * Return the startup log entry (if any) for a given autonomy level and agent.
  *
- * Emitted once at config load so operators can see the mode the worker
- * is running in. Null means no log should be emitted for that level.
+ * Emitted once per configured agent at config load so operators can see the
+ * flags each agent runs with. Null means no log should be emitted.
  */
 export function resolveAutonomyLogMessage(
+  autonomy: Autonomy,
+  agent: Agent,
+): AutonomyLogMessage | null {
+  switch (agent) {
+    case Agent.CLAUDE:
+      return resolveClaudeAutonomyLogMessage(autonomy);
+    case Agent.CODEX:
+      return resolveCodexAutonomyLogMessage(autonomy);
+    default: {
+      const _exhaustive: never = agent;
+      throw new Error(`Unknown agent: ${_exhaustive}`);
+    }
+  }
+}
+
+function resolveClaudeAutonomyLogMessage(
   autonomy: Autonomy,
 ): AutonomyLogMessage | null {
   switch (autonomy) {
@@ -153,6 +169,35 @@ export function resolveAutonomyLogMessage(
         level: "warn",
         message:
           "Claude Code does not support 'sandboxed' autonomy; falling back to 'interactive'",
+      };
+    case Autonomy.INTERACTIVE:
+      return null;
+    default: {
+      const _exhaustive: never = autonomy;
+      throw new Error(`Unknown autonomy level: ${_exhaustive}`);
+    }
+  }
+}
+
+function resolveCodexAutonomyLogMessage(
+  autonomy: Autonomy,
+): AutonomyLogMessage | null {
+  switch (autonomy) {
+    case Autonomy.FULL:
+      return {
+        level: "warn",
+        message: "autonomy is set to 'full'. Codex CLI will run with --yolo.",
+      };
+    case Autonomy.AUTO:
+      return {
+        level: "info",
+        message: "autonomy is set to 'auto'. Codex CLI will run with --approve-for-me.",
+      };
+    case Autonomy.SANDBOXED:
+      return {
+        level: "info",
+        message:
+          "autonomy is set to 'sandboxed'. Codex CLI will run with --sandbox workspace-write.",
       };
     case Autonomy.INTERACTIVE:
       return null;

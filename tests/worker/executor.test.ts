@@ -615,30 +615,50 @@ describe("resolveClaudeAutonomyFlags", () => {
 });
 
 describe("resolveAutonomyLogMessage", () => {
-  it("full の場合 warn レベルで full 向けメッセージを返す", () => {
-    const result = resolveAutonomyLogMessage("full");
-    expect(result).not.toBeNull();
+  it("claude の full は承認を全部飛ばすため warn レベルで --dangerously-skip-permissions を示す", () => {
+    const result = resolveAutonomyLogMessage("full", "claude");
     expect(result?.level).toBe("warn");
+    expect(result?.message).toContain("Claude Code CLI");
     expect(result?.message).toContain("--dangerously-skip-permissions");
   });
 
-  it("auto の場合 info レベルで auto 向けメッセージを返す", () => {
-    const result = resolveAutonomyLogMessage("auto");
-    expect(result).not.toBeNull();
+  it("codex の full は承認とサンドボックスを無効化するため warn レベルで --yolo を示す", () => {
+    const result = resolveAutonomyLogMessage("full", "codex");
+    expect(result?.level).toBe("warn");
+    expect(result?.message).toContain("Codex CLI");
+    expect(result?.message).toContain("--yolo");
+  });
+
+  it("claude の auto は info レベルで --permission-mode auto を示す", () => {
+    const result = resolveAutonomyLogMessage("auto", "claude");
     expect(result?.level).toBe("info");
     expect(result?.message).toContain("--permission-mode auto");
   });
 
-  it("sandboxed の場合 warn レベルで fallback メッセージを返す", () => {
-    const result = resolveAutonomyLogMessage("sandboxed");
-    expect(result).not.toBeNull();
+  it("codex の auto は info レベルで --approve-for-me を示す", () => {
+    const result = resolveAutonomyLogMessage("auto", "codex");
+    expect(result?.level).toBe("info");
+    expect(result?.message).toContain("Codex CLI");
+    expect(result?.message).toContain("--approve-for-me");
+  });
+
+  it("claude の sandboxed は非対応のため warn レベルで interactive へのフォールバックを示す", () => {
+    const result = resolveAutonomyLogMessage("sandboxed", "claude");
     expect(result?.level).toBe("warn");
     expect(result?.message).toContain("sandboxed");
     expect(result?.message).toContain("interactive");
   });
 
-  it("interactive の場合 null を返す", () => {
-    expect(resolveAutonomyLogMessage("interactive")).toBeNull();
+  it("codex の sandboxed は info レベルで workspace-write sandbox を示す", () => {
+    const result = resolveAutonomyLogMessage("sandboxed", "codex");
+    expect(result?.level).toBe("info");
+    expect(result?.message).toContain("Codex CLI");
+    expect(result?.message).toContain("--sandbox workspace-write");
+  });
+
+  it("interactive の場合 エージェントによらず null を返す", () => {
+    expect(resolveAutonomyLogMessage("interactive", "claude")).toBeNull();
+    expect(resolveAutonomyLogMessage("interactive", "codex")).toBeNull();
   });
 });
 
