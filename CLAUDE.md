@@ -215,12 +215,11 @@ spec の review 状態では、ワーカーが毎サイクル評価を行う。�
 - `execution.max_parallel`: 並列実行数（整数、1-10、デフォルト: 1）
 - `execution.max_issues_per_repo`: リポジトリあたりの最大処理 Issue 数（整数、1-20、デフォルト: 1）
 - `execution.agent`: 実行エージェント（`claude` / `codex`、または優先度順のリスト、デフォルト: `claude`）
-- `execution.autonomy`: CLI の自律実行レベル（`interactive` / `auto` / `full` / `sandboxed`、デフォルト: `interactive`）
+- `execution.autonomy`: CLI の自律実行レベル（`interactive` / `auto` / `full`、デフォルト: `interactive`）
   - `interactive`: 各操作にユーザー承認が必要。launchd 無人実行には不向き
   - `auto`: 承認要求を自動判定に回す。Claude は `--permission-mode auto` で、分類器が危険操作のみブロックする。v2.1.83 以降と Max・Team・Enterprise プランが必要。Codex は `--approve-for-me` で、workspace-write sandbox のまま権限昇格を自動レビューに回す。0.147.0 以降が必要
   - `full`: 承認をすべて省略する。Claude は `--dangerously-skip-permissions`、Codex は `--yolo` で sandbox も無効
-  - `sandboxed`: Codex は自動レビューなしの `--sandbox workspace-write`、Claude は interactive にフォールバック
-  - Codex の再開に使う `codex exec resume` は `--sandbox` と `--approve-for-me` を受け付けないため、フラグは `resume` の前に置く。置かないと再開後の approval が `never` に戻り、自動レビューが外れる
+  - Codex の再開に使う `codex exec resume` は `--approve-for-me` を受け付けないため、フラグは `resume` の前に置く。置かないと再開後の approval が `never` に戻り、自動レビューが外れる
 - `repositories[].labels`: 各フェーズのラベル名（省略可、デフォルト: `ai/*`）。フェーズ単位でフォールバック
 - `execution.interval_minutes`: スケジュール実行間隔（整数、10-1440分、デフォルト: 10）
 - `execution.timeout_minutes`: エージェントCLI実行タイムアウト（整数、1-240分、デフォルト: 60）
@@ -236,7 +235,6 @@ spec の review 状態では、ワーカーが毎サイクル評価を行う。�
 - 値は `node.toJS(doc, CONFIG_YAML_PARSE_OPTIONS)` で読む。`toJSON()` は alias を `{ source }` のまま返すため、`loadConfig` が受け付ける値を不正と誤判定する
 - 現在値と同じ値の再入力は変更として扱わない。変更が無く `schema_version` も最新なら書き込まない
 - `loadConfig` はラベルのフェーズが存在すると全キーを必須にする。そのため、省略されたフェーズのキーを 1 つでも入力したら、残りのキーをデフォルト値で書き込む
-- autonomy の選択肢は `init` と同じく `sandboxed` を含めない。手書きの `sandboxed` は選択肢に残し、Enter で値が変わらないようにする
 - `config.yml` は `YAML.parseDocument()` の Document API で部分編集する。コメント・未知キー・整形はそのまま保持される（`YAML.stringify()` によるラウンドトリップは使わない）。`add` コマンドも同方式
 - `execution.interval_minutes` の実効値が変化した場合のみ `reinstall` の実行を促す（plist の `StartInterval` はこのキーにのみ依存するため）
 - インストール済みバージョンより新しい `schema_version` が記録されている場合は、何も変更せず中断する

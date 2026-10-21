@@ -16,9 +16,10 @@ execution:
   # max_issues_per_repo: 1  # Max issues per repository (default: 1)
   # agent: claude           # claude / codex (default: claude)
   # agent: [claude, codex]  # priority list; falls back to the next agent when one hits its usage limit
-  # autonomy: interactive    # interactive / auto / full / sandboxed (default: interactive)
+  # autonomy: interactive    # interactive / auto / full (default: interactive)
   #                          # auto: Claude Code --permission-mode auto (v2.1.83+, Max/Team/Enterprise)
-  #                          # Codex full: --yolo; auto/sandboxed: --sandbox workspace-write
+  #                          #       Codex --approve-for-me (0.147.0+)
+  #                          # full: Claude Code --dangerously-skip-permissions / Codex --yolo
   # interval_minutes: 10  # Scheduled execution interval in minutes (10-1440, default: 10)
   # timeout_minutes: 60   # Agent CLI execution timeout in minutes (1-240, default: 60)
 

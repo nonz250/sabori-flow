@@ -342,7 +342,7 @@ language: ja
 | `execution.max_parallel` | 並列実行数。デフォルトは `1`（逐次実行） |
 | `execution.max_issues_per_repo` | リポジトリあたりの Issue 処理上限。デフォルトは `1` |
 | `execution.agent` | 実行エージェント: `claude` / `codex`。優先度順のリスト（例: `[claude, codex]`）も指定でき、利用上限やクレジット切れで失敗したときはリストの次のエージェントで Issue を実行し直す。デフォルトは `claude` |
-| `execution.autonomy` | CLI の自律実行レベル。`auto` は Claude Code では `--permission-mode auto`、Codex では `--approve-for-me`。`full` は Claude Code では `--dangerously-skip-permissions`、Codex では `--yolo`。`sandboxed` は Codex では `--sandbox workspace-write` で、Claude Code では `interactive` にフォールバック。デフォルトは `interactive` |
+| `execution.autonomy` | CLI の自律実行レベル。`auto` は Claude Code では `--permission-mode auto`、Codex では `--approve-for-me`。`full` は Claude Code では `--dangerously-skip-permissions`、Codex では `--yolo`。デフォルトは `interactive` |
 | `execution.interval_minutes` | スケジュール実行間隔（分、10-1440）。デフォルトは `10` |
 | `execution.timeout_minutes` | エージェントCLIの実行タイムアウト（分、1-240）。デフォルトは `60`。impl の再開を含むセッション全体の予算。別のエージェントにフォールバックした場合は、エージェントごとに予算を持つ |
 | `language` | CLI メッセージおよびプロンプトテンプレートの言語（`ja` / `en`）。デフォルトは `ja` |
@@ -353,7 +353,6 @@ language: ja
 
 このツールはデフォルトで `interactive` モードでエージェントの CLI を実行し、各操作にユーザー承認が必要です。launchd による無人実行向けには、安全性の高い順に以下の自動化オプションがあります。
 
-- `execution.autonomy: sandboxed` — Codex 専用です。自動レビューなしの `--sandbox workspace-write` で実行し、コマンドは worktree のサンドボックス内に留まり、ネットワークアクセスなどの権限昇格は拒否されます。Claude Code では `interactive` にフォールバックします。
 - `execution.autonomy: auto` — 承認要求を自動判定に回します。Claude Code は `--permission-mode auto` で実行し、分類器が危険操作 (デプロイ・大規模削除等) のみブロックし、それ以外は自動承認します。Claude Code v2.1.83 以降および Max / Team / Enterprise プランが必要です。Codex は `--approve-for-me` で実行し、workspace-write サンドボックスを保ったまま、ネットワークアクセスなどの権限昇格を Codex の自動レビューに回します。Codex 0.147.0 以降が必要です。
 - `execution.autonomy: full` — 承認をすべて省略します。Claude Code は `--dangerously-skip-permissions`、Codex は `--yolo` で実行し、Codex ではサンドボックスも無効になります。どちらもマシン上でほぼ任意の操作を許可するため、外部で隔離された実行環境に限定してください。
 
