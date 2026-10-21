@@ -656,6 +656,27 @@ describe("resolveAutonomyLogMessage", () => {
     expect(result?.message).toContain("--sandbox workspace-write");
   });
 
+  it.each([
+    ["claude", "auto", resolveClaudeAutonomyFlags],
+    ["claude", "full", resolveClaudeAutonomyFlags],
+    ["codex", "auto", resolveCodexAutonomyFlags],
+    ["codex", "full", resolveCodexAutonomyFlags],
+    ["codex", "sandboxed", resolveCodexAutonomyFlags],
+  ] as const)("%s の %s はログに実際に渡すフラグを示す", (agent, autonomy, resolveFlags) => {
+    const result = resolveAutonomyLogMessage(autonomy, agent);
+    expect(result?.message).toContain(resolveFlags(autonomy).join(" "));
+  });
+
+  it("すべてのログは autonomy の設定値から始まる", () => {
+    for (const agent of ["claude", "codex"] as const) {
+      for (const autonomy of ["auto", "full", "sandboxed"] as const) {
+        expect(resolveAutonomyLogMessage(autonomy, agent)?.message).toMatch(
+          new RegExp(`^autonomy is set to '${autonomy}'\\.`),
+        );
+      }
+    }
+  });
+
   it("interactive の場合 エージェントによらず null を返す", () => {
     expect(resolveAutonomyLogMessage("interactive", "claude")).toBeNull();
     expect(resolveAutonomyLogMessage("interactive", "codex")).toBeNull();
