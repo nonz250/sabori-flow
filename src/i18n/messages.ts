@@ -95,13 +95,13 @@ const jaMessages: MessageKeys = {
   "prompt.autonomyChoiceInteractive":
     "interactive (推奨) — 各操作でユーザー承認が必要",
   "prompt.autonomyChoiceAuto":
-    "auto — Claude Code の分類器が危険操作のみブロック",
+    "auto — 承認要求を自動判定に回す (Claude: 分類器 / Codex: --approve-for-me)",
   "prompt.autonomyChoiceFull":
     "full — 全許可 (Claude: skip permissions / Codex: --yolo)",
   "prompt.autonomyDescInteractive":
     "最も安全。ただし launchd での自動実行には向きません (承認待ちで停止します)",
   "prompt.autonomyDescAuto":
-    "Claude Code v2.1.83 以降および Max / Team / Enterprise プランが必要です。launchd 自動実行に推奨",
+    "Claude Code は v2.1.83 以降および Max / Team / Enterprise プラン、Codex は 0.147.0 以降が必要です。launchd 自動実行に推奨",
   "prompt.autonomyDescFull":
     "警告: マシン上でほぼ任意の操作を許可します。必要性を慎重に検討してください",
 
@@ -261,13 +261,13 @@ const enMessages: MessageKeys = {
   "prompt.autonomyChoiceInteractive":
     "interactive (recommended) — requires user approval for each action",
   "prompt.autonomyChoiceAuto":
-    "auto — Claude Code's classifier blocks only dangerous actions",
+    "auto — routes approval requests to automatic review (Claude: classifier / Codex: --approve-for-me)",
   "prompt.autonomyChoiceFull":
     "full — unrestricted (Claude: skip permissions / Codex: --yolo)",
   "prompt.autonomyDescInteractive":
     "Safest. Not suitable for unattended launchd runs (blocks on approval prompts).",
   "prompt.autonomyDescAuto":
-    "Requires Claude Code v2.1.83+ and a Max / Team / Enterprise plan. Recommended for unattended launchd runs.",
+    "Requires Claude Code v2.1.83+ with a Max / Team / Enterprise plan, or Codex 0.147.0+. Recommended for unattended launchd runs.",
   "prompt.autonomyDescFull":
     "Warning: allows nearly any operation on your machine. Use with caution.",
 
