@@ -351,8 +351,9 @@ Labels default to `ai/*` (e.g. `ai/spec`, `ai/plan/in-progress`). To customize p
 
 ## Security
 
-By default, this tool runs the agent CLI in `interactive` mode, which requires user approval for each action. For unattended launchd runs you have two autonomous options, from safer to riskier:
+By default, this tool runs the agent CLI in `interactive` mode, which requires user approval for each action. For unattended launchd runs you have the following options, from safer to riskier:
 
+- `execution.autonomy: sandboxed` (Codex only) — `--sandbox workspace-write` without automatic review. Commands stay inside the worktree sandbox, and escalations such as network access are refused. Claude Code falls back to `interactive`.
 - `execution.autonomy: auto` — approval requests go to an automatic judge. Claude Code runs with `--permission-mode auto`, where a classifier blocks dangerous actions (deploys, mass deletions, etc.) and auto-approves the rest. Requires Claude Code v2.1.83+ and a Max/Team/Enterprise plan. Codex runs with `--approve-for-me`, which keeps the workspace-write sandbox and routes escalations such as network access to Codex's automatic review. Requires Codex 0.147.0+.
 - `execution.autonomy: full` — skips every approval. Claude Code runs with `--dangerously-skip-permissions` and Codex with `--yolo`, which also disables Codex's sandbox. Both allow nearly arbitrary operations on your machine, so restrict `full` to an externally isolated runner.
 
