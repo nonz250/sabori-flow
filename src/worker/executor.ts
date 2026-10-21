@@ -177,8 +177,11 @@ export async function runCodex(
 
   const autonomy = options?.autonomy ?? Autonomy.INTERACTIVE;
   const autonomyFlags = resolveCodexAutonomyFlags(autonomy);
+  // Flags go before `resume`: `codex exec resume` does not accept --sandbox or
+  // --approve-for-me, while `codex exec` applies its own flags to the resumed run.
+  // Without them the resumed run falls back to approval "never" and loses the reviewer.
   const args = options?.continueSession
-    ? ["exec", "resume", ...resolveCodexResumeAutonomyFlags(autonomy), "--last", "-"]
+    ? ["exec", ...autonomyFlags, "resume", "--last", "-"]
     : ["exec", ...autonomyFlags, "-"];
 
   try {
@@ -211,7 +214,8 @@ export async function runCodex(
  * Autonomy レベルから Codex CLI のフラグを解決する。
  *
  * - full: --yolo (no sandbox, no approvals)
- * - auto/sandboxed: --sandbox workspace-write
+ * - auto: --approve-for-me (workspace-write sandbox, approval requests go to automatic review)
+ * - sandboxed: --sandbox workspace-write (no automatic review)
  * - interactive: no flags (use Codex configuration defaults)
  */
 export function resolveCodexAutonomyFlags(autonomy: Autonomy): readonly string[] {
@@ -219,6 +223,7 @@ export function resolveCodexAutonomyFlags(autonomy: Autonomy): readonly string[]
     case Autonomy.FULL:
       return ["--yolo"];
     case Autonomy.AUTO:
+      return ["--approve-for-me"];
     case Autonomy.SANDBOXED:
       return ["--sandbox", "workspace-write"];
     case Autonomy.INTERACTIVE:
@@ -228,14 +233,6 @@ export function resolveCodexAutonomyFlags(autonomy: Autonomy): readonly string[]
       throw new Error(`Unknown autonomy level: ${_exhaustive}`);
     }
   }
-}
-
-/**
- * `codex exec resume` supports --yolo but not --sandbox. For other modes,
- * Codex restores the resumed session's original sandbox configuration.
- */
-function resolveCodexResumeAutonomyFlags(autonomy: Autonomy): readonly string[] {
-  return autonomy === Autonomy.FULL ? ["--yolo"] : [];
 }
 
 /**

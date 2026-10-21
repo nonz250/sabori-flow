@@ -754,6 +754,15 @@ describe("runCodex", () => {
       expect(args).toEqual(["exec", "-"]);
     });
 
+    it("autonomy が auto の場合 --approve-for-me が含まれる", async () => {
+      mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
+
+      await runCodex("prompt text", { autonomy: "auto" });
+
+      const args = mockedRunCommand.mock.calls[0][1];
+      expect(args).toEqual(["exec", "--approve-for-me", "-"]);
+    });
+
     it("continueSession の場合は最新の cwd セッションを --yolo で再開する", async () => {
       mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
 
@@ -761,9 +770,36 @@ describe("runCodex", () => {
 
       expect(mockedRunCommand).toHaveBeenCalledWith(
         "codex",
-        ["exec", "resume", "--yolo", "--last", "-"],
+        ["exec", "--yolo", "resume", "--last", "-"],
         { input: "continue", cwd: undefined, timeoutMs: 3_600_000 },
       );
+    });
+
+    it("continueSession で autonomy が auto の場合も自動レビューを保ったまま再開する", async () => {
+      mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
+
+      await runCodex("continue", { autonomy: "auto", continueSession: true });
+
+      const args = mockedRunCommand.mock.calls[0][1];
+      expect(args).toEqual(["exec", "--approve-for-me", "resume", "--last", "-"]);
+    });
+
+    it("continueSession で autonomy が sandboxed の場合も sandbox を指定して再開する", async () => {
+      mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
+
+      await runCodex("continue", { autonomy: "sandboxed", continueSession: true });
+
+      const args = mockedRunCommand.mock.calls[0][1];
+      expect(args).toEqual(["exec", "--sandbox", "workspace-write", "resume", "--last", "-"]);
+    });
+
+    it("continueSession で autonomy が interactive の場合 フラグなしで再開する", async () => {
+      mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
+
+      await runCodex("continue", { autonomy: "interactive", continueSession: true });
+
+      const args = mockedRunCommand.mock.calls[0][1];
+      expect(args).toEqual(["exec", "resume", "--last", "-"]);
     });
   });
 
@@ -815,8 +851,11 @@ describe("resolveCodexAutonomyFlags", () => {
     expect(resolveCodexAutonomyFlags("full")).toEqual(["--yolo"]);
   });
 
-  it("auto と sandboxed の場合 workspace-write sandbox を返す", () => {
-    expect(resolveCodexAutonomyFlags("auto")).toEqual(["--sandbox", "workspace-write"]);
+  it("auto の場合 承認要求を自動レビューに回す --approve-for-me を返す", () => {
+    expect(resolveCodexAutonomyFlags("auto")).toEqual(["--approve-for-me"]);
+  });
+
+  it("sandboxed の場合 自動レビューなしの workspace-write sandbox を返す", () => {
     expect(resolveCodexAutonomyFlags("sandboxed")).toEqual(["--sandbox", "workspace-write"]);
   });
 
