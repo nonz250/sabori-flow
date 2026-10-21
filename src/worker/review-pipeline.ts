@@ -9,7 +9,7 @@ import type {
   RepositoryConfig,
   StepResult,
 } from "./models.js";
-import { Agent, FailureCategory, repoFullName } from "./models.js";
+import { Agent, FailureCategory, agentDisplayName, repoFullName } from "./models.js";
 import type { ProcessResult } from "./process.js";
 import type { ReviewPromptOptions } from "./prompt.js";
 import { buildReviewPrompt } from "./prompt.js";
@@ -37,7 +37,6 @@ import {
 } from "./review-screenshots.js";
 import type { AttemptOutcome } from "./agent-fallback.js";
 import {
-  agentDisplayName,
   describeFallback,
   enterInProgress,
   tryAgentsInOrder,

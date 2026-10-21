@@ -321,20 +321,6 @@ describe("runClaude", () => {
       expect(args).toContain("--dangerously-skip-permissions");
     });
 
-    it("autonomy が sandboxed の場合 --dangerously-skip-permissions が含まれない", async () => {
-      mockedRunCommand.mockResolvedValue({
-        success: true,
-        stdout: "",
-        stderr: "",
-      });
-
-      await runClaude("prompt text", { autonomy: "sandboxed" });
-
-      const args = mockedRunCommand.mock.calls[0][1];
-      expect(args).toEqual(["-p"]);
-      expect(args).not.toContain("--dangerously-skip-permissions");
-    });
-
     it("autonomy が interactive の場合 --dangerously-skip-permissions が含まれない", async () => {
       mockedRunCommand.mockResolvedValue({
         success: true,
@@ -393,7 +379,6 @@ describe("runClaude", () => {
       mockLoggerInstance.warn.mockClear();
       mockLoggerInstance.info.mockClear();
 
-      await runClaude("prompt text", { autonomy: "sandboxed" });
       await runClaude("prompt text", { autonomy: "full" });
       await runClaude("prompt text", { autonomy: "auto" });
 
@@ -599,10 +584,6 @@ describe("resolveClaudeAutonomyFlags", () => {
     ]);
   });
 
-  it("sandboxed の場合 空配列を返す", () => {
-    expect(resolveClaudeAutonomyFlags("sandboxed")).toEqual([]);
-  });
-
   it("interactive の場合 空配列を返す", () => {
     expect(resolveClaudeAutonomyFlags("interactive")).toEqual([]);
   });
@@ -615,30 +596,56 @@ describe("resolveClaudeAutonomyFlags", () => {
 });
 
 describe("resolveAutonomyLogMessage", () => {
-  it("full の場合 warn レベルで full 向けメッセージを返す", () => {
-    const result = resolveAutonomyLogMessage("full");
-    expect(result).not.toBeNull();
+  it("claude の full は承認を全部飛ばすため warn レベルで --dangerously-skip-permissions を示す", () => {
+    const result = resolveAutonomyLogMessage("full", "claude");
     expect(result?.level).toBe("warn");
+    expect(result?.message).toContain("Claude Code CLI");
     expect(result?.message).toContain("--dangerously-skip-permissions");
   });
 
-  it("auto の場合 info レベルで auto 向けメッセージを返す", () => {
-    const result = resolveAutonomyLogMessage("auto");
-    expect(result).not.toBeNull();
+  it("codex の full は承認とサンドボックスを無効化するため warn レベルで --yolo を示す", () => {
+    const result = resolveAutonomyLogMessage("full", "codex");
+    expect(result?.level).toBe("warn");
+    expect(result?.message).toContain("Codex CLI");
+    expect(result?.message).toContain("--yolo");
+  });
+
+  it("claude の auto は info レベルで --permission-mode auto を示す", () => {
+    const result = resolveAutonomyLogMessage("auto", "claude");
     expect(result?.level).toBe("info");
     expect(result?.message).toContain("--permission-mode auto");
   });
 
-  it("sandboxed の場合 warn レベルで fallback メッセージを返す", () => {
-    const result = resolveAutonomyLogMessage("sandboxed");
-    expect(result).not.toBeNull();
-    expect(result?.level).toBe("warn");
-    expect(result?.message).toContain("sandboxed");
-    expect(result?.message).toContain("interactive");
+  it("codex の auto は info レベルで --approve-for-me を示す", () => {
+    const result = resolveAutonomyLogMessage("auto", "codex");
+    expect(result?.level).toBe("info");
+    expect(result?.message).toContain("Codex CLI");
+    expect(result?.message).toContain("--approve-for-me");
   });
 
-  it("interactive の場合 null を返す", () => {
-    expect(resolveAutonomyLogMessage("interactive")).toBeNull();
+  it.each([
+    ["claude", "auto", resolveClaudeAutonomyFlags],
+    ["claude", "full", resolveClaudeAutonomyFlags],
+    ["codex", "auto", resolveCodexAutonomyFlags],
+    ["codex", "full", resolveCodexAutonomyFlags],
+  ] as const)("%s の %s はログに実際に渡すフラグを示す", (agent, autonomy, resolveFlags) => {
+    const result = resolveAutonomyLogMessage(autonomy, agent);
+    expect(result?.message).toContain(resolveFlags(autonomy).join(" "));
+  });
+
+  it("すべてのログは autonomy の設定値から始まる", () => {
+    for (const agent of ["claude", "codex"] as const) {
+      for (const autonomy of ["auto", "full"] as const) {
+        expect(resolveAutonomyLogMessage(autonomy, agent)?.message).toMatch(
+          new RegExp(`^autonomy is set to '${autonomy}'\\.`),
+        );
+      }
+    }
+  });
+
+  it("interactive の場合 エージェントによらず null を返す", () => {
+    expect(resolveAutonomyLogMessage("interactive", "claude")).toBeNull();
+    expect(resolveAutonomyLogMessage("interactive", "codex")).toBeNull();
   });
 });
 
@@ -728,19 +735,6 @@ describe("runCodex", () => {
       expect(args).toContain("--yolo");
     });
 
-    it("autonomy が sandboxed の場合 workspace-write sandbox が含まれる", async () => {
-      mockedRunCommand.mockResolvedValue({
-        success: true,
-        stdout: "",
-        stderr: "",
-      });
-
-      await runCodex("prompt text", { autonomy: "sandboxed" });
-
-      const args = mockedRunCommand.mock.calls[0][1];
-      expect(args).toEqual(["exec", "--sandbox", "workspace-write", "-"]);
-    });
-
     it("autonomy が interactive の場合 追加フラグが含まれない", async () => {
       mockedRunCommand.mockResolvedValue({
         success: true,
@@ -754,6 +748,15 @@ describe("runCodex", () => {
       expect(args).toEqual(["exec", "-"]);
     });
 
+    it("autonomy が auto の場合 --approve-for-me が含まれる", async () => {
+      mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
+
+      await runCodex("prompt text", { autonomy: "auto" });
+
+      const args = mockedRunCommand.mock.calls[0][1];
+      expect(args).toEqual(["exec", "--approve-for-me", "-"]);
+    });
+
     it("continueSession の場合は最新の cwd セッションを --yolo で再開する", async () => {
       mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
 
@@ -761,9 +764,27 @@ describe("runCodex", () => {
 
       expect(mockedRunCommand).toHaveBeenCalledWith(
         "codex",
-        ["exec", "resume", "--yolo", "--last", "-"],
+        ["exec", "--yolo", "resume", "--last", "-"],
         { input: "continue", cwd: undefined, timeoutMs: 3_600_000 },
       );
+    });
+
+    it("continueSession で autonomy が auto の場合も自動レビューを保ったまま再開する", async () => {
+      mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
+
+      await runCodex("continue", { autonomy: "auto", continueSession: true });
+
+      const args = mockedRunCommand.mock.calls[0][1];
+      expect(args).toEqual(["exec", "--approve-for-me", "resume", "--last", "-"]);
+    });
+
+    it("continueSession で autonomy が interactive の場合 フラグなしで再開する", async () => {
+      mockedRunCommand.mockResolvedValue({ success: true, stdout: "", stderr: "" });
+
+      await runCodex("continue", { autonomy: "interactive", continueSession: true });
+
+      const args = mockedRunCommand.mock.calls[0][1];
+      expect(args).toEqual(["exec", "resume", "--last", "-"]);
     });
   });
 
@@ -815,9 +836,8 @@ describe("resolveCodexAutonomyFlags", () => {
     expect(resolveCodexAutonomyFlags("full")).toEqual(["--yolo"]);
   });
 
-  it("auto と sandboxed の場合 workspace-write sandbox を返す", () => {
-    expect(resolveCodexAutonomyFlags("auto")).toEqual(["--sandbox", "workspace-write"]);
-    expect(resolveCodexAutonomyFlags("sandboxed")).toEqual(["--sandbox", "workspace-write"]);
+  it("auto の場合 承認要求を自動レビューに回す --approve-for-me を返す", () => {
+    expect(resolveCodexAutonomyFlags("auto")).toEqual(["--approve-for-me"]);
   });
 
   it("interactive の場合 空配列を返す", () => {

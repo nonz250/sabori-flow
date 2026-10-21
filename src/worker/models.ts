@@ -33,19 +33,18 @@ export type Agent = (typeof Agent)[keyof typeof Agent];
  *
  * - INTERACTIVE: requires user approval for each action. Safest, but
  *   unsuitable for unattended launchd runs (blocks on approval prompts).
- * - AUTO: Claude Code's `--permission-mode auto`. The classifier blocks
- *   only dangerous actions (deploys, mass deletions, etc.) and
- *   auto-approves the rest. Recommended for unattended runs.
- * - FULL: maps to `--dangerously-skip-permissions`. Allows everything;
- *   use with caution.
- * - SANDBOXED: reserved value. Claude Code does not support it and
- *   falls back to interactive. Retained for future non-Claude CLIs
- *   (e.g. OpenAI Codex's `--sandbox`).
+ * - AUTO: approval requests go to an automatic judge. Claude Code's
+ *   `--permission-mode auto` has a classifier block only dangerous actions
+ *   (deploys, mass deletions, etc.); Codex's `--approve-for-me` keeps the
+ *   workspace-write sandbox and sends escalations to its automatic review.
+ *   Recommended for unattended runs.
+ * - FULL: skips every approval. Claude Code's
+ *   `--dangerously-skip-permissions` and Codex's `--yolo`, which also
+ *   disables the sandbox. Use with caution.
  */
 export const Autonomy = {
   FULL: "full",
   AUTO: "auto",
-  SANDBOXED: "sandboxed",
   INTERACTIVE: "interactive",
 } as const;
 export type Autonomy = (typeof Autonomy)[keyof typeof Autonomy];
@@ -208,4 +207,8 @@ export interface FailureDiagnostics {
 /** リポジトリのフルネーム ("owner/repo") を返す */
 export function repoFullName(config: RepositoryConfig): string {
   return `${config.owner}/${config.repo}`;
+}
+
+export function agentDisplayName(agent: Agent): string {
+  return agent === Agent.CODEX ? "Codex CLI" : "Claude Code CLI";
 }

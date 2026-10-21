@@ -701,8 +701,7 @@ describe("workerMain", () => {
       await workerMain("/path/to/config.yml", deps);
 
       expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
-        "autonomy is set to 'full'. %s.",
-        "Claude Code CLI will run with --dangerously-skip-permissions",
+        expect.stringContaining("Claude Code CLI will run with --dangerously-skip-permissions"),
       );
     });
 
@@ -721,22 +720,6 @@ describe("workerMain", () => {
         expect.stringContaining("--permission-mode auto"),
       );
       expect(mockLoggerInstance.warn).not.toHaveBeenCalled();
-    });
-
-    it("autonomy が sandboxed の場合 WARN ログが一度だけ出力される", async () => {
-      vi.mocked(deps.loadConfig).mockReturnValue(
-        makeAppConfig({ execution: { autonomy: Autonomy.SANDBOXED } }),
-      );
-      vi.mocked(deps.fetchIssues).mockResolvedValue([]);
-
-      mockLoggerInstance.warn.mockClear();
-
-      await workerMain("/path/to/config.yml", deps);
-
-      expect(mockLoggerInstance.warn).toHaveBeenCalledTimes(1);
-      expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
-        expect.stringContaining("sandboxed"),
-      );
     });
 
     it("autonomy が interactive の場合 autonomy ログは出力されない", async () => {
@@ -833,8 +816,7 @@ describe("workerMain", () => {
       await workerMain("/path/to/config.yml", deps);
 
       expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
-        "autonomy is set to 'full'. %s.",
-        "Codex CLI will run with --yolo",
+        expect.stringContaining("Codex CLI will run with --yolo"),
       );
     });
 
@@ -849,8 +831,7 @@ describe("workerMain", () => {
       await workerMain("/path/to/config.yml", deps);
 
       expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
-        "autonomy is set to 'full'. %s.",
-        "Claude Code CLI will run with --dangerously-skip-permissions",
+        expect.stringContaining("Claude Code CLI will run with --dangerously-skip-permissions"),
       );
     });
 
@@ -865,14 +846,33 @@ describe("workerMain", () => {
       await workerMain("/path/to/config.yml", deps);
 
       expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
-        "autonomy is set to 'full'. %s.",
-        "Claude Code CLI will run with --dangerously-skip-permissions",
+        expect.stringContaining("Claude Code CLI will run with --dangerously-skip-permissions"),
       );
       expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
-        "autonomy is set to 'full'. %s.",
-        "Codex CLI will run with --yolo",
+        expect.stringContaining("Codex CLI will run with --yolo"),
       );
     });
+
+    it("優先度リストに複数のエージェントがあり autonomy が auto の場合、各エージェントのフラグを INFO ログに出す", async () => {
+      vi.mocked(deps.loadConfig).mockReturnValue(
+        makeAppConfig({ execution: { agents: [Agent.CLAUDE, Agent.CODEX], autonomy: Autonomy.AUTO } }),
+      );
+      vi.mocked(deps.fetchIssues).mockResolvedValue([]);
+
+      mockLoggerInstance.warn.mockClear();
+      mockLoggerInstance.info.mockClear();
+
+      await workerMain("/path/to/config.yml", deps);
+
+      expect(mockLoggerInstance.info).toHaveBeenCalledWith(
+        expect.stringContaining("Claude Code CLI will run with --permission-mode auto"),
+      );
+      expect(mockLoggerInstance.info).toHaveBeenCalledWith(
+        expect.stringContaining("Codex CLI will run with --approve-for-me"),
+      );
+      expect(mockLoggerInstance.warn).not.toHaveBeenCalled();
+    });
+
   });
 });
 

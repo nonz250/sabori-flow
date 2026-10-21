@@ -4,7 +4,7 @@ import {
   ProcessExecutionError,
 } from "./process.js";
 import type { ProcessResult, RunCommandOptions } from "./process.js";
-import { Autonomy, Agent } from "./models.js";
+import { Autonomy, Agent, agentDisplayName } from "./models.js";
 
 export class ExecutorError extends Error {
   constructor(message: string) {
@@ -99,7 +99,6 @@ export async function runClaude(
  *
  * - full        -> --dangerously-skip-permissions
  * - auto        -> --permission-mode auto
- * - sandboxed   -> no flags (Claude Code does not support it; reserved for future non-Claude CLIs)
  * - interactive -> no flags
  */
 export function resolveClaudeAutonomyFlags(autonomy: Autonomy): readonly string[] {
@@ -108,8 +107,6 @@ export function resolveClaudeAutonomyFlags(autonomy: Autonomy): readonly string[
       return ["--dangerously-skip-permissions"];
     case Autonomy.AUTO:
       return ["--permission-mode", "auto"];
-    case Autonomy.SANDBOXED:
-      return [];
     case Autonomy.INTERACTIVE:
       return [];
     default: {
@@ -126,34 +123,42 @@ export interface AutonomyLogMessage {
   readonly message: string;
 }
 
+const AUTONOMY_FLAG_RESOLVERS: Readonly<
+  Record<Agent, (autonomy: Autonomy) => readonly string[]>
+> = {
+  [Agent.CLAUDE]: resolveClaudeAutonomyFlags,
+  [Agent.CODEX]: resolveCodexAutonomyFlags,
+};
+
 /**
- * Return the startup log entry (if any) for a given autonomy level.
+ * Return the startup log entry (if any) for a given autonomy level and agent.
  *
- * Emitted once at config load so operators can see the mode the worker
- * is running in. Null means no log should be emitted for that level.
+ * Emitted once per configured agent at config load so operators can see the
+ * flags each agent runs with. The flags come from the same resolvers that
+ * build the argv, so the log cannot drift from what is actually passed.
+ * Null means no log should be emitted.
  */
 export function resolveAutonomyLogMessage(
   autonomy: Autonomy,
+  agent: Agent,
 ): AutonomyLogMessage | null {
+  const level = resolveAutonomyLogLevel(autonomy);
+  if (level === null) {
+    return null;
+  }
+  const flags = AUTONOMY_FLAG_RESOLVERS[agent](autonomy).join(" ");
+  return {
+    level,
+    message: `autonomy is set to '${autonomy}'. ${agentDisplayName(agent)} will run with ${flags}.`,
+  };
+}
+
+function resolveAutonomyLogLevel(autonomy: Autonomy): AutonomyLogLevel | null {
   switch (autonomy) {
     case Autonomy.FULL:
-      return {
-        level: "warn",
-        message:
-          "autonomy is set to 'full'. Claude Code CLI will run with --dangerously-skip-permissions.",
-      };
+      return "warn";
     case Autonomy.AUTO:
-      return {
-        level: "info",
-        message:
-          "autonomy is set to 'auto'. Claude Code CLI will run with --permission-mode auto.",
-      };
-    case Autonomy.SANDBOXED:
-      return {
-        level: "warn",
-        message:
-          "Claude Code does not support 'sandboxed' autonomy; falling back to 'interactive'",
-      };
+      return "info";
     case Autonomy.INTERACTIVE:
       return null;
     default: {
@@ -177,8 +182,11 @@ export async function runCodex(
 
   const autonomy = options?.autonomy ?? Autonomy.INTERACTIVE;
   const autonomyFlags = resolveCodexAutonomyFlags(autonomy);
+  // Flags go before `resume`: `codex exec resume` does not accept --sandbox or
+  // --approve-for-me, while `codex exec` applies its own flags to the resumed run.
+  // Without them the resumed run falls back to approval "never" and loses the reviewer.
   const args = options?.continueSession
-    ? ["exec", "resume", ...resolveCodexResumeAutonomyFlags(autonomy), "--last", "-"]
+    ? ["exec", ...autonomyFlags, "resume", "--last", "-"]
     : ["exec", ...autonomyFlags, "-"];
 
   try {
@@ -211,7 +219,7 @@ export async function runCodex(
  * Autonomy レベルから Codex CLI のフラグを解決する。
  *
  * - full: --yolo (no sandbox, no approvals)
- * - auto/sandboxed: --sandbox workspace-write
+ * - auto: --approve-for-me (workspace-write sandbox, approval requests go to automatic review)
  * - interactive: no flags (use Codex configuration defaults)
  */
 export function resolveCodexAutonomyFlags(autonomy: Autonomy): readonly string[] {
@@ -219,8 +227,7 @@ export function resolveCodexAutonomyFlags(autonomy: Autonomy): readonly string[]
     case Autonomy.FULL:
       return ["--yolo"];
     case Autonomy.AUTO:
-    case Autonomy.SANDBOXED:
-      return ["--sandbox", "workspace-write"];
+      return ["--approve-for-me"];
     case Autonomy.INTERACTIVE:
       return [];
     default: {
@@ -228,14 +235,6 @@ export function resolveCodexAutonomyFlags(autonomy: Autonomy): readonly string[]
       throw new Error(`Unknown autonomy level: ${_exhaustive}`);
     }
   }
-}
-
-/**
- * `codex exec resume` supports --yolo but not --sandbox. For other modes,
- * Codex restores the resumed session's original sandbox configuration.
- */
-function resolveCodexResumeAutonomyFlags(autonomy: Autonomy): readonly string[] {
-  return autonomy === Autonomy.FULL ? ["--yolo"] : [];
 }
 
 /**

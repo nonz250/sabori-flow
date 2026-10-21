@@ -108,11 +108,6 @@ async function askChoice(
   choices: { value: unknown; name: string }[],
 ): Promise<FieldAnswer> {
   const { field, state } = evaluated;
-  // A valid value outside the offered choices (e.g. sandboxed) stays selectable,
-  // so Enter keeps it.
-  if (state.kind === "valid" && !choices.some((c) => c.value === state.value)) {
-    choices = [...choices, { value: state.value, name: String(state.value) }];
-  }
   const allChoices =
     state.kind === "unset"
       ? [

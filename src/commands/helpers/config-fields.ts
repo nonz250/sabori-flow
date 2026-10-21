@@ -193,7 +193,6 @@ function rootFields(): ConfigField[] {
     {
       id: "execution.autonomy",
       path: ["execution", "autonomy"],
-      // Same choices as init: sandboxed is for hand-edited configs only.
       input: {
         kind: "select",
         choices: [Autonomy.INTERACTIVE, Autonomy.AUTO, Autonomy.FULL],

@@ -1,5 +1,5 @@
 import type { AppConfig, ExecutionConfig, Issue, LabelsConfig, Phase, PullRequest, RepositoryConfig, StepResult } from "./models.js";
-import { Autonomy, Agent, repoFullName } from "./models.js";
+import { repoFullName } from "./models.js";
 import { Phase as PhaseEnum } from "./models.js";
 import { loadConfig } from "./config.js";
 import { fetchIssues, fetchReviewPullRequests } from "./fetcher.js";
@@ -361,15 +361,8 @@ export async function workerMain(
 
   deps.migrateFlatPromptTemplates(appConfig.language);
 
-  if (appConfig.execution.autonomy === Autonomy.FULL) {
-    for (const agent of appConfig.execution.agents) {
-      const agentLabel = agent === Agent.CODEX
-        ? "Codex CLI will run with --yolo"
-        : "Claude Code CLI will run with --dangerously-skip-permissions";
-      logger.warn("autonomy is set to 'full'. %s.", agentLabel);
-    }
-  } else {
-    const autonomyLog = resolveAutonomyLogMessage(appConfig.execution.autonomy);
+  for (const agent of appConfig.execution.agents) {
+    const autonomyLog = resolveAutonomyLogMessage(appConfig.execution.autonomy, agent);
     if (autonomyLog !== null) {
       logger[autonomyLog.level](autonomyLog.message);
     }

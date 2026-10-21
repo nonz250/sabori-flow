@@ -129,7 +129,7 @@ export async function initCommand(): Promise<void> {
       ],
     });
 
-    // autonomy 選択 (sandboxed は手動編集専用のため UI には載せない)
+    // autonomy 選択
     const autonomy = await select<Autonomy>({
       message: t("prompt.autonomy"),
       choices: [
