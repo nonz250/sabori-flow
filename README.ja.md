@@ -351,7 +351,7 @@ language: ja
 
 ## セキュリティ
 
-このツールはデフォルトで `interactive` モードでエージェントの CLI を実行し、各操作にユーザー承認が必要です。launchd による無人実行向けには、安全性の高い順に以下の自動化オプションがあります。
+このツールはデフォルトで `interactive` モードで Claude Code CLI を実行し、各操作にユーザー承認が必要です。launchd による無人実行向けには、安全性の高い順に以下の自動化オプションがあります。
 
 - `execution.autonomy: auto` — 承認要求を自動判定に回します。Claude Code は `--permission-mode auto` で実行し、分類器が危険操作 (デプロイ・大規模削除等) のみブロックし、それ以外は自動承認します。Claude Code v2.1.83 以降および Max / Team / Enterprise プランが必要です。Codex は `--approve-for-me` で実行し、workspace-write サンドボックスを保ったまま、ネットワークアクセスなどの権限昇格を Codex の自動レビューに回します。Codex 0.147.0 以降が必要です。
 - `execution.autonomy: full` — 承認をすべて省略します。Claude Code は `--dangerously-skip-permissions`、Codex は `--yolo` で実行し、Codex ではサンドボックスも無効になります。どちらもマシン上でほぼ任意の操作を許可するため、外部で隔離された実行環境に限定してください。
