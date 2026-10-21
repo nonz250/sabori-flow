@@ -59,10 +59,6 @@ describe("Autonomy", () => {
     expect(Autonomy.AUTO).toBe("auto");
   });
 
-  it("SANDBOXED の値が 'sandboxed' である", () => {
-    expect(Autonomy.SANDBOXED).toBe("sandboxed");
-  });
-
   it("INTERACTIVE の値が 'interactive' である", () => {
     expect(Autonomy.INTERACTIVE).toBe("interactive");
   });

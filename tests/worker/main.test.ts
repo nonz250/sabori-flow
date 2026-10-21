@@ -722,22 +722,6 @@ describe("workerMain", () => {
       expect(mockLoggerInstance.warn).not.toHaveBeenCalled();
     });
 
-    it("autonomy が sandboxed の場合 WARN ログが一度だけ出力される", async () => {
-      vi.mocked(deps.loadConfig).mockReturnValue(
-        makeAppConfig({ execution: { autonomy: Autonomy.SANDBOXED } }),
-      );
-      vi.mocked(deps.fetchIssues).mockResolvedValue([]);
-
-      mockLoggerInstance.warn.mockClear();
-
-      await workerMain("/path/to/config.yml", deps);
-
-      expect(mockLoggerInstance.warn).toHaveBeenCalledTimes(1);
-      expect(mockLoggerInstance.warn).toHaveBeenCalledWith(
-        expect.stringContaining("sandboxed"),
-      );
-    });
-
     it("autonomy が interactive の場合 autonomy ログは出力されない", async () => {
       vi.mocked(deps.loadConfig).mockReturnValue(
         makeAppConfig({ execution: { autonomy: Autonomy.INTERACTIVE } }),
@@ -889,22 +873,6 @@ describe("workerMain", () => {
       expect(mockLoggerInstance.warn).not.toHaveBeenCalled();
     });
 
-    it("agent が codex かつ autonomy が sandboxed の場合 Claude Code 向けのフォールバック警告は出さない", async () => {
-      vi.mocked(deps.loadConfig).mockReturnValue(
-        makeAppConfig({ execution: { agents: [Agent.CODEX], autonomy: Autonomy.SANDBOXED } }),
-      );
-      vi.mocked(deps.fetchIssues).mockResolvedValue([]);
-
-      mockLoggerInstance.warn.mockClear();
-      mockLoggerInstance.info.mockClear();
-
-      await workerMain("/path/to/config.yml", deps);
-
-      expect(mockLoggerInstance.info).toHaveBeenCalledWith(
-        expect.stringContaining("Codex CLI will run with --sandbox workspace-write"),
-      );
-      expect(mockLoggerInstance.warn).not.toHaveBeenCalled();
-    });
   });
 });
 

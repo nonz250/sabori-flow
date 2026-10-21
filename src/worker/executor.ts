@@ -99,7 +99,6 @@ export async function runClaude(
  *
  * - full        -> --dangerously-skip-permissions
  * - auto        -> --permission-mode auto
- * - sandboxed   -> no flags (Claude Code does not support it; reserved for future non-Claude CLIs)
  * - interactive -> no flags
  */
 export function resolveClaudeAutonomyFlags(autonomy: Autonomy): readonly string[] {
@@ -108,8 +107,6 @@ export function resolveClaudeAutonomyFlags(autonomy: Autonomy): readonly string[
       return ["--dangerously-skip-permissions"];
     case Autonomy.AUTO:
       return ["--permission-mode", "auto"];
-    case Autonomy.SANDBOXED:
-      return [];
     case Autonomy.INTERACTIVE:
       return [];
     default: {
@@ -153,17 +150,10 @@ export function resolveAutonomyLogMessage(
   if (autonomy === Autonomy.INTERACTIVE) {
     return null;
   }
-  const prefix = `autonomy is set to '${autonomy}'.`;
-  if (agent === Agent.CLAUDE && autonomy === Autonomy.SANDBOXED) {
-    return {
-      level: "warn",
-      message: `${prefix} Claude Code does not support it and falls back to 'interactive'.`,
-    };
-  }
   const flags = AUTONOMY_FLAG_RESOLVERS[agent](autonomy).join(" ");
   return {
     level: autonomy === Autonomy.FULL ? "warn" : "info",
-    message: `${prefix} ${AGENT_CLI_NAMES[agent]} will run with ${flags}.`,
+    message: `autonomy is set to '${autonomy}'. ${AGENT_CLI_NAMES[agent]} will run with ${flags}.`,
   };
 }
 
@@ -219,7 +209,6 @@ export async function runCodex(
  *
  * - full: --yolo (no sandbox, no approvals)
  * - auto: --approve-for-me (workspace-write sandbox, approval requests go to automatic review)
- * - sandboxed: --sandbox workspace-write (no automatic review)
  * - interactive: no flags (use Codex configuration defaults)
  */
 export function resolveCodexAutonomyFlags(autonomy: Autonomy): readonly string[] {
@@ -228,8 +217,6 @@ export function resolveCodexAutonomyFlags(autonomy: Autonomy): readonly string[]
       return ["--yolo"];
     case Autonomy.AUTO:
       return ["--approve-for-me"];
-    case Autonomy.SANDBOXED:
-      return ["--sandbox", "workspace-write"];
     case Autonomy.INTERACTIVE:
       return [];
     default: {

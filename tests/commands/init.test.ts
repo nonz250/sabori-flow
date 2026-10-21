@@ -462,7 +462,7 @@ describe("initCommand - autonomy 選択", () => {
     expect(execution.autonomy).toBe("full");
   });
 
-  it("autonomy 選択 UI には sandboxed が含まれない (choices)", async () => {
+  it("autonomy 選択 UI には interactive / auto / full がこの順で並ぶ (choices)", async () => {
     setupInitPrompts();
     mockExistsSyncForConfig(false);
     mockedPromptRepository.mockResolvedValueOnce(makeRepoInput());
@@ -480,7 +480,6 @@ describe("initCommand - autonomy 選択", () => {
       .choices;
     const values = choices.map((c) => c.value);
     expect(values).toEqual(["interactive", "auto", "full"]);
-    expect(values).not.toContain("sandboxed");
   });
 
   it("英語モードでは autonomy プロンプトに 'autonomy' が含まれる", async () => {

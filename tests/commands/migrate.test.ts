@@ -332,13 +332,13 @@ describe("migrateCommand - autonomy choices", () => {
     expect(values).toEqual(["interactive", "auto", "full"]);
   });
 
-  it("keeps a hand-written sandboxed value selectable and unchanged on Enter", async () => {
-    answer();
+  it("asks for a new value when the config still has the removed sandboxed level", async () => {
+    answer({ "execution.autonomy": "interactive" });
     await run(FULL_CONFIG.replace("autonomy: auto", "autonomy: sandboxed"));
     const prompt = promptFor("execution.autonomy");
-    expect(prompt.choices!.map((c) => c.value)).toContain("sandboxed");
-    expect(prompt.default).toBe("sandboxed");
-    expect(mockedWriteFileSync).not.toHaveBeenCalled();
+    expect(prompt.choices!.map((c) => c.value)).toEqual(["interactive", "auto", "full"]);
+    expect(prompt.message).toContain("got 'sandboxed'");
+    expect((written().execution as Record<string, unknown>).autonomy).toBe("interactive");
   });
 });
 

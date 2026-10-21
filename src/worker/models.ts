@@ -41,13 +41,10 @@ export type Agent = (typeof Agent)[keyof typeof Agent];
  * - FULL: skips every approval. Claude Code's
  *   `--dangerously-skip-permissions` and Codex's `--yolo`, which also
  *   disables the sandbox. Use with caution.
- * - SANDBOXED: Codex's `--sandbox workspace-write` without automatic
- *   review. Claude Code does not support it and falls back to interactive.
  */
 export const Autonomy = {
   FULL: "full",
   AUTO: "auto",
-  SANDBOXED: "sandboxed",
   INTERACTIVE: "interactive",
 } as const;
 export type Autonomy = (typeof Autonomy)[keyof typeof Autonomy];

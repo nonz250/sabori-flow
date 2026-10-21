@@ -736,15 +736,16 @@ describe("loadConfig - execution validation", () => {
     expect(result.execution.autonomy).toBe("full");
   });
 
-  it("autonomy: 'sandboxed' が正しくパースされる", () => {
+  it("廃止した autonomy: 'sandboxed' はエラーになり、指定できる値を示す", () => {
     const yaml = VALID_YAML.replace(
       "max_parallel: 4",
       'max_parallel: 4\n  autonomy: "sandboxed"',
     );
     mockYaml(yaml);
 
-    const result = loadConfig("/path/to/config.yml");
-    expect(result.execution.autonomy).toBe("sandboxed");
+    expect(() => loadConfig("/path/to/config.yml")).toThrow(
+      "execution.autonomy: must be one of: full, auto, interactive; got 'sandboxed'",
+    );
   });
 
   it("autonomy: 'interactive' が正しくパースされる", () => {
@@ -792,7 +793,7 @@ describe("loadConfig - execution validation", () => {
       ConfigValidationError,
     );
     expect(() => loadConfig("/path/to/config.yml")).toThrow(
-      /execution\.autonomy: must be one of: (?=.*full)(?=.*auto)(?=.*sandboxed)(?=.*interactive)/,
+      /execution\.autonomy: must be one of: (?=.*full)(?=.*auto)(?=.*interactive)/,
     );
   });
 
