@@ -67,6 +67,7 @@ Confirm two things: existing behavior has not regressed, and the PR achieves its
    - Follow the steps described in the README, CLAUDE.md, Makefile, docker compose files, and so on, such as `composer install`, `npm ci`, or running tests in the test container the conventions describe
    - Do not use commands that rewrite lock files, such as `composer update` or `npm install`
    - The worktree is a fresh checkout every time, so missing dependencies are normal. Try the steps in the conventions before concluding that you cannot install them
+   - If the tests or the app need configuration files such as `.env`, create them by following the steps in the conventions, such as `make configure` or `cp .env.example .env`
 2. Run the existing tests, lint, type checks, and build according to the repository's conventions
 3. Derive verification scenarios from the diff. Prepare both scenarios that check whether the PR achieves its purpose and scenarios that check existing behavior the change may affect
 4. If the change involves a UI, start the app locally, operate it in a browser, and take a screenshot of the result of each scenario
@@ -161,4 +162,4 @@ If anything could not be verified, state what and why
 - Do not modify code, commit, or push. The only goal is review and verification. Installing dependencies and starting containers for verification is fine
 - Do not access production environments, shared environments, or paid external APIs. Keep verification entirely local
 - Do not include credentials, secrets, or environment variable values in the output or in screenshots
-- Do not create or modify `.env` files or files containing credentials
+- Create or modify `.env` files or files containing credentials only when following the local setup steps in the repository's conventions. Do not create or modify them otherwise
