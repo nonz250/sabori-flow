@@ -70,6 +70,7 @@ Confirm two things: existing behavior has not regressed, and the PR achieves its
 2. Run the existing tests, lint, type checks, and build according to the repository's conventions
 3. Derive verification scenarios from the diff. Prepare both scenarios that check whether the PR achieves its purpose and scenarios that check existing behavior the change may affect
 4. If the change involves a UI, start the app locally, operate it in a browser, and take a screenshot of the result of each scenario
+   - Start the app by following the steps in the repository's conventions. You may run those steps even when they create configuration files such as `.env` (e.g. `make configure` or `cp .env.example .env`)
    - Use Playwright to operate the browser
    - Use Chrome DevTools only if Playwright is unavailable, for example when the tool is not provided or the browser cannot be launched
    - If neither is available, follow step 6
@@ -161,4 +162,4 @@ If anything could not be verified, state what and why
 - Do not modify code, commit, or push. The only goal is review and verification. Installing dependencies and starting containers for verification is fine
 - Do not access production environments, shared environments, or paid external APIs. Keep verification entirely local
 - Do not include credentials, secrets, or environment variable values in the output or in screenshots
-- Do not create or modify `.env` files or files containing credentials
+- Create or modify `.env` files or files containing credentials only when following the local setup steps in the repository's conventions. Do not create or modify them otherwise
