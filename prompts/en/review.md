@@ -67,10 +67,10 @@ Confirm two things: existing behavior has not regressed, and the PR achieves its
    - Follow the steps described in the README, CLAUDE.md, Makefile, docker compose files, and so on, such as `composer install`, `npm ci`, or running tests in the test container the conventions describe
    - Do not use commands that rewrite lock files, such as `composer update` or `npm install`
    - The worktree is a fresh checkout every time, so missing dependencies are normal. Try the steps in the conventions before concluding that you cannot install them
+   - If the tests or the app need configuration files such as `.env`, create them by following the steps in the conventions, such as `make configure` or `cp .env.example .env`
 2. Run the existing tests, lint, type checks, and build according to the repository's conventions
 3. Derive verification scenarios from the diff. Prepare both scenarios that check whether the PR achieves its purpose and scenarios that check existing behavior the change may affect
 4. If the change involves a UI, start the app locally, operate it in a browser, and take a screenshot of the result of each scenario
-   - Start the app by following the steps in the repository's conventions. You may run those steps even when they create configuration files such as `.env` (e.g. `make configure` or `cp .env.example .env`)
    - Use Playwright to operate the browser
    - Use Chrome DevTools only if Playwright is unavailable, for example when the tool is not provided or the browser cannot be launched
    - If neither is available, follow step 6
